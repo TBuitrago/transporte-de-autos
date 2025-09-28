@@ -15,21 +15,25 @@ class SDPI_Form {
     public function init_hooks() {
         // Register shortcode
         add_shortcode('super_dispatch_pricing_form', array($this, 'render_form'));
-        
+
         // Handle form submission
         add_action('init', array($this, 'handle_form_submission'));
-        
+
         // Enqueue styles
         add_action('wp_enqueue_scripts', array($this, 'enqueue_styles'));
-        
+
         // Add AJAX handler for better user experience
         add_action('wp_ajax_sdpi_get_quote', array($this, 'ajax_get_quote'));
         add_action('wp_ajax_nopriv_sdpi_get_quote', array($this, 'ajax_get_quote'));
-        
+
         // Add AJAX handler for payment
         add_action('wp_ajax_sdpi_initiate_payment', array($this, 'ajax_initiate_payment'));
         add_action('wp_ajax_nopriv_sdpi_initiate_payment', array($this, 'ajax_initiate_payment'));
-        
+
+        // Add AJAX handler for client info capture
+        add_action('wp_ajax_sdpi_save_client_info', array($this, 'ajax_save_client_info'));
+        add_action('wp_ajax_nopriv_sdpi_save_client_info', array($this, 'ajax_save_client_info'));
+
         // Enqueue JavaScript
         add_action('wp_enqueue_scripts', array($this, 'enqueue_scripts'));
     }
@@ -62,13 +66,28 @@ class SDPI_Form {
     }
 
     /**
+     * Check if client contact info has been captured
+     */
+    private function has_client_info() {
+        if (!session_id()) {
+            session_start();
+        }
+        return isset($_SESSION['sdpi_client_info']) && !empty($_SESSION['sdpi_client_info']);
+    }
+
+    /**
      * Render the pricing form
      */
     public function render_form() {
         // Enqueue scripts and styles when form is rendered
         $this->enqueue_styles();
         $this->enqueue_scripts();
-        
+
+        // Check if client info has been captured
+        if (!$this->has_client_info()) {
+            return $this->render_client_info_form();
+        }
+
         ob_start();
         ?>
         <div class="sdpi-pricing-form">
@@ -135,8 +154,16 @@ class SDPI_Form {
                     </div>
 
                     <div class="sdpi-form-group">
+                        <label for="sdpi_vehicle_electric">
+                            <input type="checkbox" id="sdpi_vehicle_electric" name="vehicle_electric" value="1">
+                            ¿Es un vehículo eléctrico?
+                        </label>
+                        <small class="sdpi-field-help">Se agregarán $600 USD adicionales al precio total</small>
+                    </div>
+
+                    <div class="sdpi-form-group">
                         <label for="sdpi_vehicle_make">Marca del Vehículo</label>
-                        <input type="text" id="sdpi_vehicle_make" name="vehicle_make" 
+                        <input type="text" id="sdpi_vehicle_make" name="vehicle_make"
                                placeholder="Ej: Toyota, Ford, Chevrolet">
                     </div>
 
@@ -412,6 +439,178 @@ class SDPI_Form {
     }
 
     /**
+     * Render the client information capture form
+     */
+    private function render_client_info_form() {
+        ob_start();
+        ?>
+        <div class="sdpi-client-info-form">
+            <div class="sdpi-form-section">
+                <h3>Información de Contacto</h3>
+                <p>Para poder contactarlo en caso de que necesite asistencia con su cotización o proceso de envío, por favor complete la siguiente información:</p>
+
+                <form method="post" class="sdpi-form" id="sdpi-registration-form">
+                    <input type="hidden" name="sdpi_registration_submit" value="1">
+                    <input type="hidden" name="sdpi_nonce" value="<?php echo wp_create_nonce('sdpi_nonce'); ?>">
+
+                    <div class="sdpi-form-group">
+                        <label for="sdpi_user_name">Nombre Completo *</label>
+                        <input type="text" id="sdpi_user_name" name="user_name" required
+                               placeholder="Ej: Juan Pérez">
+                    </div>
+
+                    <div class="sdpi-form-group">
+                        <label for="sdpi_user_phone">Número de Teléfono *</label>
+                        <input type="tel" id="sdpi_user_phone" name="user_phone" required
+                               placeholder="Ej: (787) 123-4567" pattern="[0-9\(\)\-\+\s]+">
+                    </div>
+
+                    <div class="sdpi-form-group">
+                        <label for="sdpi_user_email">Correo Electrónico *</label>
+                        <input type="email" id="sdpi_user_email" name="user_email" required
+                               placeholder="Ej: juan@email.com">
+                    </div>
+
+                    <div class="sdpi-form-submit">
+                        <button type="submit" class="sdpi-submit-btn" id="sdpi-client-info-btn">Continuar con la Cotización</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Client info results container -->
+            <div id="sdpi-client-info-results" class="sdpi-results" style="display: none;">
+                <h3 id="sdpi-client-info-title">Información Guardada</h3>
+                <p id="sdpi-client-info-message"></p>
+            </div>
+
+            <!-- Loading indicator -->
+            <div id="sdpi-client-info-loading" class="sdpi-loading" style="display: none;">
+                <p>Guardando información...</p>
+            </div>
+        </div>
+
+        <script>
+        jQuery(document).ready(function($) {
+            // Handle client info form submission
+            $('#sdpi-registration-form').on('submit', function(e) {
+                e.preventDefault();
+
+                var formData = {
+                    action: 'sdpi_save_client_info',
+                    nonce: $('input[name="sdpi_nonce"]').val(),
+                    client_name: $('#sdpi_user_name').val().trim(),
+                    client_phone: $('#sdpi_user_phone').val().trim(),
+                    client_email: $('#sdpi_user_email').val().trim()
+                };
+
+                // Basic validation
+                if (!formData.client_name || !formData.client_phone || !formData.client_email) {
+                    $('#sdpi-client-info-title').text('Error');
+                    $('#sdpi-client-info-message').text('Todos los campos son requeridos.');
+                    $('#sdpi-client-info-results').removeClass('success').addClass('error').show();
+                    return;
+                }
+
+                // Email validation
+                var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(formData.client_email)) {
+                    $('#sdpi-client-info-title').text('Error');
+                    $('#sdpi-client-info-message').text('Por favor ingrese un correo electrónico válido.');
+                    $('#sdpi-client-info-results').removeClass('success').addClass('error').show();
+                    return;
+                }
+
+                // Show loading
+                $('#sdpi-client-info-btn').prop('disabled', true).text('Guardando...');
+                $('#sdpi-client-info-loading').show();
+                $('#sdpi-client-info-results').hide();
+
+                $.ajax({
+                    url: sdpi_ajax.ajax_url,
+                    type: 'POST',
+                    data: formData,
+                    dataType: 'json',
+                    success: function(response) {
+                        $('#sdpi-client-info-loading').hide();
+                        $('#sdpi-client-info-btn').prop('disabled', false).text('Continuar con la Cotización');
+
+                        if (response.success) {
+                            $('#sdpi-client-info-title').text('Información Guardada');
+                            $('#sdpi-client-info-message').text('¡Perfecto! Continuando con la cotización...');
+                            $('#sdpi-client-info-results').removeClass('error').addClass('success').show();
+
+                            // Reload the page to show the quote form
+                            setTimeout(function() {
+                                location.reload();
+                            }, 1500);
+                        } else {
+                            $('#sdpi-client-info-title').text('Error');
+                            $('#sdpi-client-info-message').text(response.data || 'Error al guardar la información.');
+                            $('#sdpi-client-info-results').removeClass('success').addClass('error').show();
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        $('#sdpi-client-info-loading').hide();
+                        $('#sdpi-client-info-btn').prop('disabled', false).text('Continuar con la Cotización');
+
+                        var errorMessage = 'Error de conexión. Intente nuevamente.';
+                        if (status === 'timeout') {
+                            errorMessage = 'La solicitud tardó demasiado. Intente nuevamente.';
+                        } else if (xhr.responseJSON && xhr.responseJSON.data) {
+                            errorMessage = xhr.responseJSON.data;
+                        }
+
+                        $('#sdpi-client-info-title').text('Error');
+                        $('#sdpi-client-info-message').text(errorMessage);
+                        $('#sdpi-client-info-results').removeClass('success').addClass('error').show();
+                    }
+                });
+            });
+        });
+        </script>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * AJAX handler for client info capture
+     */
+    public function ajax_save_client_info() {
+        check_ajax_referer('sdpi_nonce', 'nonce');
+
+        $client_name = sanitize_text_field($_POST['client_name']);
+        $client_phone = sanitize_text_field($_POST['client_phone']);
+        $client_email = sanitize_email($_POST['client_email']);
+
+        // Validation
+        if (empty($client_name) || empty($client_phone) || empty($client_email)) {
+            wp_send_json_error('Todos los campos son requeridos.');
+            exit;
+        }
+
+        if (!is_email($client_email)) {
+            wp_send_json_error('Por favor ingrese un correo electrónico válido.');
+            exit;
+        }
+
+        // Start session if not started
+        if (!session_id()) {
+            session_start();
+        }
+
+        // Store client data in session
+        $_SESSION['sdpi_client_info'] = array(
+            'name' => $client_name,
+            'phone' => $client_phone,
+            'email' => $client_email,
+            'captured_at' => current_time('mysql')
+        );
+
+        wp_send_json_success('Información del cliente guardada exitosamente.');
+        exit;
+    }
+
+    /**
      * AJAX handler for getting a quote
      */
     public function ajax_get_quote() {
@@ -422,6 +621,7 @@ class SDPI_Form {
         $trailer_type = sanitize_text_field($_POST['trailer_type']);
         $vehicle_type = sanitize_text_field($_POST['vehicle_type']);
         $vehicle_inoperable = !empty($_POST['vehicle_inoperable']);
+        $vehicle_electric = !empty($_POST['vehicle_electric']);
         $vehicle_make = sanitize_text_field($_POST['vehicle_make']);
         $vehicle_model = sanitize_text_field($_POST['vehicle_model']);
         $vehicle_year = intval($_POST['vehicle_year']);
@@ -469,7 +669,7 @@ class SDPI_Form {
                 }
 
                 // Calculate final price with maritime transport
-                $final_price_data = $this->calculate_final_price($api_response, $pickup_zip, $delivery_zip);
+                $final_price_data = $this->calculate_final_price($api_response, $pickup_zip, $delivery_zip, $vehicle_electric);
             }
         } else {
             // For terrestrial routes, use original ZIPs
@@ -496,11 +696,11 @@ class SDPI_Form {
             }
 
             // Calculate final price with company profit and confidence adjustments
-            $final_price_data = $this->calculate_final_price($api_response, $pickup_zip, $delivery_zip);
+            $final_price_data = $this->calculate_final_price($api_response, $pickup_zip, $delivery_zip, $vehicle_electric);
         }
 
         // Log to history
-        $this->log_to_history($pickup_zip, $delivery_zip, $trailer_type, $vehicle_type, $vehicle_inoperable, $vehicle_make, $vehicle_model, $vehicle_year, $api_response, $final_price_data, $involves_maritime);
+        $this->log_to_history($pickup_zip, $delivery_zip, $trailer_type, $vehicle_type, $vehicle_inoperable, $vehicle_electric, $vehicle_make, $vehicle_model, $vehicle_year, $api_response, $final_price_data, $involves_maritime);
 
         // Add payment availability
         $final_price_data['payment_available'] = class_exists('WooCommerce');
@@ -513,12 +713,21 @@ class SDPI_Form {
     /**
      * Log quote to history
      */
-    private function log_to_history($pickup_zip, $delivery_zip, $trailer_type, $vehicle_type, $vehicle_inoperable, $vehicle_make, $vehicle_model, $vehicle_year, $api_response, $final_price_data, $involves_maritime) {
+    private function log_to_history($pickup_zip, $delivery_zip, $trailer_type, $vehicle_type, $vehicle_inoperable, $vehicle_electric, $vehicle_make, $vehicle_model, $vehicle_year, $api_response, $final_price_data, $involves_maritime) {
         try {
             // Get cities from ZIPs
             $pickup_city = $this->get_city_from_zip($pickup_zip);
             $delivery_city = $this->get_city_from_zip($delivery_zip);
-            
+
+            // Get client info from session
+            $client_info = array();
+            if (!session_id()) {
+                session_start();
+            }
+            if (isset($_SESSION['sdpi_client_info'])) {
+                $client_info = $_SESSION['sdpi_client_info'];
+            }
+
             // Prepare form data for logging
             $form_data = array(
                 'pickup_zip' => $pickup_zip,
@@ -528,10 +737,15 @@ class SDPI_Form {
                 'trailer_type' => $trailer_type,
                 'vehicle_type' => $vehicle_type,
                 'vehicle_inoperable' => $vehicle_inoperable,
+                'vehicle_electric' => $vehicle_electric,
                 'vehicle_make' => $vehicle_make,
                 'vehicle_model' => $vehicle_model,
                 'vehicle_year' => $vehicle_year,
-                'maritime_involved' => $involves_maritime
+                'maritime_involved' => $involves_maritime,
+                'client_name' => isset($client_info['name']) ? $client_info['name'] : '',
+                'client_phone' => isset($client_info['phone']) ? $client_info['phone'] : '',
+                'client_email' => isset($client_info['email']) ? $client_info['email'] : '',
+                'client_info_captured_at' => isset($client_info['captured_at']) ? $client_info['captured_at'] : null
             );
             
             // Add maritime data if applicable
@@ -614,7 +828,7 @@ class SDPI_Form {
     /**
      * Calculate final price with company profit and confidence adjustments including maritime transport
      */
-    private function calculate_final_price($api_response, $pickup_zip = '', $delivery_zip = '') {
+    private function calculate_final_price($api_response, $pickup_zip = '', $delivery_zip = '', $vehicle_electric = false) {
         $base_price = floatval($api_response['recommended_price'] ?? 0);
         $confidence = floatval($api_response['confidence'] ?? 0);
         
@@ -640,11 +854,14 @@ class SDPI_Form {
         
         // Company profit (fixed) - only for terrestrial transport
         $company_profit = 200.00;
-        
+
+        // Electric vehicle surcharge
+        $electric_surcharge = $vehicle_electric ? 600.00 : 0.00;
+
         // Confidence-based adjustment
         $confidence_adjustment = 0;
         $confidence_description = '';
-        
+
         if ($confidence >= 60 && $confidence <= 100) {
             // Add percentage to reach 100%
             $remaining_percentage = 100 - $confidence;
@@ -669,9 +886,9 @@ class SDPI_Form {
                 number_format($confidence, 1)
             );
         }
-        
+
         // Calculate final price
-        $final_price = $base_price + $confidence_adjustment + $company_profit;
+        $final_price = $base_price + $confidence_adjustment + $company_profit + $electric_surcharge;
         
         // Build detailed message
         $message = sprintf(
@@ -694,7 +911,7 @@ class SDPI_Form {
                 <div class="sdpi-price-item">
                     <span class="sdpi-price-label">Ganancia de la empresa:</span>
                     <span class="sdpi-price-value">+$%s USD</span>
-                </div>
+                </div>%s
                 <div class="sdpi-price-item sdpi-price-total">
                     <span class="sdpi-price-label"><strong>Total Final:</strong></span>
                     <span class="sdpi-price-value"><strong>$%s USD</strong></span>
@@ -704,6 +921,13 @@ class SDPI_Form {
             $confidence_description,
             number_format($confidence_adjustment, 2),
             number_format($company_profit, 2),
+            $vehicle_electric ? sprintf(
+                '<div class="sdpi-price-item">
+                    <span class="sdpi-price-label">Recargo por vehículo eléctrico:</span>
+                    <span class="sdpi-price-value">+$%s USD</span>
+                </div>',
+                number_format($electric_surcharge, 2)
+            ) : '',
             number_format($final_price, 2)
         );
 

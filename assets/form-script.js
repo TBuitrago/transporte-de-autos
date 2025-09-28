@@ -121,6 +121,7 @@ jQuery(document).ready(function($) {
             trailer_type: $('#sdpi_trailer_type').val(),
             vehicle_type: $('#sdpi_vehicle_type').val(),
             vehicle_inoperable: $('#sdpi_vehicle_inoperable').is(':checked') ? 1 : 0,
+            vehicle_electric: $('#sdpi_vehicle_electric').is(':checked') ? 1 : 0,
             vehicle_make: $('#sdpi_vehicle_make').val(),
             vehicle_model: $('#sdpi_vehicle_model').val(),
             vehicle_year: $('#sdpi_vehicle_year').val()

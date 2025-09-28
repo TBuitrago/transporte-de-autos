@@ -44,6 +44,10 @@ class SDPI_History {
             vehicle_make varchar(50),
             vehicle_model varchar(50),
             vehicle_year varchar(4),
+            client_name varchar(100),
+            client_phone varchar(20),
+            client_email varchar(100),
+            client_info_captured_at datetime,
             api_response text,
             api_price decimal(10,2),
             api_confidence decimal(5,2),
@@ -303,7 +307,10 @@ class SDPI_History {
         $total_quotes = $wpdb->get_var("SELECT COUNT(*) FROM {$this->table_name}");
         $maritime_quotes = $wpdb->get_var("SELECT COUNT(*) FROM {$this->table_name} WHERE maritime_involved = 1");
         $terrestrial_quotes = $total_quotes - $maritime_quotes;
-        
+
+        $registered_clients = $wpdb->get_var("SELECT COUNT(*) FROM {$this->table_name} WHERE client_name IS NOT NULL AND client_name != ''");
+        $unregistered_clients = $total_quotes - $registered_clients;
+
         $total_revenue = $wpdb->get_var("SELECT SUM(final_price) FROM {$this->table_name} WHERE final_price > 0");
         $avg_price = $wpdb->get_var("SELECT AVG(final_price) FROM {$this->table_name} WHERE final_price > 0");
         
@@ -361,6 +368,18 @@ class SDPI_History {
                 <div class="sdpi-stat-card">
                     <h3>Precio Promedio</h3>
                     <div class="sdpi-stat-number">$<?php echo number_format($avg_price, 2); ?></div>
+                </div>
+
+                <div class="sdpi-stat-card">
+                    <h3>Clientes Registrados</h3>
+                    <div class="sdpi-stat-number"><?php echo number_format($registered_clients); ?></div>
+                    <div class="sdpi-stat-percentage"><?php echo $total_quotes > 0 ? round(($registered_clients / $total_quotes) * 100, 1) : 0; ?>%</div>
+                </div>
+
+                <div class="sdpi-stat-card">
+                    <h3>Clientes No Registrados</h3>
+                    <div class="sdpi-stat-number"><?php echo number_format($unregistered_clients); ?></div>
+                    <div class="sdpi-stat-percentage"><?php echo $total_quotes > 0 ? round(($unregistered_clients / $total_quotes) * 100, 1) : 0; ?>%</div>
                 </div>
             </div>
             
@@ -613,6 +632,7 @@ class SDPI_History {
                 <tr>
                     <th>ID</th>
                     <th>Fecha</th>
+                    <th>Cliente</th>
                     <th>Origen</th>
                     <th>Destino</th>
                     <th>Vehículo</th>
@@ -626,7 +646,7 @@ class SDPI_History {
             <tbody>
                 <?php if (empty($items)): ?>
                 <tr>
-                    <td colspan="10" style="text-align: center; padding: 40px;">
+                    <td colspan="11" style="text-align: center; padding: 40px;">
                         No se encontraron cotizaciones con los filtros aplicados.
                     </td>
                 </tr>
@@ -635,6 +655,14 @@ class SDPI_History {
                 <tr>
                     <td><?php echo $item->id; ?></td>
                     <td><?php echo date('Y-m-d H:i', strtotime($item->created_at)); ?></td>
+                    <td>
+                        <?php if ($item->client_name): ?>
+                            <strong><?php echo esc_html($item->client_name); ?></strong><br>
+                            <small><?php echo esc_html($item->client_email); ?><br><?php echo esc_html($item->client_phone); ?></small>
+                        <?php else: ?>
+                            <em style="color: #999;">No registrado</em>
+                        <?php endif; ?>
+                    </td>
                     <td>
                         <?php echo esc_html($item->pickup_city); ?><br>
                         <small><?php echo esc_html($item->pickup_zip); ?></small>
@@ -746,6 +774,12 @@ class SDPI_History {
         $vehicle_make = sanitize_text_field($form_data['vehicle_make'] ?? '');
         $vehicle_model = sanitize_text_field($form_data['vehicle_model'] ?? '');
         $vehicle_year = sanitize_text_field($form_data['vehicle_year'] ?? '');
+
+        // Client information
+        $client_name = sanitize_text_field($form_data['client_name'] ?? '');
+        $client_phone = sanitize_text_field($form_data['client_phone'] ?? '');
+        $client_email = sanitize_text_field($form_data['client_email'] ?? '');
+        $client_info_captured_at = sanitize_text_field($form_data['client_info_captured_at'] ?? null);
         
         // API response data
         $api_price = 0;
@@ -807,6 +841,10 @@ class SDPI_History {
                 'vehicle_make' => $vehicle_make,
                 'vehicle_model' => $vehicle_model,
                 'vehicle_year' => $vehicle_year,
+                'client_name' => $client_name,
+                'client_phone' => $client_phone,
+                'client_email' => $client_email,
+                'client_info_captured_at' => $client_info_captured_at,
                 'api_response' => json_encode($api_response),
                 'api_price' => $api_price,
                 'api_confidence' => $api_confidence,
@@ -825,6 +863,7 @@ class SDPI_History {
             ),
             array(
                 '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s',
+                '%s', '%s', '%s', '%s',
                 '%s', '%f', '%f', '%f', '%f', '%f', '%f', '%d', '%f', '%s', '%s', '%f', '%f',
                 '%s', '%s'
             )
@@ -929,8 +968,23 @@ class SDPI_History {
         
         // Basic Info
         $html .= '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px;">';
-        
+
         // Left Column
+        $html .= '<div>';
+        $html .= '<h3 style="color: #0073aa; margin-bottom: 15px; font-size: 16px;">👤 Información del Cliente</h3>';
+        $html .= '<div style="background: #f8f9fa; padding: 15px; border-radius: 6px;">';
+        if ($quote->client_name) {
+            $html .= '<p><strong>Nombre:</strong> ' . esc_html($quote->client_name) . '</p>';
+            $html .= '<p><strong>Email:</strong> ' . esc_html($quote->client_email) . '</p>';
+            $html .= '<p><strong>Teléfono:</strong> ' . esc_html($quote->client_phone) . '</p>';
+            $html .= '<p><strong>Info Capturada:</strong> ' . date('d/m/Y H:i', strtotime($quote->client_info_captured_at)) . '</p>';
+        } else {
+            $html .= '<p><em style="color: #999;">Cliente no registrado</em></p>';
+        }
+        $html .= '</div>';
+        $html .= '</div>';
+
+        // Right Column
         $html .= '<div>';
         $html .= '<h3 style="color: #0073aa; margin-bottom: 15px; font-size: 16px;">📅 Información General</h3>';
         $html .= '<div style="background: #f8f9fa; padding: 15px; border-radius: 6px;">';
@@ -940,24 +994,26 @@ class SDPI_History {
         $html .= '<p><strong>Navegador:</strong> ' . esc_html(substr($quote->user_agent, 0, 50)) . '...</p>';
         $html .= '</div>';
         $html .= '</div>';
-        
-        // Right Column
-        $html .= '<div>';
+
+        $html .= '</div>';
+
+        // Shipping Info
+        $html .= '<div style="margin-bottom: 25px;">';
         $html .= '<h3 style="color: #0073aa; margin-bottom: 15px; font-size: 16px;">🚛 Información del Envío</h3>';
         $html .= '<div style="background: #f8f9fa; padding: 15px; border-radius: 6px;">';
-        $html .= '<p><strong>Origen:</strong> ' . esc_html($quote->pickup_city) . ' (' . esc_html($quote->pickup_zip) . ')</p>';
-        $html .= '<p><strong>Destino:</strong> ' . esc_html($quote->delivery_city) . ' (' . esc_html($quote->delivery_zip) . ')</p>';
-        $html .= '<p><strong>Tipo de Tráiler:</strong> ' . esc_html(ucfirst($quote->trailer_type)) . '</p>';
-        $html .= '<p><strong>Tipo de Transporte:</strong> ';
+        $html .= '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">';
+        $html .= '<div><strong>Origen:</strong> ' . esc_html($quote->pickup_city) . ' (' . esc_html($quote->pickup_zip) . ')</div>';
+        $html .= '<div><strong>Destino:</strong> ' . esc_html($quote->delivery_city) . ' (' . esc_html($quote->delivery_zip) . ')</div>';
+        $html .= '<div><strong>Tipo de Tráiler:</strong> ' . esc_html(ucfirst($quote->trailer_type)) . '</div>';
+        $html .= '<div><strong>Tipo de Transporte:</strong> ';
         if ($quote->maritime_involved) {
             $html .= '<span style="background: #0073aa; color: white; padding: 2px 8px; border-radius: 3px; font-size: 12px;">🚢 Marítimo</span>';
         } else {
             $html .= '<span style="background: #00a32a; color: white; padding: 2px 8px; border-radius: 3px; font-size: 12px;">🚛 Terrestre</span>';
         }
-        $html .= '</p>';
         $html .= '</div>';
         $html .= '</div>';
-        
+        $html .= '</div>';
         $html .= '</div>';
         
         // Vehicle Info
@@ -1080,7 +1136,8 @@ class SDPI_History {
         
         // Headers
         fputcsv($output, array(
-            'ID', 'Fecha', 'IP Usuario', 'Origen Ciudad', 'Origen ZIP', 'Destino Ciudad', 'Destino ZIP',
+            'ID', 'Fecha', 'IP Usuario', 'Cliente Nombre', 'Cliente Teléfono', 'Cliente Email', 'Info Capturada',
+            'Origen Ciudad', 'Origen ZIP', 'Destino Ciudad', 'Destino ZIP',
             'Tipo Tráiler', 'Tipo Vehículo', 'Marca', 'Modelo', 'Año', 'No Operativo',
             'Precio API', 'Confianza API', 'Precio por Milla', 'Precio Final', 'Ganancia Empresa',
             'Ajuste Confianza', 'Marítimo', 'Costo Marítimo', 'Puerto USA', 'ZIP Puerto',
@@ -1093,6 +1150,10 @@ class SDPI_History {
                 $row['id'],
                 $row['created_at'],
                 $row['user_ip'],
+                $row['client_name'],
+                $row['client_phone'],
+                $row['client_email'],
+                $row['client_info_captured_at'],
                 $row['pickup_city'],
                 $row['pickup_zip'],
                 $row['delivery_city'],

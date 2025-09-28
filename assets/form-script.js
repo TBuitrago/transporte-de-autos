@@ -151,14 +151,17 @@ jQuery(document).ready(function($) {
             timeout: 30000,
             success: function(response) {
                 $('#sdpi-loading').hide();
-                
+
                 if (response.success) {
+                    // Clear any previous payment buttons before showing new results
+                    $('.sdpi-pay-btn').remove();
+
                     // Show success results
                     $('#sdpi-result-title').text('Cotización Obtenida');
                     $('#sdpi-result-message').text(response.data.message);
                     $('#sdpi-price').text('$' + response.data.final_price + ' USD');
                     $('#sdpi-confidence').text(response.data.confidence_percentage + '%');
-                    
+
                     // Show price breakdown
                     if (response.data.breakdown) {
                         $('#sdpi-result-details').html(response.data.breakdown);
@@ -168,7 +171,7 @@ jQuery(document).ready(function($) {
                             '<p><strong>Nivel de Confianza:</strong> ' + response.data.confidence_percentage + '%</p>'
                         );
                     }
-                    
+
                     $('#sdpi-result-details').show();
                     $('#sdpi-results').removeClass('error').addClass('success').show();
 
@@ -178,6 +181,9 @@ jQuery(document).ready(function($) {
                         $('#sdpi-results').append(payButton);
                     }
                 } else {
+                    // Clear any previous payment buttons on error too
+                    $('.sdpi-pay-btn').remove();
+
                     // Show error
                     $('#sdpi-result-title').text('Error');
                     $('#sdpi-result-message').text(response.data || 'Error al obtener la cotización.');

@@ -1,0 +1,637 @@
+/* Super Dispatch Pricing Insights Form Styles */
+
+.sdpi-pricing-form {
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 2rem;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+.sdpi-form-section {
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid #e1e5e9;
+}
+
+.sdpi-form-section:last-of-type {
+    border-bottom: none;
+}
+
+.sdpi-form-section h3 {
+    color: #2c3e50;
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #3498db;
+}
+
+.sdpi-form-group {
+    margin-bottom: 1.5rem;
+}
+
+.sdpi-form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #34495e;
+    font-size: 0.95rem;
+}
+
+.sdpi-form-group input[type="text"],
+.sdpi-form-group input[type="number"],
+.sdpi-form-group select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid #e1e5e9;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    background: #ffffff;
+}
+
+.sdpi-form-group input[type="text"]:focus,
+.sdpi-form-group input[type="number"]:focus,
+.sdpi-form-group select:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.sdpi-form-group input[type="text"].valid,
+.sdpi-form-group input[type="number"].valid {
+    border-color: #27ae60;
+    background-color: #f8fff9;
+}
+
+.sdpi-form-group input[type="text"].invalid,
+.sdpi-form-group input[type="number"].invalid {
+    border-color: #e74c3c;
+    background-color: #fff8f8;
+}
+
+.sdpi-form-group input[type="checkbox"] {
+    margin-right: 0.5rem;
+    transform: scale(1.2);
+}
+
+.sdpi-form-group input[type="checkbox"] + span {
+    font-weight: normal;
+}
+
+.sdpi-form-submit {
+    text-align: center;
+    margin-top: 2rem;
+}
+
+.sdpi-submit-btn {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+    border: none;
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+}
+
+.sdpi-submit-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
+}
+
+.sdpi-submit-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.sdpi-clear-btn {
+    background: #95a5a6;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-left: 1rem;
+}
+
+.sdpi-clear-btn:hover {
+    background: #7f8c8d;
+    transform: translateY(-1px);
+}
+
+/* Payment button styles */
+.sdpi-pay-btn {
+    background: linear-gradient(135deg, #27ae60, #219a52);
+    color: white;
+    border: none;
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
+    margin-top: 1rem;
+    display: block;
+    width: 100%;
+    max-width: 300px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.sdpi-pay-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(39, 174, 96, 0.4);
+    background: linear-gradient(135deg, #219a52, #1e8449);
+}
+
+.sdpi-pay-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+    background: #95a5a6;
+}
+
+/* Loading indicator */
+.sdpi-loading {
+    text-align: center;
+    padding: 2rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-top: 1rem;
+    border: 2px dashed #dee2e6;
+}
+
+.sdpi-loading p {
+    color: #6c757d;
+    font-size: 1.1rem;
+    margin: 0;
+    font-weight: 500;
+}
+
+/* Results styling */
+.sdpi-results {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    border-radius: 8px;
+    border-left: 4px solid;
+}
+
+.sdpi-results.success {
+    background: #d4edda;
+    border-color: #28a745;
+    color: #155724;
+}
+
+.sdpi-results.error {
+    background: #f8d7da;
+    border-color: #dc3545;
+    color: #721c24;
+}
+
+.sdpi-results h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1.3rem;
+    font-weight: 600;
+}
+
+.sdpi-results p {
+    margin-bottom: 1rem;
+    line-height: 1.6;
+}
+
+.sdpi-result-details {
+    background: rgba(255, 255, 255, 0.7);
+    padding: 1rem;
+    border-radius: 6px;
+    margin-top: 1rem;
+}
+
+.sdpi-result-details p {
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.sdpi-result-details strong {
+    color: #2c3e50;
+}
+
+/* Debug info */
+.sdpi-debug {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-top: 1rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+}
+
+.sdpi-debug h4 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    color: #495057;
+    font-size: 0.9rem;
+}
+
+.sdpi-debug pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: #6c757d;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .dpi-pricing-form {
+        margin: 1rem;
+        padding: 1.5rem;
+    }
+    
+    .dpi-form-section h3 {
+        font-size: 1.1rem;
+    }
+    
+    .dpi-submit-btn {
+        width: 100%;
+        margin-bottom: 1rem;
+    }
+    
+    .dpi-clear-btn {
+        width: 100%;
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .dpi-pricing-form {
+        padding: 1rem;
+    }
+    
+    .dpi-form-group input[type="text"],
+    .dpi-form-group input[type="number"],
+    .dpi-form-group select {
+        padding: 0.6rem;
+        font-size: 0.95rem;
+    }
+}
+
+/* Animation for form elements */
+.sdpi-form-group {
+    animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Success animation */
+.sdpi-results.success {
+    animation: slideInRight 0.5s ease-out;
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Error animation */
+.sdpi-results.error {
+    animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+/* Loading animation */
+.sdpi-loading p {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Price breakdown styles */
+.sdpi-price-breakdown {
+    margin-top: 1rem;
+    padding: 1rem;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.sdpi-price-breakdown h4 {
+    margin: 0 0 1rem 0;
+    color: #2c3e50;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.sdpi-price-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.sdpi-price-item:last-child {
+    border-bottom: none;
+}
+
+.sdpi-price-item.sdpi-price-total {
+    margin-top: 0.5rem;
+    padding-top: 1rem;
+    border-top: 2px solid #3498db;
+    font-size: 1.1rem;
+}
+
+.sdpi-price-label {
+    color: #495057;
+    font-weight: 500;
+}
+
+.sdpi-price-value {
+    color: #2c3e50;
+    font-weight: 600;
+    text-align: right;
+}
+
+.sdpi-price-total .sdpi-price-label,
+.sdpi-price-total .sdpi-price-value {
+    color: #2c3e50;
+    font-size: 1.2rem;
+}
+
+/* City search field styles */
+.sdpi-field-help {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.875rem;
+    color: #6c757d;
+    font-style: italic;
+    padding-left: 0;
+    transition: color 0.3s ease;
+}
+
+.sdpi-field-help::before {
+    content: "";
+    margin-right: 0;
+    font-size: 0.9em;
+}
+
+/* Focus state for help text */
+.sdpi-form-group:focus-within .sdpi-field-help {
+    color: #3498db;
+}
+
+/* Maritime Transport Styles */
+.sdpi-maritime-breakdown {
+    background: #f8f9fa;
+    border: 2px solid #007cba;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+}
+
+.sdpi-maritime-breakdown h4 {
+    color: #007cba;
+    margin: 0 0 1rem 0;
+    font-size: 1.2rem;
+    border-bottom: 2px solid #007cba;
+    padding-bottom: 0.5rem;
+}
+
+.sdpi-maritime-breakdown h5 {
+    color: #495057;
+    margin: 1rem 0 0.5rem 0;
+    font-size: 1rem;
+}
+
+.sdpi-cost-section {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 1rem;
+    margin: 0.5rem 0;
+}
+
+.sdpi-cost-total {
+    background: #e3f2fd;
+    border: 2px solid #2196f3;
+    border-radius: 6px;
+    padding: 1rem;
+    margin: 1rem 0 0 0;
+}
+
+.sdpi-cost-total h5 {
+    color: #1976d2;
+    margin: 0 0 0.5rem 0;
+}
+
+.sdpi-maritime-note {
+    font-style: italic;
+    color: #666;
+    font-size: 0.9rem;
+    margin: 0.5rem 0 0 0;
+}
+
+/* Price breakdown items */
+.sdpi-price-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #eee;
+}
+
+.sdpi-price-item:last-child {
+    border-bottom: none;
+}
+
+.sdpi-price-label {
+    font-weight: 500;
+    color: #333;
+}
+
+.sdpi-price-value {
+    font-weight: 600;
+    color: #007cba;
+}
+
+.sdpi-price-subtotal {
+    background: #f8f9fa;
+    padding: 0.75rem;
+    margin: 0.5rem 0;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+}
+
+.sdpi-price-total {
+    background: #e3f2fd;
+    padding: 1rem;
+    margin: 1rem 0 0 0;
+    border-radius: 6px;
+    border: 2px solid #2196f3;
+    font-size: 1.1rem;
+}
+
+.sdpi-price-total .sdpi-price-label,
+.sdpi-price-total .sdpi-price-value {
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+/* Custom Search Container */
+.sdpi-search-container {
+    position: relative;
+    width: 100%;
+}
+
+.sdpi-search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 2px solid #e1e5e9;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+    display: none;
+}
+
+.sdpi-city-option {
+    padding: 12px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid #f8f9fa;
+    transition: all 0.2s ease;
+    font-size: 0.95rem;
+    color: #34495e;
+}
+
+.sdpi-city-option:hover {
+    background-color: #3498db;
+    color: white;
+    border-bottom-color: #2980b9;
+}
+
+.sdpi-city-option:last-child {
+    border-bottom: none;
+}
+
+.sdpi-city-option .city-name {
+    font-weight: 500;
+    color: inherit;
+}
+
+.sdpi-search-loading {
+    padding: 12px 16px;
+    color: #6c757d;
+    font-style: italic;
+    text-align: center;
+    font-size: 0.95rem;
+}
+
+.sdpi-no-results {
+    padding: 12px 16px;
+    color: #6c757d;
+    font-style: italic;
+    text-align: center;
+    font-size: 0.95rem;
+}
+
+/* Search container focus state */
+.sdpi-form-group:focus-within .sdpi-search-container input {
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+/* Search container error state */
+.sdpi-form-group.error .sdpi-search-container input {
+    border-color: #dc3232;
+}
+
+/* Search container success state */
+.sdpi-form-group.success .sdpi-search-container input {
+    border-color: #46b450;
+}
+
+/* ZIP search indicator */
+.sdpi-zip-option {
+    background-color: #f8f9fa;
+    border-left: 3px solid #007cba;
+}
+
+.sdpi-zip-option:hover {
+    background-color: #3498db !important;
+    color: white !important;
+}
+
+.sdpi-zip-option .zip-indicator {
+    background-color: rgba(255, 255, 255, 0.2) !important;
+    color: white !important;
+}
+
+/* Responsive search results */
+@media (max-width: 768px) {
+    .sdpi-city-option {
+        padding: 10px 12px;
+        font-size: 0.9rem;
+    }
+    
+    .sdpi-search-loading,
+    .sdpi-no-results {
+        padding: 10px 12px;
+        font-size: 0.9rem;
+    }
+}
+
+/* Ensure form fields match exactly */
+.sdpi-form-group select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid #e1e5e9;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    background: #ffffff;
+}
+
+.sdpi-form-group select:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}

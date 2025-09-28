@@ -1,0 +1,217 @@
+{
+  "plugin": {
+    "name": "Super Dispatch Pricing Insights",
+    "slug": "super-dispatch-pricing-insights",
+    "version": "1.2.0",
+    "description": "Plugin de WordPress que integra la API de Super Dispatch para proporcionar cotizaciones de transporte de vehículos en tiempo real, incluyendo soporte para transporte marítimo a Puerto Rico.",
+    "author": "Tu Nombre",
+    "author_uri": "https://tu-sitio.com",
+    "plugin_uri": "https://tu-sitio.com/super-dispatch-pricing-insights",
+    "license": "GPL v2 or later",
+    "license_uri": "https://www.gnu.org/licenses/gpl-2.0.html",
+    "text_domain": "super-dispatch-pricing-insights",
+    "domain_path": "/languages",
+    "network": false,
+    "requires_wp": "5.0",
+    "tested_wp": "6.4",
+    "requires_php": "7.4",
+    "minimum_php": "7.4",
+    "recommended_php": "8.0"
+  },
+  "features": {
+    "terrestrial_transport": {
+      "enabled": true,
+      "description": "Cotizaciones de transporte terrestre usando Super Dispatch API",
+      "api_integration": true,
+      "price_calculation": true,
+      "confidence_adjustment": true
+    },
+    "maritime_transport": {
+      "enabled": true,
+      "description": "Soporte para transporte marítimo a Puerto Rico",
+      "auto_port_selection": true,
+      "fixed_rates": true,
+      "hybrid_calculation": true
+    },
+    "city_search": {
+      "enabled": true,
+      "description": "Búsqueda inteligente de ciudades y códigos postales",
+      "autocomplete": true,
+      "zip_search": true,
+      "database_integration": true
+    },
+    "pricing_logic": {
+      "company_profit": 200.00,
+      "confidence_adjustments": {
+        "60_100": "percentage_remaining",
+        "30_59": 150.00,
+        "0_29": 200.00
+      },
+      "maritime_no_profit": true
+    }
+  },
+  "api": {
+    "provider": "Super Dispatch",
+    "endpoint": "https://api.superdispatch.com/v1/recommended-price",
+    "authentication": "api_key",
+    "rate_limit": "unlimited",
+    "timeout": 30,
+    "retry_attempts": 3
+  },
+  "database": {
+    "tables": [
+      {
+        "name": "wp_sdpi_cities",
+        "description": "Tabla de ciudades y códigos postales de Estados Unidos",
+        "fields": [
+          "id (int, primary key)",
+          "city (varchar 100)",
+          "state_id (varchar 2)",
+          "zips (text)"
+        ],
+        "indexes": ["city", "state_id"]
+      }
+    ],
+    "options": [
+      "sdpi_api_key",
+      "sdpi_plugin_version",
+      "sdpi_settings"
+    ]
+  },
+  "maritime": {
+    "enabled": true,
+    "san_juan_zip_prefix": "009",
+    "ports": {
+      "northeast": {
+        "name": "Eddystone, PA",
+        "zip": "19022",
+        "api_zip": "10001",
+        "states": ["CT", "DC", "DE", "MA", "MD", "ME", "NH", "NJ", "NY", "PA", "RI", "VA"]
+      },
+      "southeast": {
+        "name": "Jacksonville, FL",
+        "zip": "32226",
+        "api_zip": "33101",
+        "states": "all_others"
+      }
+    },
+    "rates": {
+      "san_juan_to_jacksonville": 895.00,
+      "san_juan_to_penn_terminals": 1350.00,
+      "jacksonville_to_san_juan": 1150.00,
+      "penn_terminals_to_san_juan": 1675.00
+    }
+  },
+  "hooks": {
+    "actions": [
+      "sdpi_before_form_render",
+      "sdpi_after_form_render",
+      "sdpi_before_api_call",
+      "sdpi_after_api_call"
+    ],
+    "filters": [
+      "sdpi_form_data",
+      "sdpi_api_response",
+      "sdpi_final_price",
+      "sdpi_maritime_rates"
+    ]
+  },
+  "assets": {
+    "css": [
+      "assets/form-styles.css"
+    ],
+    "js": [
+      "assets/form-script.js"
+    ],
+    "dependencies": {
+      "css": [],
+      "js": ["jquery"]
+    }
+  },
+  "shortcodes": [
+    {
+      "tag": "sdpi_pricing_form",
+      "description": "Muestra el formulario de cotización de precios",
+      "parameters": [],
+      "example": "[sdpi_pricing_form]"
+    }
+  ],
+  "admin_pages": [
+    {
+      "slug": "sdpi-settings",
+      "title": "Super Dispatch Pricing",
+      "menu_title": "Super Dispatch Pricing",
+      "capability": "manage_options",
+      "icon": "dashicons-truck",
+      "position": 30
+    }
+  ],
+  "ajax_actions": [
+    {
+      "action": "sdpi_get_quote",
+      "description": "Obtiene cotización de precios",
+      "public": true,
+      "nonce": true
+    },
+    {
+      "action": "sdpi_search_cities",
+      "description": "Busca ciudades para autocompletado",
+      "public": true,
+      "nonce": true
+    },
+    {
+      "action": "sdpi_test_api",
+      "description": "Prueba conexión con la API",
+      "public": false,
+      "nonce": true
+    }
+  ],
+  "security": {
+    "nonce_verification": true,
+    "capability_checks": true,
+    "data_sanitization": true,
+    "output_escaping": true,
+    "sql_injection_protection": true
+  },
+  "performance": {
+    "caching": {
+      "api_responses": true,
+      "city_search": true,
+      "transient_expiry": 300
+    },
+    "optimization": {
+      "conditional_loading": true,
+      "minified_assets": false,
+      "database_indexing": true
+    }
+  },
+  "debugging": {
+    "enabled": false,
+    "log_level": "info",
+    "log_file": "debug.log",
+    "debug_prefix": "SDPI",
+    "maritime_debug_prefix": "SDPI MARITIME"
+  },
+  "testing": {
+    "unit_tests": false,
+    "integration_tests": false,
+    "test_data": {
+      "cities": ["Miami", "New York", "Los Angeles"],
+      "zips": ["33101", "10001", "90001"],
+      "san_juan_zips": ["00901", "00918", "00925"]
+    }
+  },
+  "documentation": {
+    "readme": "README.md",
+    "developer_docs": "DEVELOPER.md",
+    "installation_guide": "INSTALLATION.md",
+    "changelog": "CHANGELOG.md"
+  },
+  "support": {
+    "email": "support@tu-sitio.com",
+    "documentation_url": "https://tu-sitio.com/docs/super-dispatch-pricing-insights",
+    "github_issues": "https://github.com/tu-usuario/super-dispatch-pricing-insights/issues",
+    "wordpress_support": "https://wordpress.org/support/plugin/super-dispatch-pricing-insights"
+  }
+}
+

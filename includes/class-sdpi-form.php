@@ -30,6 +30,10 @@ class SDPI_Form {
         add_action('wp_ajax_sdpi_initiate_payment', array($this, 'ajax_initiate_payment'));
         add_action('wp_ajax_nopriv_sdpi_initiate_payment', array($this, 'ajax_initiate_payment'));
 
+        // Add AJAX handler for additional shipping info
+        add_action('wp_ajax_sdpi_save_additional_info', array($this, 'ajax_save_additional_info'));
+        add_action('wp_ajax_nopriv_sdpi_save_additional_info', array($this, 'ajax_save_additional_info'));
+
         // Add AJAX handler for client info capture
         add_action('wp_ajax_sdpi_save_client_info', array($this, 'ajax_save_client_info'));
         add_action('wp_ajax_nopriv_sdpi_save_client_info', array($this, 'ajax_save_client_info'));
@@ -209,6 +213,7 @@ class SDPI_Form {
             </div>
             <?php endif; ?>
         </div>
+        <?php $this->render_additional_info_screen(); ?>
         
         <script>
         jQuery(document).ready(function($) {
@@ -439,6 +444,110 @@ class SDPI_Form {
     }
 
     /**
+     * Render a secondary screen to capture additional shipping info before checkout
+     * This markup will be toggled from JS when user clicks Pay
+     */
+    private function render_additional_info_screen() {
+        ?>
+        <div id="sdpi-additional-info" class="sdpi-client-info-form" style="display:none;">
+            <div class="sdpi-form-section">
+                <h3>Información adicional para el envío</h3>
+                <p>Revise los datos de la cotización y complete la información de recogida y entrega antes de continuar al pago.</p>
+
+                <!-- Resumen no editable de la cotización previa -->
+                <div class="sdpi-price-breakdown" id="sdpi-additional-summary">
+                    <h4>Resumen de la Cotización</h4>
+                    <div class="sdpi-price-item"><span class="sdpi-price-label">Origen:</span><span class="sdpi-price-value" id="sdpi-summary-pickup"></span></div>
+                    <div class="sdpi-price-item"><span class="sdpi-price-label">Destino:</span><span class="sdpi-price-value" id="sdpi-summary-delivery"></span></div>
+                    <div class="sdpi-price-item"><span class="sdpi-price-label">Tipo de Tráiler:</span><span class="sdpi-price-value" id="sdpi-summary-trailer"></span></div>
+                    <div class="sdpi-price-item"><span class="sdpi-price-label">Vehículo:</span><span class="sdpi-price-value" id="sdpi-summary-vehicle"></span></div>
+                    <div class="sdpi-price-item sdpi-price-total"><span class="sdpi-price-label">Precio Final:</span><span class="sdpi-price-value" id="sdpi-summary-price"></span></div>
+                </div>
+
+                <!-- Formulario adicional -->
+                <form id="sdpi-additional-info-form">
+                    <input type="hidden" name="sdpi_nonce" value="<?php echo wp_create_nonce('sdpi_nonce'); ?>">
+
+                    <div class="sdpi-form-section">
+                        <h3>Datos del vehículo</h3>
+                        <div class="sdpi-form-group">
+                            <label for="sdpi_ai_vehicle_year">Año</label>
+                            <input type="number" id="sdpi_ai_vehicle_year" disabled>
+                        </div>
+                        <div class="sdpi-form-group">
+                            <label for="sdpi_ai_vehicle_make">Marca</label>
+                            <input type="text" id="sdpi_ai_vehicle_make" disabled>
+                        </div>
+                        <div class="sdpi-form-group">
+                            <label for="sdpi_ai_vehicle_model">Modelo</label>
+                            <input type="text" id="sdpi_ai_vehicle_model" disabled>
+                        </div>
+                    </div>
+
+                    <div class="sdpi-form-section">
+                        <h3>Información de recogida</h3>
+                        <div class="sdpi-form-group">
+                            <label for="sdpi_ai_p_name">Nombre de quien entrega *</label>
+                            <input type="text" id="sdpi_ai_p_name" required>
+                        </div>
+                        <div class="sdpi-form-group">
+                            <label for="sdpi_ai_p_street">Dirección de recogida *</label>
+                            <input type="text" id="sdpi_ai_p_street" required>
+                        </div>
+                        <div class="sdpi-form-group">
+                            <label for="sdpi_ai_p_city">Ciudad de recogida *</label>
+                            <input type="text" id="sdpi_ai_p_city" required readonly>
+                        </div>
+                        <div class="sdpi-form-group">
+                            <label for="sdpi_ai_p_zip">ZIP de recogida *</label>
+                            <input type="text" id="sdpi_ai_p_zip" required pattern="^\\d{5}$" maxlength="5" readonly>
+                        </div>
+                    </div>
+
+                    <div class="sdpi-form-section">
+                        <h3>Información de entrega</h3>
+                        <div class="sdpi-form-group">
+                            <label for="sdpi_ai_d_name">Nombre de quien recibe *</label>
+                            <input type="text" id="sdpi_ai_d_name" required>
+                        </div>
+                        <div class="sdpi-form-group">
+                            <label for="sdpi_ai_d_street">Dirección de entrega *</label>
+                            <input type="text" id="sdpi_ai_d_street" required>
+                        </div>
+                        <div class="sdpi-form-group">
+                            <label for="sdpi_ai_d_city">Ciudad de entrega *</label>
+                            <input type="text" id="sdpi_ai_d_city" required readonly>
+                        </div>
+                        <div class="sdpi-form-group">
+                            <label for="sdpi_ai_d_zip">ZIP de entrega *</label>
+                            <input type="text" id="sdpi_ai_d_zip" required pattern="^\\d{5}$" maxlength="5" readonly>
+                        </div>
+                    </div>
+
+                    <div class="sdpi-form-section">
+                        <h3>Tipo de recogida</h3>
+                        <div class="sdpi-form-group">
+                            <label for="sdpi_ai_pickup_type">Seleccione una opción *</label>
+                            <select id="sdpi_ai_pickup_type" required>
+                                <option value="">Seleccione...</option>
+                                <option value="Subasta">Subasta</option>
+                                <option value="Residencia">Residencia</option>
+                                <option value="Dealer o negocio">Dealer o negocio</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="sdpi-form-submit">
+                        <button type="button" class="sdpi-submit-btn" id="sdpi-ai-continue">Continuar al Pago</button>
+                        <button type="button" class="sdpi-clear-btn" id="sdpi-ai-cancel">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <?php
+    }
+
+    /**
      * Render the client information capture form
      */
     private function render_client_info_form() {
@@ -610,6 +719,66 @@ class SDPI_Form {
         );
 
         wp_send_json_success('Información del cliente guardada exitosamente.');
+        exit;
+    }
+
+    /**
+     * AJAX handler for saving additional shipping info
+     */
+    public function ajax_save_additional_info() {
+        check_ajax_referer('sdpi_nonce', 'nonce');
+
+        $p_name = sanitize_text_field($_POST['p_name']);
+        $p_street = sanitize_text_field($_POST['p_street']);
+        $p_city = sanitize_text_field($_POST['p_city']);
+        $p_zip = sanitize_text_field($_POST['p_zip']);
+        $d_name = sanitize_text_field($_POST['d_name']);
+        $d_street = sanitize_text_field($_POST['d_street']);
+        $d_city = sanitize_text_field($_POST['d_city']);
+        $d_zip = sanitize_text_field($_POST['d_zip']);
+        $pickup_type = sanitize_text_field($_POST['pickup_type']);
+
+        // Validation
+        if (empty($p_name) || empty($p_street) || empty($p_city) || empty($p_zip) ||
+            empty($d_name) || empty($d_street) || empty($d_city) || empty($d_zip) ||
+            empty($pickup_type)) {
+            wp_send_json_error('Todos los campos son requeridos.');
+            exit;
+        }
+
+        // Validate ZIP codes
+        if (!preg_match('/^\d{5}$/', $p_zip) || !preg_match('/^\d{5}$/', $d_zip)) {
+            wp_send_json_error('Los códigos postales deben tener 5 dígitos.');
+            exit;
+        }
+
+        // Validate pickup type
+        $valid_pickup_types = array('Subasta', 'Residencia', 'Dealer o negocio');
+        if (!in_array($pickup_type, $valid_pickup_types)) {
+            wp_send_json_error('Tipo de recogida inválido.');
+            exit;
+        }
+
+        // Start session if not started
+        if (!session_id()) {
+            session_start();
+        }
+
+        // Store additional shipping info in session
+        $_SESSION['sdpi_additional_info'] = array(
+            'p_name' => $p_name,
+            'p_street' => $p_street,
+            'p_city' => $p_city,
+            'p_zip' => $p_zip,
+            'd_name' => $d_name,
+            'd_street' => $d_street,
+            'd_city' => $d_city,
+            'd_zip' => $d_zip,
+            'pickup_type' => $pickup_type,
+            'saved_at' => current_time('mysql')
+        );
+
+        wp_send_json_success('Información adicional guardada exitosamente.');
         exit;
     }
 

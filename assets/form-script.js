@@ -175,9 +175,9 @@ jQuery(document).ready(function($) {
                     $('#sdpi-result-details').show();
                     $('#sdpi-results').removeClass('error').addClass('success').show();
 
-                    // Add payment button if available
+                    // Add continue button if payment available
                     if (response.data.payment_available) {
-                        var payButton = '<button type="button" class="sdpi-pay-btn" data-quote=\'' + JSON.stringify(response.data) + '\'>Pagar Cotización Ahora</button>';
+                        var payButton = '<button type="button" class="sdpi-pay-btn" data-quote=\'' + JSON.stringify(response.data) + '\'>Continuar</button>';
                         $('#sdpi-results').append(payButton);
                     }
                 } else {
@@ -222,29 +222,117 @@ jQuery(document).ready(function($) {
     $(document).on('click', '.sdpi-pay-btn', function() {
         var quoteData = $(this).data('quote');
         var button = $(this);
-        
-        button.prop('disabled', true).text('Procesando...');
-        
+
+        // Mostrar pantalla adicional antes del pago
+        try {
+            // Completar resumen
+            $('#sdpi-summary-pickup').text(quoteData.pickup_city ? (quoteData.pickup_city + ' (' + quoteData.pickup_zip + ')') : $('#sdpi_pickup_city').val() + ' (' + $('#sdpi_pickup_zip').val() + ')');
+            $('#sdpi-summary-delivery').text(quoteData.delivery_city ? (quoteData.delivery_city + ' (' + quoteData.delivery_zip + ')') : $('#sdpi_delivery_city').val() + ' (' + $('#sdpi_delivery_zip').val() + ')');
+            $('#sdpi-summary-trailer').text($('#sdpi_trailer_type option:selected').text());
+            var vehicleSummary = $('#sdpi_vehicle_year').val() + ' ' + $('#sdpi_vehicle_make').val() + ' ' + $('#sdpi_vehicle_model').val();
+            $('#sdpi-summary-vehicle').text(vehicleSummary.trim());
+            $('#sdpi-summary-price').text('$' + quoteData.final_price + ' USD');
+
+            // Prellenar datos no editables del vehículo
+            $('#sdpi_ai_vehicle_year').val($('#sdpi_vehicle_year').val());
+            $('#sdpi_ai_vehicle_make').val($('#sdpi_vehicle_make').val());
+            $('#sdpi_ai_vehicle_model').val($('#sdpi_vehicle_model').val());
+
+            // Prellenar ciudad/zip reutilizables
+            $('#sdpi_ai_p_city').val($('#sdpi_pickup_city').val());
+            $('#sdpi_ai_p_zip').val($('#sdpi_pickup_zip').val());
+            $('#sdpi_ai_d_city').val($('#sdpi_delivery_city').val());
+            $('#sdpi_ai_d_zip').val($('#sdpi_delivery_zip').val());
+
+            // Mostrar nueva pantalla y ocultar cotizador
+            $('#sdpi-pricing-form').hide();
+            $('#sdpi-results').hide();
+            $('#sdpi-additional-info').show();
+            $('html, body').animate({ scrollTop: $('#sdpi-additional-info').offset().top - 40 }, 300);
+
+            // Guardar quote en data para uso posterior
+            $('#sdpi-additional-info').data('quote', quoteData);
+        } catch (e) {
+            console.error('Error preparando pantalla adicional:', e);
+        }
+    });
+
+    // Botón cancelar en pantalla adicional
+    $(document).on('click', '#sdpi-ai-cancel', function() {
+        $('#sdpi-additional-info').hide();
+        $('#sdpi-pricing-form').show();
+        $('#sdpi-results').show();
+    });
+
+    // Continuar al pago: validar y guardar info adicional, luego iniciar pago
+    $(document).on('click', '#sdpi-ai-continue', function() {
+        var btn = $(this);
+        var container = $('#sdpi-additional-info');
+        var quoteData = container.data('quote') || {};
+
+        var payload = {
+            action: 'sdpi_save_additional_info',
+            nonce: sdpi_ajax.nonce,
+            p_name: $('#sdpi_ai_p_name').val().trim(),
+            p_street: $('#sdpi_ai_p_street').val().trim(),
+            p_city: $('#sdpi_ai_p_city').val().trim(),
+            p_zip: $('#sdpi_ai_p_zip').val().trim(),
+            d_name: $('#sdpi_ai_d_name').val().trim(),
+            d_street: $('#sdpi_ai_d_street').val().trim(),
+            d_city: $('#sdpi_ai_d_city').val().trim(),
+            d_zip: $('#sdpi_ai_d_zip').val().trim(),
+            pickup_type: $('#sdpi_ai_pickup_type').val().trim()
+        };
+
+        // Validación básica
+        if (!payload.p_name || !payload.p_street || !payload.p_city || !/^\d{5}$/.test(payload.p_zip) ||
+            !payload.d_name || !payload.d_street || !payload.d_city || !/^\d{5}$/.test(payload.d_zip) ||
+            !payload.pickup_type) {
+            alert('Por favor complete todos los campos obligatorios con información válida.');
+            return;
+        }
+
+        btn.prop('disabled', true).text('Guardando...');
+
         $.ajax({
             url: sdpi_ajax.ajax_url,
             type: 'POST',
-            data: {
-                action: 'sdpi_initiate_payment',
-                nonce: sdpi_ajax.nonce,
-                quote_data: JSON.stringify(quoteData)
-            },
+            data: payload,
             dataType: 'json',
-            success: function(response) {
-                if (response.success) {
-                    window.location.href = response.data.checkout_url;
-                } else {
-                    alert('Error al iniciar el pago: ' + (response.data || 'Error desconocido'));
-                    button.prop('disabled', false).text('Pagar Cotización Ahora');
+            success: function(resp) {
+                if (!resp.success) {
+                    alert(resp.data || 'Error al guardar la información adicional.');
+                    btn.prop('disabled', false).text('Continuar al Pago');
+                    return;
                 }
+
+                // Iniciar pago con WooCommerce usando el flujo existente
+                $.ajax({
+                    url: sdpi_ajax.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'sdpi_initiate_payment',
+                        nonce: sdpi_ajax.nonce,
+                        quote_data: JSON.stringify(quoteData)
+                    },
+                    dataType: 'json',
+                    success: function(response) {
+                        if (response.success) {
+                            window.location.href = response.data.checkout_url;
+                        } else {
+                            alert('Error al iniciar el pago: ' + (response.data || 'Error desconocido'));
+                            btn.prop('disabled', false).text('Continuar al Pago');
+                        }
+                    },
+                    error: function() {
+                        alert('Error de conexión al iniciar el pago.');
+                        btn.prop('disabled', false).text('Continuar al Pago');
+                    }
+                });
             },
             error: function() {
-                alert('Error de conexión. Intente nuevamente.');
-                button.prop('disabled', false).text('Pagar Cotización Ahora');
+                alert('Error de conexión al guardar la información adicional.');
+                btn.prop('disabled', false).text('Continuar al Pago');
             }
         });
     });

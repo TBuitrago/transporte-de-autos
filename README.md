@@ -59,5 +59,9 @@ El plugin crea automáticamente la tabla `wp_sdpi_cities` para almacenar datos d
 - PHP 7.4+
 - API key de Super Dispatch
 
-## Soporte
-Para soporte técnico, contactar al desarrollador del plugin.
+## Soporte y Contacto
+Para soporte técnico, contactar a:
+
+**Tomas Buitrago**  
+Empresa: TBA Digitals  
+Email: [sdpi@tbadigitals.com](mailto:sdpi@tbadigitals.com)

@@ -1,5 +1,12 @@
 # Super Dispatch Pricing Insights - Documentación Técnica
 
+## Desarrollador
+**Tomas Buitrago**  
+Empresa: TBA Digitals  
+Contacto: [sdpi@tbadigitals.com](mailto:sdpi@tbadigitals.com)
+
+---
+
 ## 🏗️ Arquitectura del Sistema
 
 ### Flujo de Datos

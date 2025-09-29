@@ -276,6 +276,11 @@ Al contactar soporte, incluir:
 - Logs de error relevantes
 - Descripción detallada del problema
 
+### Contacto de Soporte
+**Tomas Buitrago**  
+Empresa: TBA Digitals  
+Email: [sdpi@tbadigitals.com](mailto:sdpi@tbadigitals.com)
+
 ### Recursos de Ayuda
 - Documentación del plugin: `README.md`
 - Documentación técnica: `DEVELOPER.md`

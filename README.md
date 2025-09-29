@@ -5,9 +5,13 @@ Plugin de WordPress que permite a los clientes cotizar en tiempo real el precio 
 
 ## Características
 - ✅ Formulario personalizado con búsqueda de ciudades
+- ✅ Pantalla adicional previa al pago para datos de recogida/entrega
 - ✅ Integración con API de Super Dispatch
 - ✅ Sistema de precios con ganancia de empresa y ajustes por confianza
-- ✅ Búsqueda de ciudades con autocompletado
+- ✅ Soporte marítimo PR con puertos USA automáticos
+- ✅ Sesiones de cotización consolidadas (registro único por proceso)
+- ✅ Envío a Zapier/CRM solo al finalizar (o manual desde admin)
+- ✅ Historial con estado Zapier y acciones en lote (enviar/eliminar)
 - ✅ Interfaz responsive y moderna
 - ✅ Validación en tiempo real
 
@@ -33,6 +37,19 @@ Plugin de WordPress que permite a los clientes cotizar en tiempo real el precio 
 - **Modelo del Vehículo**: Texto libre
 - **Año del Vehículo**: Texto libre
 
+### Pantallas del Flujo
+- **Información de Contacto**: Nombre, correo, teléfono (inicia sesión de cotización)
+- **Cotizador**: Origen, destino, vehículo, obtiene precio
+- **Información adicional**: Nombre de quien entrega/recibe, direcciones, ciudades/ZIP (ciudades/ZIP en solo lectura), tipo de recogida
+
+### Integración con WooCommerce
+- Botón “Continuar” abre pantalla adicional y, tras guardar, lleva al checkout nativo de WooCommerce.
+
+### Envío a Zapier / CRM
+- Automático: al completar el pedido (hook `woocommerce_order_status_completed`).
+- Manual: desde WP Admin → SDPI → “Enviar a Zapier”, ingresando `Session ID`.
+- Lote: WP Admin → SDPI → Historial, seleccionar varias filas y “Enviar seleccionados a Zapier”.
+
 ## Sistema de Precios
 El plugin aplica la siguiente lógica de precios:
 1. **Precio base**: Obtenido de la API de Super Dispatch
@@ -43,7 +60,9 @@ El plugin aplica la siguiente lógica de precios:
    - 0-29%: Suma $200 USD fijos
 
 ## Base de Datos
-El plugin crea automáticamente la tabla `wp_sdpi_cities` para almacenar datos de ciudades de EE.UU.
+- `wp_sdpi_cities`: datos de ciudades/ZIP.
+- `wp_sdpi_history`: historial de cotizaciones, incluye `zapier_status` y `zapier_last_sent_at`.
+- `wp_sdpi_quote_sessions`: sesiones consolidadas con JSON incremental por `session_id`.
 
 ## Archivos Principales
 - `super-dispatch-pricing-insights.php` - Archivo principal del plugin
@@ -51,6 +70,8 @@ El plugin crea automáticamente la tabla `wp_sdpi_cities` para almacenar datos d
 - `includes/class-sdpi-api.php` - Comunicación con la API
 - `includes/class-sdpi-form.php` - Formulario personalizado
 - `includes/class-sdpi-cities.php` - Gestión de ciudades
+- `includes/class-sdpi-history.php` - Historial, estadísticas, envío/acciones en lote
+- `includes/class-sdpi-session.php` - Gestión de sesiones de cotización
 - `assets/form-script.js` - JavaScript del formulario
 - `assets/form-styles.css` - Estilos del formulario
 

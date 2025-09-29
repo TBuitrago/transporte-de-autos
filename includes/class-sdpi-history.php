@@ -20,6 +20,8 @@ class SDPI_History {
         add_action('wp_ajax_sdpi_delete_history_item', array($this, 'ajax_delete_history_item'));
         add_action('wp_ajax_sdpi_export_history', array($this, 'ajax_export_history'));
         add_action('wp_ajax_sdpi_get_quote_details', array($this, 'ajax_get_quote_details'));
+        add_action('wp_ajax_sdpi_bulk_send_zapier', array($this, 'ajax_bulk_send_zapier'));
+        add_action('wp_ajax_sdpi_bulk_delete_history', array($this, 'ajax_bulk_delete_history'));
     }
     
     /**
@@ -63,6 +65,8 @@ class SDPI_History {
             total_maritime_cost decimal(10,2),
             price_breakdown text,
             error_message text,
+            zapier_status varchar(20) DEFAULT 'pending',
+            zapier_last_sent_at datetime DEFAULT NULL,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             KEY user_ip (user_ip),
@@ -106,6 +110,15 @@ class SDPI_History {
             'manage_options',
             'sdpi-statistics',
             array($this, 'statistics_page')
+        );
+
+        add_submenu_page(
+            'sdpi-history',
+            'Enviar a Zapier (manual)',
+            'Enviar a Zapier',
+            'manage_options',
+            'sdpi-send-zapier',
+            array($this, 'send_zapier_page')
         );
     }
     
@@ -294,6 +307,73 @@ class SDPI_History {
             jQuery('#sdpi-details-modal').remove();
         }
         </script>
+        <?php
+    }
+
+    /**
+     * Manual send to Zapier page
+     */
+    public function send_zapier_page() {
+        if (!current_user_can('manage_options')) { return; }
+        $message = '';
+        if (isset($_POST['sdpi_manual_send'])) {
+            check_admin_referer('sdpi_manual_send_action', 'sdpi_manual_send_nonce');
+            $session_id = sanitize_text_field($_POST['session_id'] ?? '');
+            if (!empty($session_id)) {
+                $session = new SDPI_Session();
+                $row = $session->get($session_id);
+                if ($row) {
+                    // Build minimal payload and reuse existing sender
+                    $data = is_array($row['data']) ? $row['data'] : array();
+                    $quote = isset($data['quote']) ? $data['quote'] : array();
+                    $final = isset($quote['final']) ? $quote['final'] : array();
+                    $pickup_zip = isset($quote['pickup_zip']) ? $quote['pickup_zip'] : '';
+                    $delivery_zip = isset($quote['delivery_zip']) ? $quote['delivery_zip'] : '';
+                    $trailer_type = isset($quote['trailer_type']) ? $quote['trailer_type'] : '';
+                    $vehicle = isset($quote['vehicle']) ? $quote['vehicle'] : array();
+                    $form = new SDPI_Form();
+                    $ref = new ReflectionClass($form);
+                    $m = $ref->getMethod('send_to_zapier');
+                    $m->setAccessible(true);
+                    $m->invoke($form,
+                        $pickup_zip,
+                        $delivery_zip,
+                        $trailer_type,
+                        isset($vehicle['type']) ? $vehicle['type'] : '',
+                        isset($vehicle['inoperable']) ? $vehicle['inoperable'] : false,
+                        isset($vehicle['electric']) ? $vehicle['electric'] : false,
+                        isset($vehicle['make']) ? $vehicle['make'] : '',
+                        isset($vehicle['model']) ? $vehicle['model'] : '',
+                        isset($vehicle['year']) ? $vehicle['year'] : '',
+                        $final,
+                        isset($final['maritime_involved']) ? $final['maritime_involved'] : false
+                    );
+                    $message = 'Datos enviados a Zapier.';
+                } else {
+                    $message = 'Sesión no encontrada.';
+                }
+            } else {
+                $message = 'Ingrese un Session ID válido.';
+            }
+        }
+
+        ?>
+        <div class="wrap">
+            <h1>Enviar a Zapier (manual)</h1>
+            <?php if (!empty($message)): ?>
+                <div class="notice notice-info"><p><?php echo esc_html($message); ?></p></div>
+            <?php endif; ?>
+            <form method="post">
+                <?php wp_nonce_field('sdpi_manual_send_action', 'sdpi_manual_send_nonce'); ?>
+                <p>
+                    <label for="session_id">Session ID:</label><br>
+                    <input type="text" id="session_id" name="session_id" class="regular-text" placeholder="UUID de sesión" required>
+                </p>
+                <p>
+                    <input type="submit" name="sdpi_manual_send" class="button button-primary" value="Enviar ahora">
+                </p>
+            </form>
+        </div>
         <?php
     }
     
@@ -627,9 +707,12 @@ class SDPI_History {
             </div>
         </div>
         
+        <form id="sdpi-bulk-send-form">
+        <?php wp_nonce_field('sdpi_bulk_send', 'sdpi_bulk_send_nonce'); ?>
         <table class="sdpi-history-table">
             <thead>
                 <tr>
+                    <th style="width:28px;"><input type="checkbox" id="sdpi-select-all"></th>
                     <th>ID</th>
                     <th>Fecha</th>
                     <th>Cliente</th>
@@ -640,6 +723,7 @@ class SDPI_History {
                     <th>Precio API</th>
                     <th>Precio Final</th>
                     <th>Confianza</th>
+                    <th>Estado Zapier</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
@@ -653,6 +737,7 @@ class SDPI_History {
                 <?php else: ?>
                 <?php foreach ($items as $item): ?>
                 <tr>
+                    <td><input type="checkbox" class="sdpi-select" name="ids[]" value="<?php echo esc_attr($item->id); ?>"></td>
                     <td><?php echo $item->id; ?></td>
                     <td><?php echo date('Y-m-d H:i', strtotime($item->created_at)); ?></td>
                     <td>
@@ -710,6 +795,18 @@ class SDPI_History {
                         <?php endif; ?>
                     </td>
                     <td>
+                        <?php if ($item->zapier_status === 'sent'): ?>
+                            <span class="sdpi-terrestrial-badge">Enviado</span>
+                            <?php if (!empty($item->zapier_last_sent_at)): ?>
+                                <br><small><?php echo esc_html(date('Y-m-d H:i', strtotime($item->zapier_last_sent_at))); ?></small>
+                            <?php endif; ?>
+                        <?php elseif ($item->zapier_status === 'error'): ?>
+                            <span class="sdpi-maritime-badge" style="background:#d63638;">Error</span>
+                        <?php else: ?>
+                            <span class="sdpi-maritime-badge" style="background:#777;">Pendiente</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
                         <div class="sdpi-actions">
                             <button class="button button-small" onclick="sdpiViewDetails(<?php echo $item->id; ?>)">Ver</button>
                             <button class="button button-small button-link-delete" onclick="sdpiDeleteItem(<?php echo $item->id; ?>)">Eliminar</button>
@@ -720,6 +817,11 @@ class SDPI_History {
                 <?php endif; ?>
             </tbody>
         </table>
+        <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
+            <button type="button" id="sdpi-bulk-send-btn" class="button button-primary">Enviar seleccionados a Zapier</button>
+            <button type="button" id="sdpi-bulk-delete-btn" class="button">Eliminar seleccionados</button>
+        </div>
+        </form>
         
         <div class="tablenav bottom">
             <div class="tablenav-pages">
@@ -753,6 +855,51 @@ class SDPI_History {
                 });
             }
         }
+        </script>
+        <script>
+        jQuery(document).ready(function($){
+            $('#sdpi-select-all').on('change', function(){
+                $('.sdpi-select').prop('checked', $(this).is(':checked'));
+            });
+
+            $('#sdpi-bulk-send-btn').on('click', function(){
+                var ids = $('.sdpi-select:checked').map(function(){ return this.value; }).get();
+                if (ids.length === 0) { alert('Seleccione al menos una cotización.'); return; }
+                var nonce = $('#sdpi-bulk-send-form').find('input[name="sdpi_bulk_send_nonce"]').val();
+                var btn = $(this);
+                btn.prop('disabled', true).text('Enviando...');
+                jQuery.post(ajaxurl, { action: 'sdpi_bulk_send_zapier', nonce: nonce, ids: ids }, function(resp){
+                    btn.prop('disabled', false).text('Enviar seleccionados a Zapier');
+                    if (resp && resp.success) {
+                        alert('Envío completado. Éxito: ' + resp.data.sent + ', Fallas: ' + resp.data.failed);
+                    } else {
+                        alert('Error al enviar: ' + (resp && resp.data ? resp.data : 'Desconocido'));
+                    }
+                }).fail(function(){
+                    btn.prop('disabled', false).text('Enviar seleccionados a Zapier');
+                    alert('Error de red.');
+                });
+            });
+
+            $('#sdpi-bulk-delete-btn').on('click', function(){
+                var ids = $('.sdpi-select:checked').map(function(){ return this.value; }).get();
+                if (ids.length === 0) { alert('Seleccione al menos una cotización.'); return; }
+                if (!confirm('¿Está seguro de eliminar los elementos seleccionados?')) { return; }
+                var btn = $(this);
+                btn.prop('disabled', true).text('Eliminando...');
+                jQuery.post(ajaxurl, { action: 'sdpi_bulk_delete_history', ids: ids, nonce: '<?php echo wp_create_nonce('sdpi_bulk_delete'); ?>' }, function(resp){
+                    btn.prop('disabled', false).text('Eliminar seleccionados');
+                    if (resp && resp.success) {
+                        location.reload();
+                    } else {
+                        alert('Error al eliminar: ' + (resp && resp.data ? resp.data : 'Desconocido'));
+                    }
+                }).fail(function(){
+                    btn.prop('disabled', false).text('Eliminar seleccionados');
+                    alert('Error de red.');
+                });
+            });
+        });
         </script>
         <?php
     }
@@ -924,6 +1071,35 @@ class SDPI_History {
         } else {
             wp_send_json_error(array('message' => 'Failed to delete item'));
         }
+    }
+
+    /**
+     * AJAX: Bulk delete selected history items
+     */
+    public function ajax_bulk_delete_history() {
+        check_ajax_referer('sdpi_bulk_delete', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_die('Insufficient permissions');
+        }
+
+        $ids = isset($_POST['ids']) ? (array)$_POST['ids'] : array();
+        $ids = array_map('intval', $ids);
+        $ids = array_filter($ids);
+
+        if (empty($ids)) {
+            wp_send_json_error('No se recibieron IDs.');
+        }
+
+        global $wpdb;
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+        $query = "DELETE FROM {$this->table_name} WHERE id IN ($placeholders)";
+        $prepared = $wpdb->prepare($query, $ids);
+        $result = $wpdb->query($prepared);
+        if ($result === false) {
+            wp_send_json_error('Fallo al eliminar.');
+        }
+        wp_send_json_success(array('deleted' => $result));
     }
     
     /**
@@ -1182,5 +1358,77 @@ class SDPI_History {
         
         fclose($output);
         exit;
+    }
+
+    /**
+     * AJAX: Bulk send selected history rows to Zapier
+     */
+    public function ajax_bulk_send_zapier() {
+        check_ajax_referer('sdpi_bulk_send', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_die('Insufficient permissions');
+        }
+
+        $ids = isset($_POST['ids']) ? (array)$_POST['ids'] : array();
+        $ids = array_map('intval', $ids);
+        $ids = array_filter($ids);
+
+        if (empty($ids)) {
+            wp_send_json_error('No se recibieron IDs.');
+        }
+
+        global $wpdb;
+        $sent = 0; $failed = 0;
+        $form = new SDPI_Form();
+        $ref = new ReflectionClass($form);
+        $m = $ref->getMethod('send_to_zapier');
+        $m->setAccessible(true);
+
+        foreach ($ids as $id) {
+            $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$this->table_name} WHERE id = %d", $id));
+            if (!$row) { $failed++; continue; }
+            $api_response = json_decode($row->api_response, true);
+            $final = array(
+                'final_price' => floatval($row->final_price),
+                'base_price' => floatval($row->api_price),
+                'confidence_percentage' => floatval($row->api_confidence),
+                'company_profit' => floatval($row->company_profit),
+                'confidence_adjustment' => floatval($row->confidence_adjustment),
+                'maritime_involved' => intval($row->maritime_involved) === 1,
+                'maritime_cost' => floatval($row->maritime_cost),
+                'terrestrial_cost' => floatval($row->total_terrestrial_cost),
+                'us_port' => !empty($row->us_port_name) ? array('port' => $row->us_port_name, 'zip' => $row->us_port_zip) : null
+            );
+
+            try {
+                $m->invoke($form,
+                    $row->pickup_zip,
+                    $row->delivery_zip,
+                    $row->trailer_type,
+                    $row->vehicle_type,
+                    intval($row->vehicle_inoperable) === 1,
+                    false,
+                    $row->vehicle_make,
+                    $row->vehicle_model,
+                    $row->vehicle_year,
+                    $final,
+                    intval($row->maritime_involved) === 1
+                );
+                // mark as sent
+                $wpdb->update($this->table_name, array(
+                    'zapier_status' => 'sent',
+                    'zapier_last_sent_at' => current_time('mysql')
+                ), array('id' => $id), array('%s','%s'), array('%d'));
+                $sent++;
+            } catch (Exception $e) {
+                $wpdb->update($this->table_name, array(
+                    'zapier_status' => 'error'
+                ), array('id' => $id), array('%s'), array('%d'));
+                $failed++;
+            }
+        }
+
+        wp_send_json_success(array('sent' => $sent, 'failed' => $failed));
     }
 }

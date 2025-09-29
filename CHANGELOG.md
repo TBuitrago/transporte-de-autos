@@ -1,5 +1,23 @@
 # Changelog - Super Dispatch Pricing Insights
 
+## [1.3.0] - 2025-09-29
+
+### ✨ Nuevas Características
+- **Pantalla adicional previa al checkout**: Captura de datos de recogida/entrega con campos de ciudad/ZIP en solo lectura.
+- **Sesiones de cotización consolidadas**: Registro único por `session_id` que se enriquece a lo largo del flujo.
+- **Envío a Zapier al finalizar**: Integración con WooCommerce (`order_status_completed`) para enviar solo una vez finalizado.
+- **Envío manual y en lote**: Nuevo submenú “Enviar a Zapier”, y casillas/botón en Historial para enviar múltiples registros.
+- **Estado Zapier en historial**: Columna con “Pendiente/Enviado/Error” y fecha del último envío.
+
+### 🔧 Mejoras
+- Persistencia incremental de datos (contacto, cotizador, adicionales) en `wp_sdpi_quote_sessions`.
+- Marcado de estado Zapier tras envíos automáticos o manuales.
+
+### 🐛 Correcciones
+- Registro de handler AJAX faltante para borrado masivo en historial.
+
+---
+
 ## [1.2.0] - 2025-01-10
 
 ### ✨ Nuevas Características

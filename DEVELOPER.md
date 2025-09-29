@@ -31,7 +31,8 @@ SDPI_API
 SDPI_Form
     ├── Renderizado del formulario
     ├── Procesamiento AJAX
-    └── Cálculo de precios
+    ├── Cálculo de precios
+    └── Gestión de sesión consolidada (SDPI_Session)
 
 SDPI_Cities
     ├── Gestión de base de datos
@@ -39,6 +40,15 @@ SDPI_Cities
     └── Autocompletado
 
 SDPI_Maritime
+SDPI_Session
+    ├── Tabla wp_sdpi_quote_sessions
+    ├── start_session()/update_data()/set_status()
+    └── get(session_id)
+
+Relaciones clave
+- SDPI_Form → SDPI_Session: persiste datos parciales por `session_id`
+- SDPI_History: muestra estado Zapier, envíos en lote y borrado en lote
+- Hook WC `order_status_completed`: dispara envío consolidado a Zapier
     ├── Detección de transporte marítimo
     ├── Selección de puertos
     └── Cálculo de tarifas
@@ -215,7 +225,14 @@ const MARITIME_RATES = [
 
 ## 🔄 Flujo de Procesamiento
 
-### 1. Envío del Formulario
+### 1. Captura de Contacto (inicia sesión)
+```php
+// SDPI_Form::ajax_save_client_info()
+// 1) Guarda datos en $_SESSION
+// 2) Inicia SDPI_Session y devuelve session_id
+```
+
+### 2. Envío del Cotizador
 ```javascript
 // Frontend (form-script.js)
 $('#sdpi-pricing-form').on('submit', function(e) {
@@ -228,7 +245,7 @@ $('#sdpi-pricing-form').on('submit', function(e) {
 });
 ```
 
-### 2. Procesamiento Backend
+### 3. Procesamiento Backend
 ```php
 // SDPI_Form::ajax_get_quote()
 1. Verificar nonce
@@ -242,10 +259,11 @@ $('#sdpi-pricing-form').on('submit', function(e) {
 5. Si es terrestre:
    - Llamar API directamente
    - Aplicar lógica de precios
-6. Retornar respuesta JSON
+6. Persistir en SDPI_Session → `quote.{pickup,delivery,vehicle,api,final}`
+7. Retornar respuesta JSON
 ```
 
-### 3. Cálculo de Precios
+### 4. Cálculo de Precios
 ```php
 // Lógica de precios
 $base_price = $api_response['recommended_price'];
@@ -270,6 +288,27 @@ $final_price = $base_price + $company_profit + $confidence_adjustment;
 ## 🗄️ Base de Datos
 
 ### Tabla wp_sdpi_cities
+### Tabla wp_sdpi_quote_sessions
+```sql
+CREATE TABLE wp_sdpi_quote_sessions (
+    id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+    session_id varchar(64) NOT NULL,
+    status varchar(20) NOT NULL DEFAULT 'started',
+    client_name varchar(100) DEFAULT NULL,
+    client_email varchar(100) DEFAULT NULL,
+    client_phone varchar(30) DEFAULT NULL,
+    data longtext NULL,
+    created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY session_id (session_id)
+);
+```
+
+### Tabla wp_sdpi_history (extensiones)
+Campos añadidos:
+- `zapier_status` (pending|sent|error)
+- `zapier_last_sent_at` (datetime)
 ```sql
 -- Estructura
 CREATE TABLE wp_sdpi_cities (
@@ -305,6 +344,8 @@ LIMIT 10;
 ## 🔌 Hooks y Filtros
 
 ### Acciones Disponibles
+// Envío consolidado al completar pedido
+add_action('woocommerce_order_status_completed', ...);
 ```php
 // Antes de renderizar formulario
 do_action('sdpi_before_form_render');

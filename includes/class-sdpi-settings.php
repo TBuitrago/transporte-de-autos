@@ -25,6 +25,7 @@ class SDPI_Settings {
         register_setting('sdpi_settings', 'sdpi_api_key');
         register_setting('sdpi_settings', 'sdpi_api_endpoint');
         register_setting('sdpi_settings', 'sdpi_cache_time');
+        register_setting('sdpi_settings', 'sdpi_zapier_webhook_url');
 
         add_settings_section(
             'sdpi_api_section',
@@ -63,6 +64,21 @@ class SDPI_Settings {
             array($this, 'test_connection_field_callback'),
             'sdpi_settings',
             'sdpi_api_section'
+        );
+
+        add_settings_section(
+            'sdpi_integrations_section',
+            'Integrations',
+            array($this, 'integrations_section_callback'),
+            'sdpi_settings'
+        );
+
+        add_settings_field(
+            'sdpi_zapier_webhook_url',
+            'Zapier Webhook URL',
+            array($this, 'zapier_webhook_field_callback'),
+            'sdpi_settings',
+            'sdpi_integrations_section'
         );
     }
 
@@ -136,6 +152,22 @@ class SDPI_Settings {
         </script>';
     }
 
+    public function integrations_section_callback() {
+        echo '<p>Configure third-party integrations for the pricing form. Data from completed quotes will be automatically sent to these services.</p>';
+    }
+
+    public function zapier_webhook_field_callback() {
+        $webhook_url = get_option('sdpi_zapier_webhook_url');
+        echo '<input type="url" name="sdpi_zapier_webhook_url" value="' . esc_url($webhook_url) . '" class="regular-text" placeholder="https://hooks.zapier.com/hooks/catch/..." />';
+        echo '<p class="description">Zapier webhook URL to send quote data automatically after each successful quote generation</p>';
+
+        if (!empty($webhook_url)) {
+            echo '<p class="description" style="color: #00a32a;">✅ <strong>Zapier Integration Active:</strong> Quote data will be sent to Zapier after each successful quote.</p>';
+        } else {
+            echo '<p class="description" style="color: #f0b849;">ℹ️ <strong>Optional:</strong> Leave empty to disable Zapier integration.</p>';
+        }
+    }
+
     public function admin_notices() {
         $api_key = get_option('sdpi_api_key');
         if (empty($api_key)) {
@@ -158,17 +190,24 @@ class SDPI_Settings {
                 <?php
                 $api_key = get_option('sdpi_api_key');
                 $endpoint = get_option('sdpi_api_endpoint');
-                
+                $zapier_webhook = get_option('sdpi_zapier_webhook_url');
+
                 if (!empty($api_key)) {
                     echo '<p style="color: #00a32a;">✅ <strong>Plugin Active:</strong> API key is configured.</p>';
                 } else {
                     echo '<p style="color: #d63638;">❌ <strong>Plugin Inactive:</strong> API key is required.</p>';
                 }
-                
+
                 if (!empty($endpoint)) {
                     echo '<p style="color: #00a32a;">✅ <strong>API Endpoint:</strong> ' . esc_html($endpoint) . '</p>';
                 } else {
                     echo '<p style="color: #d63638;">❌ <strong>API Endpoint:</strong> Not configured</p>';
+                }
+
+                if (!empty($zapier_webhook)) {
+                    echo '<p style="color: #00a32a;">✅ <strong>Zapier Integration:</strong> Active - Quote data will be sent to Zapier</p>';
+                } else {
+                    echo '<p style="color: #f0b849;">ℹ️ <strong>Zapier Integration:</strong> Not configured (optional)</p>';
                 }
                 ?>
             </div>
@@ -186,6 +225,7 @@ class SDPI_Settings {
                 <p><strong>Shortcode:</strong> Use <code>[super_dispatch_pricing_form]</code> in any page or post to display the pricing form.</p>
                 <p><strong>Form Fields:</strong> The form includes pickup/delivery ZIP codes, trailer type, vehicle type, and optional vehicle details.</p>
                 <p><strong>API Response:</strong> Shows recommended price and confidence score from Super Dispatch.</p>
+                <p><strong>Zapier Integration:</strong> If configured, quote data is automatically sent to your Zapier webhook after each successful quote generation.</p>
             </div>
 
             <div class="card" style="max-width: 800px; margin-top: 20px;">

@@ -1184,8 +1184,13 @@ class SDPI_Form {
             'payment_available' => class_exists('WooCommerce')
         );
 
-        // Zapier webhook URL
-        $zapier_webhook_url = 'https://hooks.zapier.com/hooks/catch/15500764/u1pzj07/';
+        // Get Zapier webhook URL from settings
+        $zapier_webhook_url = get_option('sdpi_zapier_webhook_url');
+
+        // Skip if Zapier integration is not configured
+        if (empty($zapier_webhook_url)) {
+            return;
+        }
 
         // Send data to Zapier (non-blocking)
         $response = wp_remote_post($zapier_webhook_url, array(

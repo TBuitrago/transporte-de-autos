@@ -636,7 +636,7 @@ class SDPI_Form {
             
             if ($pickup_is_san_juan && $delivery_is_san_juan) {
                 // San Juan to San Juan - only maritime, no API call needed
-                $final_price_data = $this->calculate_maritime_only_quote($pickup_zip, $delivery_zip);
+                $final_price_data = $this->calculate_maritime_only_quote($pickup_zip, $delivery_zip, $vehicle_electric);
             } else {
                 // One side is San Juan, one side is continental
                 $continental_zip = $pickup_is_san_juan ? $delivery_zip : $pickup_zip;
@@ -784,39 +784,54 @@ class SDPI_Form {
     /**
      * Calculate maritime-only quote without API call (San Juan to San Juan)
      */
-    private function calculate_maritime_only_quote($pickup_zip, $delivery_zip) {
+    private function calculate_maritime_only_quote($pickup_zip, $delivery_zip, $vehicle_electric = false) {
         // This should only be called for San Juan to San Juan routes
         $maritime_cost = SDPI_Maritime::get_maritime_rate($pickup_zip, $delivery_zip);
-        
+
+        // Electric vehicle surcharge
+        $electric_surcharge = $vehicle_electric ? 600.00 : 0.00;
+        $total_cost = $maritime_cost + $electric_surcharge;
+
         $breakdown = '<div class="sdpi-maritime-breakdown">';
         $breakdown .= '<h4>Desglose de Costos - Transporte Marítimo</h4>';
-        
+
         $breakdown .= '<div class="sdpi-cost-section">';
         $breakdown .= '<h5>Tramo Terrestre</h5>';
         $breakdown .= '<p><em>No aplica - Transporte directo marítimo</em></p>';
         $breakdown .= '</div>';
-        
+
         $breakdown .= '<div class="sdpi-cost-section">';
         $breakdown .= '<h5>Tramo Marítimo</h5>';
         $breakdown .= '<p><strong>Ruta:</strong> San Juan, PR → San Juan, PR</p>';
         $breakdown .= '<p><strong>Tarifa Marítima:</strong> $' . number_format($maritime_cost, 2) . ' USD</p>';
         $breakdown .= '</div>';
-        
+
+        // Electric vehicle surcharge
+        if ($vehicle_electric && $electric_surcharge > 0) {
+            $breakdown .= '<div class="sdpi-cost-section">';
+            $breakdown .= '<h5>Recargos Adicionales</h5>';
+            $breakdown .= '<div class="sdpi-price-item">';
+            $breakdown .= '<span class="sdpi-price-label">Recargo por vehículo eléctrico:</span>';
+            $breakdown .= '<span class="sdpi-price-value">+$' . number_format($electric_surcharge, 2) . ' USD</span>';
+            $breakdown .= '</div>';
+            $breakdown .= '</div>';
+        }
+
         $breakdown .= '<div class="sdpi-cost-total">';
         $breakdown .= '<h5>Total Final</h5>';
-        $breakdown .= '<p><strong>Costo Total:</strong> $' . number_format($maritime_cost, 2) . ' USD</p>';
+        $breakdown .= '<p><strong>Costo Total:</strong> $' . number_format($total_cost, 2) . ' USD</p>';
         $breakdown .= '<p class="sdpi-maritime-note">* Transporte marítimo directo</p>';
         $breakdown .= '</div>';
-        
+
         $breakdown .= '</div>';
-        
+
         return array(
             'base_price' => 0,
             'confidence' => 0.85,
-            'final_price' => $maritime_cost,
+            'final_price' => $total_cost,
             'message' => 'El precio recomendado incluye transporte marítimo directo.',
             'breakdown' => $breakdown,
-            'price' => $maritime_cost,
+            'price' => $total_cost,
             'confidence_percentage' => 85,
             'maritime_involved' => true,
             'us_port' => null,
@@ -833,7 +848,7 @@ class SDPI_Form {
         $confidence = floatval($api_response['confidence'] ?? 0);
         
         // Check if maritime transport is involved
-        $maritime_result = SDPI_Maritime::calculate_maritime_cost($pickup_zip, $delivery_zip, $base_price, $confidence);
+        $maritime_result = SDPI_Maritime::calculate_maritime_cost($pickup_zip, $delivery_zip, $base_price, $confidence, $vehicle_electric);
         
         if ($maritime_result['maritime_involved']) {
             // Return maritime calculation result

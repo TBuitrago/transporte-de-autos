@@ -121,38 +121,43 @@ class SDPI_Maritime {
     /**
      * Calculate total cost with maritime transport
      */
-    public static function calculate_maritime_cost($pickup_zip, $delivery_zip, $terrestrial_cost, $confidence_percentage) {
+    public static function calculate_maritime_cost($pickup_zip, $delivery_zip, $terrestrial_cost, $confidence_percentage, $vehicle_electric = false) {
         $involves_maritime = self::involves_maritime($pickup_zip, $delivery_zip);
-        
+
         if (!$involves_maritime) {
+            // Electric vehicle surcharge for terrestrial transport
+            $electric_surcharge = $vehicle_electric ? 600.00 : 0.00;
             return [
-                'total_cost' => $terrestrial_cost,
-                'terrestrial_cost' => $terrestrial_cost,
+                'total_cost' => $terrestrial_cost + $electric_surcharge,
+                'terrestrial_cost' => $terrestrial_cost + $electric_surcharge,
                 'maritime_cost' => 0,
                 'maritime_involved' => false,
                 'us_port' => null,
                 'breakdown' => null
             ];
         }
-        
+
         // Determine which side is San Juan
         $pickup_is_san_juan = self::is_san_juan_zip($pickup_zip);
         $delivery_is_san_juan = self::is_san_juan_zip($delivery_zip);
-        
+
         // Get continental ZIP and port
         $continental_zip = $pickup_is_san_juan ? $delivery_zip : $pickup_zip;
         $us_port = self::get_us_port($continental_zip);
-        
+
         // Calculate maritime cost
         $maritime_cost = self::get_maritime_rate($pickup_zip, $delivery_zip);
-        
+
+        // Electric vehicle surcharge
+        $electric_surcharge = $vehicle_electric ? 600.00 : 0.00;
+
         // Calculate terrestrial cost (only if there's a terrestrial leg)
         $terrestrial_cost_with_markup = 0;
         $terrestrial_cost_raw = 0;
         $markup_applied = false;
         $confidence_adjustment = 0;
         $confidence_description = '';
-        
+
         if ($terrestrial_cost > 0) {
             // Apply existing markup logic to terrestrial portion only
             $terrestrial_cost_raw = $terrestrial_cost;
@@ -162,22 +167,24 @@ class SDPI_Maritime {
             $confidence_description = $markup_result['confidence_description'];
             $markup_applied = true;
         }
-        
-        // Total cost
-        $total_cost = $terrestrial_cost_with_markup + $maritime_cost;
-        
+
+        // Total cost (including electric surcharge)
+        $total_cost = $terrestrial_cost_with_markup + $maritime_cost + $electric_surcharge;
+
         // Create breakdown
         $breakdown = self::create_maritime_breakdown(
             $terrestrial_cost_raw,
             $terrestrial_cost_with_markup,
             $maritime_cost,
+            $electric_surcharge,
             $total_cost,
             $us_port,
             $markup_applied,
             $confidence_adjustment,
-            $confidence_description
+            $confidence_description,
+            $vehicle_electric
         );
-        
+
         return [
             'total_cost' => $total_cost,
             'terrestrial_cost' => $terrestrial_cost_with_markup,
@@ -234,10 +241,10 @@ class SDPI_Maritime {
     /**
      * Create detailed breakdown for maritime transport
      */
-    private static function create_maritime_breakdown($terrestrial_raw, $terrestrial_with_markup, $maritime_cost, $total_cost, $us_port, $markup_applied, $confidence_adjustment = 0, $confidence_description = '') {
+    private static function create_maritime_breakdown($terrestrial_raw, $terrestrial_with_markup, $maritime_cost, $electric_surcharge, $total_cost, $us_port, $markup_applied, $confidence_adjustment = 0, $confidence_description = '', $vehicle_electric = false) {
         $breakdown = '<div class="sdpi-maritime-breakdown">';
         $breakdown .= '<h4>Desglose de Costos - Transporte Marítimo</h4>';
-        
+
         if ($terrestrial_raw > 0) {
             $breakdown .= '<div class="sdpi-cost-section">';
             $breakdown .= '<h5>Tramo Terrestre</h5>';
@@ -245,42 +252,53 @@ class SDPI_Maritime {
             $breakdown .= '<span class="sdpi-price-label">Precio base de la API:</span>';
             $breakdown .= '<span class="sdpi-price-value">$' . number_format($terrestrial_raw, 2) . ' USD</span>';
             $breakdown .= '</div>';
-            
+
             if ($markup_applied && $confidence_adjustment > 0) {
                 $breakdown .= '<div class="sdpi-price-item">';
                 $breakdown .= '<span class="sdpi-price-label">' . $confidence_description . '</span>';
                 $breakdown .= '<span class="sdpi-price-value">+$' . number_format($confidence_adjustment, 2) . ' USD</span>';
                 $breakdown .= '</div>';
             }
-            
+
             $breakdown .= '<div class="sdpi-price-item">';
             $breakdown .= '<span class="sdpi-price-label">Ganancia de la empresa:</span>';
             $breakdown .= '<span class="sdpi-price-value">+$200.00 USD</span>';
             $breakdown .= '</div>';
-            
+
             $breakdown .= '<div class="sdpi-price-item sdpi-price-subtotal">';
             $breakdown .= '<span class="sdpi-price-label"><strong>Subtotal Terrestre:</strong></span>';
             $breakdown .= '<span class="sdpi-price-value"><strong>$' . number_format($terrestrial_with_markup, 2) . ' USD</strong></span>';
             $breakdown .= '</div>';
             $breakdown .= '</div>';
         }
-        
+
         $breakdown .= '<div class="sdpi-cost-section">';
         $breakdown .= '<h5>Tramo Marítimo</h5>';
-        
+
         // Show correct port names and ZIPs
         if ($us_port['port'] === self::PENN_TERMINALS_NAME) {
             $breakdown .= '<p><strong>Puerto USA:</strong> ' . self::PENN_TERMINALS_NAME . ' (19022)</p>';
         } else {
             $breakdown .= '<p><strong>Puerto USA:</strong> ' . self::JACKSONVILLE_NAME . ' (32226)</p>';
         }
-        
+
         $breakdown .= '<div class="sdpi-price-item">';
         $breakdown .= '<span class="sdpi-price-label">Tarifa Marítima:</span>';
         $breakdown .= '<span class="sdpi-price-value">$' . number_format($maritime_cost, 2) . ' USD</span>';
         $breakdown .= '</div>';
         $breakdown .= '</div>';
-        
+
+        // Electric vehicle surcharge
+        if ($vehicle_electric && $electric_surcharge > 0) {
+            $breakdown .= '<div class="sdpi-cost-section">';
+            $breakdown .= '<h5>Recargos Adicionales</h5>';
+            $breakdown .= '<div class="sdpi-price-item">';
+            $breakdown .= '<span class="sdpi-price-label">Recargo por vehículo eléctrico:</span>';
+            $breakdown .= '<span class="sdpi-price-value">+$' . number_format($electric_surcharge, 2) . ' USD</span>';
+            $breakdown .= '</div>';
+            $breakdown .= '</div>';
+        }
+
         $breakdown .= '<div class="sdpi-cost-total">';
         $breakdown .= '<h5>Total Final</h5>';
         $breakdown .= '<div class="sdpi-price-item sdpi-price-total">';
@@ -291,9 +309,9 @@ class SDPI_Maritime {
         $port_display_name = ($us_port['port'] === self::PENN_TERMINALS_NAME) ? self::PENN_TERMINALS_NAME : self::JACKSONVILLE_NAME;
         $breakdown .= '<p class="sdpi-maritime-note">* Incluye transporte marítimo entre ' . $port_display_name . ' y San Juan, PR</p>';
         $breakdown .= '</div>';
-        
+
         $breakdown .= '</div>';
-        
+
         return $breakdown;
     }
 }

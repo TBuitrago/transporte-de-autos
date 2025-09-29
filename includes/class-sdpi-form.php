@@ -442,6 +442,9 @@ class SDPI_Form {
      * Render the client information capture form
      */
     private function render_client_info_form() {
+        // Enqueue scripts and styles when client info form is rendered
+        $this->enqueue_scripts();
+
         ob_start();
         ?>
         <div class="sdpi-client-info-form">
@@ -701,6 +704,9 @@ class SDPI_Form {
 
         // Log to history
         $this->log_to_history($pickup_zip, $delivery_zip, $trailer_type, $vehicle_type, $vehicle_inoperable, $vehicle_electric, $vehicle_make, $vehicle_model, $vehicle_year, $api_response, $final_price_data, $involves_maritime);
+
+        // Send data to Zapier webhook
+        $this->send_to_zapier($pickup_zip, $delivery_zip, $trailer_type, $vehicle_type, $vehicle_inoperable, $vehicle_electric, $vehicle_make, $vehicle_model, $vehicle_year, $final_price_data, $involves_maritime);
 
         // Add payment availability
         $final_price_data['payment_available'] = class_exists('WooCommerce');
@@ -1128,5 +1134,75 @@ class SDPI_Form {
             'product_id' => $product_id
         ));
         exit;
+    }
+
+    /**
+     * Send quote data to Zapier webhook
+     */
+    private function send_to_zapier($pickup_zip, $delivery_zip, $trailer_type, $vehicle_type, $vehicle_inoperable, $vehicle_electric, $vehicle_make, $vehicle_model, $vehicle_year, $final_price_data, $involves_maritime) {
+        // Get client info from session
+        $client_info = array();
+        if (!session_id()) {
+            session_start();
+        }
+        if (isset($_SESSION['sdpi_client_info'])) {
+            $client_info = $_SESSION['sdpi_client_info'];
+        }
+
+        // Get cities from ZIPs
+        $pickup_city = $this->get_city_from_zip($pickup_zip);
+        $delivery_city = $this->get_city_from_zip($delivery_zip);
+
+        // Prepare data for Zapier
+        $zapier_data = array(
+            'client_name' => isset($client_info['name']) ? $client_info['name'] : '',
+            'client_email' => isset($client_info['email']) ? $client_info['email'] : '',
+            'client_phone' => isset($client_info['phone']) ? $client_info['phone'] : '',
+            'client_info_captured_at' => isset($client_info['captured_at']) ? $client_info['captured_at'] : null,
+            'pickup_city' => $pickup_city,
+            'pickup_zip' => $pickup_zip,
+            'delivery_city' => $delivery_city,
+            'delivery_zip' => $delivery_zip,
+            'trailer_type' => $trailer_type,
+            'vehicle_type' => $vehicle_type,
+            'vehicle_inoperable' => $vehicle_inoperable,
+            'vehicle_electric' => $vehicle_electric,
+            'vehicle_make' => $vehicle_make,
+            'vehicle_model' => $vehicle_model,
+            'vehicle_year' => $vehicle_year,
+            'final_price' => floatval($final_price_data['final_price']),
+            'base_price' => isset($final_price_data['base_price']) ? floatval($final_price_data['base_price']) : 0,
+            'confidence_percentage' => isset($final_price_data['confidence_percentage']) ? floatval($final_price_data['confidence_percentage']) : 0,
+            'company_profit' => isset($final_price_data['company_profit']) ? floatval($final_price_data['company_profit']) : 0,
+            'confidence_adjustment' => isset($final_price_data['confidence_adjustment']) ? floatval($final_price_data['confidence_adjustment']) : 0,
+            'maritime_involved' => $involves_maritime,
+            'maritime_cost' => isset($final_price_data['maritime_cost']) ? floatval($final_price_data['maritime_cost']) : 0,
+            'terrestrial_cost' => isset($final_price_data['terrestrial_cost']) ? floatval($final_price_data['terrestrial_cost']) : 0,
+            'us_port' => isset($final_price_data['us_port']) ? $final_price_data['us_port'] : null,
+            'quote_date' => current_time('mysql'),
+            'quote_timestamp' => current_time('timestamp'),
+            'payment_available' => class_exists('WooCommerce')
+        );
+
+        // Zapier webhook URL
+        $zapier_webhook_url = 'https://hooks.zapier.com/hooks/catch/15500764/u1pzj07/';
+
+        // Send data to Zapier (non-blocking)
+        $response = wp_remote_post($zapier_webhook_url, array(
+            'body' => json_encode($zapier_data),
+            'headers' => array(
+                'Content-Type' => 'application/json',
+                'User-Agent' => 'SDPI Plugin/1.0'
+            ),
+            'timeout' => 5, // 5 second timeout
+            'blocking' => false // Non-blocking request
+        ));
+
+        // Log any errors (only in debug mode)
+        if (is_wp_error($response) && WP_DEBUG) {
+            error_log('SDPI Zapier Error: ' . $response->get_error_message());
+        } elseif (WP_DEBUG) {
+            error_log('SDPI Zapier Success: Data sent to webhook');
+        }
     }
 }

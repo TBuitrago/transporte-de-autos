@@ -34,6 +34,9 @@ class SDPI_Form {
         add_action('wp_ajax_sdpi_save_additional_info', array($this, 'ajax_save_additional_info'));
         add_action('wp_ajax_nopriv_sdpi_save_additional_info', array($this, 'ajax_save_additional_info'));
 
+        // WooCommerce payment completion hook
+        add_action('woocommerce_payment_complete', array($this, 'handle_payment_complete'));
+
         // Add AJAX handler for client info capture
         add_action('wp_ajax_sdpi_save_client_info', array($this, 'ajax_save_client_info'));
         add_action('wp_ajax_nopriv_sdpi_save_client_info', array($this, 'ajax_save_client_info'));
@@ -740,6 +743,10 @@ class SDPI_Form {
         $session_id = $session->start_session($client_name, $client_email, $client_phone);
         $session->set_status($session_id, 'started');
 
+        // Create initial history record
+        $history = new SDPI_History();
+        $history->create_initial_record($session_id, $client_name, $client_email, $client_phone);
+
         wp_send_json_success(array('message' => 'Información del cliente guardada exitosamente.', 'session_id' => $session_id));
         exit;
     }
@@ -914,12 +921,47 @@ class SDPI_Form {
             $final_price_data = $this->calculate_final_price($api_response, $pickup_zip, $delivery_zip, $vehicle_electric);
         }
 
-        // Log to history
+        // Get session ID
+        $session = new SDPI_Session();
+        $session_id = $this->ensure_quote_session();
+
+        // Update history to 'cotizador' status
+        $history = new SDPI_History();
+        $form_data = array(
+            'pickup_zip' => $pickup_zip,
+            'delivery_zip' => $delivery_zip,
+            'pickup_city' => $this->get_city_from_zip($pickup_zip),
+            'delivery_city' => $this->get_city_from_zip($delivery_zip),
+            'trailer_type' => $trailer_type,
+            'vehicle_type' => $vehicle_type,
+            'vehicle_inoperable' => $vehicle_inoperable,
+            'vehicle_electric' => $vehicle_electric,
+            'vehicle_make' => $vehicle_make,
+            'vehicle_model' => $vehicle_model,
+            'vehicle_year' => $vehicle_year,
+            'maritime_involved' => $involves_maritime,
+            'maritime_cost' => $involves_maritime ? $maritime_cost : 0,
+            'us_port_name' => $involves_maritime ? $us_port_name : '',
+            'us_port_zip' => $involves_maritime ? $us_port_zip : '',
+            'total_terrestrial_cost' => $involves_maritime ? $terrestrial_cost : 0,
+            'total_maritime_cost' => $involves_maritime ? $maritime_cost : 0
+        );
+
+        // Get client info from session
+        $session_data = $session->get($session_id);
+        if ($session_data) {
+            $form_data['client_name'] = $session_data['client_name'] ?? '';
+            $form_data['client_email'] = $session_data['client_email'] ?? '';
+            $form_data['client_phone'] = $session_data['client_phone'] ?? '';
+            $form_data['client_info_captured_at'] = $session_data['data']['__meta']['started_at'] ?? null;
+        }
+
+        $history->update_to_cotizador($session_id, $form_data, $api_response, $final_price_data['total'], $price_breakdown);
+
+        // Log to history (legacy method for backward compatibility)
         $this->log_to_history($pickup_zip, $delivery_zip, $trailer_type, $vehicle_type, $vehicle_inoperable, $vehicle_electric, $vehicle_make, $vehicle_model, $vehicle_year, $api_response, $final_price_data, $involves_maritime);
 
         // Persist quote data to consolidated session
-        $session = new SDPI_Session();
-        $session_id = $this->ensure_quote_session();
         $session->update_data($session_id, array(
             'quote' => array(
                 'pickup_zip' => $pickup_zip,
@@ -1315,6 +1357,14 @@ class SDPI_Form {
         }
 
         $quote_data = json_decode(stripslashes($_POST['quote_data']), true);
+
+        // Update history to 'checkout' status
+        $session = new SDPI_Session();
+        $session_id = $session->get_session_id();
+        if ($session_id) {
+            $history = new SDPI_History();
+            $history->update_to_checkout($session_id);
+        }
         
         if (!$quote_data || !isset($quote_data['final_price'])) {
             wp_send_json_error('Invalid quote data.');
@@ -1359,6 +1409,9 @@ class SDPI_Form {
         $session = new SDPI_Session();
         $session_id = $this->ensure_quote_session();
         $session->set_status($session_id, 'checkout');
+
+        // Store session ID in product meta for later reference
+        $product->add_meta_data('_sdpi_session_id', $session_id, true);
 
         // Add to cart
         WC()->cart->add_to_cart($product_id, 1);
@@ -1446,6 +1499,71 @@ class SDPI_Form {
             error_log('SDPI Zapier Error: ' . $response->get_error_message());
         } elseif (WP_DEBUG) {
             error_log('SDPI Zapier Success: Data sent to webhook');
+        }
+    }
+
+    /**
+     * Handle WooCommerce payment completion
+     */
+    public function handle_payment_complete($order_id) {
+        $order = wc_get_order($order_id);
+        if (!$order) {
+            return;
+        }
+
+        // Check if this is an SDPI order by looking for our meta data
+        $session_id = $order->get_meta('_sdpi_session_id');
+        if (!$session_id) {
+            return;
+        }
+
+        // Update history to 'completado' status
+        $history = new SDPI_History();
+        $history->update_to_completado($session_id);
+
+        // Send to Zapier if configured
+        $this->send_to_zapier_from_order($order);
+    }
+
+    /**
+     * Send order data to Zapier webhook
+     */
+    private function send_to_zapier_from_order($order) {
+        // Get Zapier webhook URL from settings
+        $zapier_webhook_url = get_option('sdpi_zapier_webhook_url');
+        if (empty($zapier_webhook_url)) {
+            return;
+        }
+
+        // Prepare data for Zapier
+        $zapier_data = array(
+            'order_id' => $order->get_id(),
+            'order_status' => $order->get_status(),
+            'total' => $order->get_total(),
+            'client_name' => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
+            'client_email' => $order->get_billing_email(),
+            'client_phone' => $order->get_billing_phone(),
+            'payment_date' => $order->get_date_paid() ? $order->get_date_paid()->format('Y-m-d H:i:s') : null,
+            'quote_date' => current_time('mysql'),
+            'quote_timestamp' => current_time('timestamp')
+        );
+
+        // Send data to Zapier (non-blocking)
+        $response = wp_remote_post($zapier_webhook_url, array(
+            'body' => json_encode($zapier_data),
+            'headers' => array(
+                'Content-Type' => 'application/json',
+                'User-Agent' => 'SDPI Plugin/1.0'
+            ),
+            'timeout' => 5,
+            'blocking' => false
+        ));
+
+        // Log any errors (only in debug mode)
+        if (is_wp_error($response) && WP_DEBUG) {
+            error_log('SDPI Zapier Error: ' . $response->get_error_message());
+        } elseif (WP_DEBUG) {
+            error_log('SDPI Zapier Success: Order data sent to webhook');
         }
     }
 }

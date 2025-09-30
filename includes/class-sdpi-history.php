@@ -34,14 +34,16 @@ class SDPI_History {
         
         $sql = "CREATE TABLE {$this->table_name} (
             id int(11) NOT NULL AUTO_INCREMENT,
+            session_id varchar(64) NOT NULL,
+            flow_status varchar(20) NOT NULL DEFAULT 'inicial',
             user_ip varchar(45) NOT NULL,
             user_agent text,
-            pickup_zip varchar(10) NOT NULL,
-            delivery_zip varchar(10) NOT NULL,
+            pickup_zip varchar(10),
+            delivery_zip varchar(10),
             pickup_city varchar(100),
             delivery_city varchar(100),
-            trailer_type varchar(20) NOT NULL,
-            vehicle_type varchar(50) NOT NULL,
+            trailer_type varchar(20),
+            vehicle_type varchar(50),
             vehicle_inoperable tinyint(1) DEFAULT 0,
             vehicle_make varchar(50),
             vehicle_model varchar(50),
@@ -67,12 +69,15 @@ class SDPI_History {
             error_message text,
             zapier_status varchar(20) DEFAULT 'pending',
             zapier_last_sent_at datetime DEFAULT NULL,
+            status_updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
+            UNIQUE KEY session_id (session_id),
             KEY user_ip (user_ip),
             KEY pickup_zip (pickup_zip),
             KEY delivery_zip (delivery_zip),
             KEY created_at (created_at),
+            KEY flow_status (flow_status),
             KEY maritime_involved (maritime_involved)
         ) $charset_collate;";
         
@@ -138,6 +143,16 @@ class SDPI_History {
                         <div class="sdpi-filter-group">
                             <label for="date_from">Desde:</label>
                             <input type="date" id="date_from" name="date_from" value="<?php echo esc_attr($_GET['date_from'] ?? ''); ?>">
+                        </div>
+                        <div class="sdpi-filter-group">
+                            <label for="flow_status">Estado del Flujo:</label>
+                            <select id="flow_status" name="flow_status">
+                                <option value="">Todos los estados</option>
+                                <option value="inicial" <?php selected($_GET['flow_status'] ?? '', 'inicial'); ?>>Inicial</option>
+                                <option value="cotizador" <?php selected($_GET['flow_status'] ?? '', 'cotizador'); ?>>Cotizador</option>
+                                <option value="checkout" <?php selected($_GET['flow_status'] ?? '', 'checkout'); ?>>Checkout</option>
+                                <option value="completado" <?php selected($_GET['flow_status'] ?? '', 'completado'); ?>>Completado</option>
+                            </select>
                         </div>
                         
                         <div class="sdpi-filter-group">
@@ -630,6 +645,7 @@ class SDPI_History {
         // Get filters
         $date_from = sanitize_text_field($_GET['date_from'] ?? '');
         $date_to = sanitize_text_field($_GET['date_to'] ?? '');
+        $flow_status = sanitize_text_field($_GET['flow_status'] ?? '');
         $maritime = sanitize_text_field($_GET['maritime'] ?? '');
         $search = sanitize_text_field($_GET['search'] ?? '');
         
@@ -645,6 +661,11 @@ class SDPI_History {
         if ($date_to) {
             $where_conditions[] = "created_at <= %s";
             $where_values[] = $date_to . ' 23:59:59';
+        }
+        
+        if ($flow_status) {
+            $where_conditions[] = "flow_status = %s";
+            $where_values[] = $flow_status;
         }
         
         if ($maritime !== '') {
@@ -715,6 +736,7 @@ class SDPI_History {
                     <th style="width:28px;"><input type="checkbox" id="sdpi-select-all"></th>
                     <th>ID</th>
                     <th>Fecha</th>
+                    <th>Estado</th>
                     <th>Cliente</th>
                     <th>Origen</th>
                     <th>Destino</th>
@@ -730,7 +752,7 @@ class SDPI_History {
             <tbody>
                 <?php if (empty($items)): ?>
                 <tr>
-                    <td colspan="11" style="text-align: center; padding: 40px;">
+                    <td colspan="14" style="text-align: center; padding: 40px;">
                         No se encontraron cotizaciones con los filtros aplicados.
                     </td>
                 </tr>
@@ -740,6 +762,31 @@ class SDPI_History {
                     <td><input type="checkbox" class="sdpi-select" name="ids[]" value="<?php echo esc_attr($item->id); ?>"></td>
                     <td><?php echo $item->id; ?></td>
                     <td><?php echo date('Y-m-d H:i', strtotime($item->created_at)); ?></td>
+                    <td>
+                        <?php
+                        $status_colors = array(
+                            'inicial' => '#0073aa',
+                            'cotizador' => '#00a32a',
+                            'checkout' => '#dba617',
+                            'completado' => '#00a32a'
+                        );
+                        $status_labels = array(
+                            'inicial' => 'Inicial',
+                            'cotizador' => 'Cotizador',
+                            'checkout' => 'Checkout',
+                            'completado' => 'Completado'
+                        );
+                        $status = $item->flow_status ?? 'inicial';
+                        $color = $status_colors[$status] ?? '#666';
+                        $label = $status_labels[$status] ?? ucfirst($status);
+                        ?>
+                        <span class="sdpi-status-badge" style="background-color: <?php echo $color; ?>; color: white; padding: 4px 8px; border-radius: 3px; font-size: 11px; font-weight: 600;">
+                            <?php echo $label; ?>
+                        </span>
+                        <?php if (isset($item->status_updated_at) && $item->status_updated_at): ?>
+                        <br><small style="color: #666;"><?php echo date('m/d H:i', strtotime($item->status_updated_at)); ?></small>
+                        <?php endif; ?>
+                    </td>
                     <td>
                         <?php if ($item->client_name): ?>
                             <strong><?php echo esc_html($item->client_name); ?></strong><br>
@@ -905,7 +952,226 @@ class SDPI_History {
     }
     
     /**
-     * Log a quote to history
+     * Create initial history record when client info is captured
+     */
+    public function create_initial_record($session_id, $client_name, $client_email, $client_phone) {
+        global $wpdb;
+        
+        // Check if record already exists
+        $existing = $wpdb->get_row($wpdb->prepare(
+            "SELECT id FROM {$this->table_name} WHERE session_id = %s",
+            $session_id
+        ));
+        
+        if ($existing) {
+            // Update existing record to 'inicial' status
+            $wpdb->update(
+                $this->table_name,
+                array(
+                    'flow_status' => 'inicial',
+                    'client_name' => sanitize_text_field($client_name),
+                    'client_email' => sanitize_email($client_email),
+                    'client_phone' => sanitize_text_field($client_phone),
+                    'client_info_captured_at' => current_time('mysql'),
+                    'status_updated_at' => current_time('mysql')
+                ),
+                array('session_id' => $session_id),
+                array('%s', '%s', '%s', '%s', '%s', '%s'),
+                array('%s')
+            );
+            return $existing->id;
+        }
+        
+        // Create new record
+        $result = $wpdb->insert(
+            $this->table_name,
+            array(
+                'session_id' => sanitize_text_field($session_id),
+                'flow_status' => 'inicial',
+                'user_ip' => $this->get_user_ip(),
+                'user_agent' => sanitize_text_field($_SERVER['HTTP_USER_AGENT'] ?? ''),
+                'client_name' => sanitize_text_field($client_name),
+                'client_email' => sanitize_email($client_email),
+                'client_phone' => sanitize_text_field($client_phone),
+                'client_info_captured_at' => current_time('mysql'),
+                'status_updated_at' => current_time('mysql')
+            ),
+            array('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')
+        );
+        
+        return $result !== false ? $wpdb->insert_id : false;
+    }
+    
+    /**
+     * Update history record to 'cotizador' status with quote data
+     */
+    public function update_to_cotizador($session_id, $form_data, $api_response, $final_price, $price_breakdown = '') {
+        global $wpdb;
+        
+        // Extract data
+        $pickup_zip = sanitize_text_field($form_data['pickup_zip'] ?? '');
+        $delivery_zip = sanitize_text_field($form_data['delivery_zip'] ?? '');
+        $pickup_city = sanitize_text_field($form_data['pickup_city'] ?? '');
+        $delivery_city = sanitize_text_field($form_data['delivery_city'] ?? '');
+        $trailer_type = sanitize_text_field($form_data['trailer_type'] ?? '');
+        $vehicle_type = sanitize_text_field($form_data['vehicle_type'] ?? '');
+        $vehicle_inoperable = intval($form_data['vehicle_inoperable'] ?? 0);
+        $vehicle_make = sanitize_text_field($form_data['vehicle_make'] ?? '');
+        $vehicle_model = sanitize_text_field($form_data['vehicle_model'] ?? '');
+        $vehicle_year = sanitize_text_field($form_data['vehicle_year'] ?? '');
+
+        // Client information
+        $client_name = sanitize_text_field($form_data['client_name'] ?? '');
+        $client_phone = sanitize_text_field($form_data['client_phone'] ?? '');
+        $client_email = sanitize_text_field($form_data['client_email'] ?? '');
+        $client_info_captured_at = sanitize_text_field($form_data['client_info_captured_at'] ?? null);
+        
+        // API response data
+        $api_price = 0;
+        $api_confidence = 0;
+        $api_price_per_mile = 0;
+        $error_message = '';
+        
+        if (is_wp_error($api_response)) {
+            $error_message = $api_response->get_error_message();
+        } else {
+            $api_price = floatval($api_response['recommended_price'] ?? 0);
+            $api_confidence = floatval($api_response['confidence'] ?? 0);
+            $api_price_per_mile = floatval($api_response['price_per_mile'] ?? 0);
+        }
+        
+        // Maritime data
+        $maritime_involved = 0;
+        $maritime_cost = 0;
+        $us_port_name = '';
+        $us_port_zip = '';
+        $total_terrestrial_cost = 0;
+        $total_maritime_cost = 0;
+        
+        if (isset($form_data['maritime_involved']) && $form_data['maritime_involved']) {
+            $maritime_involved = 1;
+            $maritime_cost = floatval($form_data['maritime_cost'] ?? 0);
+            $us_port_name = sanitize_text_field($form_data['us_port_name'] ?? '');
+            $us_port_zip = sanitize_text_field($form_data['us_port_zip'] ?? '');
+            $total_terrestrial_cost = floatval($form_data['total_terrestrial_cost'] ?? 0);
+            $total_maritime_cost = floatval($form_data['total_maritime_cost'] ?? 0);
+        }
+        
+        // Calculate adjustments
+        $company_profit = 200.00;
+        $confidence_adjustment = 0;
+        
+        if ($api_confidence >= 60 && $api_confidence <= 100) {
+            $remaining = 100 - $api_confidence;
+            $confidence_adjustment = ($api_price * $remaining) / 100;
+        } elseif ($api_confidence >= 30 && $api_confidence <= 59) {
+            $confidence_adjustment = 150.00;
+        } elseif ($api_confidence >= 0 && $api_confidence <= 29) {
+            $confidence_adjustment = 200.00;
+        }
+        
+        // Update record
+        $result = $wpdb->update(
+            $this->table_name,
+            array(
+                'flow_status' => 'cotizador',
+                'pickup_zip' => $pickup_zip,
+                'delivery_zip' => $delivery_zip,
+                'pickup_city' => $pickup_city,
+                'delivery_city' => $delivery_city,
+                'trailer_type' => $trailer_type,
+                'vehicle_type' => $vehicle_type,
+                'vehicle_inoperable' => $vehicle_inoperable,
+                'vehicle_make' => $vehicle_make,
+                'vehicle_model' => $vehicle_model,
+                'vehicle_year' => $vehicle_year,
+                'client_name' => $client_name,
+                'client_phone' => $client_phone,
+                'client_email' => $client_email,
+                'client_info_captured_at' => $client_info_captured_at,
+                'api_response' => json_encode($api_response),
+                'api_price' => $api_price,
+                'api_confidence' => $api_confidence,
+                'api_price_per_mile' => $api_price_per_mile,
+                'final_price' => $final_price,
+                'company_profit' => $company_profit,
+                'confidence_adjustment' => $confidence_adjustment,
+                'maritime_involved' => $maritime_involved,
+                'maritime_cost' => $maritime_cost,
+                'us_port_name' => $us_port_name,
+                'us_port_zip' => $us_port_zip,
+                'total_terrestrial_cost' => $total_terrestrial_cost,
+                'total_maritime_cost' => $total_maritime_cost,
+                'price_breakdown' => $price_breakdown,
+                'error_message' => $error_message,
+                'status_updated_at' => current_time('mysql')
+            ),
+            array('session_id' => $session_id),
+            array(
+                '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
+                '%s', '%f', '%f', '%f', '%f', '%f', '%f', '%d', '%f', '%s', '%s', '%f', '%f',
+                '%s', '%s', '%s'
+            ),
+            array('%s')
+        );
+        
+        return $result !== false;
+    }
+    
+    /**
+     * Update history record to 'checkout' status
+     */
+    public function update_to_checkout($session_id) {
+        global $wpdb;
+        
+        $result = $wpdb->update(
+            $this->table_name,
+            array(
+                'flow_status' => 'checkout',
+                'status_updated_at' => current_time('mysql')
+            ),
+            array('session_id' => $session_id),
+            array('%s', '%s'),
+            array('%s')
+        );
+        
+        return $result !== false;
+    }
+    
+    /**
+     * Update history record to 'completado' status
+     */
+    public function update_to_completado($session_id) {
+        global $wpdb;
+        
+        $result = $wpdb->update(
+            $this->table_name,
+            array(
+                'flow_status' => 'completado',
+                'status_updated_at' => current_time('mysql')
+            ),
+            array('session_id' => $session_id),
+            array('%s', '%s'),
+            array('%s')
+        );
+        
+        return $result !== false;
+    }
+    
+    /**
+     * Get history record by session ID
+     */
+    public function get_by_session_id($session_id) {
+        global $wpdb;
+        
+        return $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$this->table_name} WHERE session_id = %s",
+            $session_id
+        ), ARRAY_A);
+    }
+
+    /**
+     * Log a quote to history (legacy method - now redirects to update_to_cotizador)
      */
     public function log_quote($form_data, $api_response, $final_price, $price_breakdown = '') {
         global $wpdb;
@@ -1312,18 +1578,20 @@ class SDPI_History {
         
         // Headers
         fputcsv($output, array(
-            'ID', 'Fecha', 'IP Usuario', 'Cliente Nombre', 'Cliente Teléfono', 'Cliente Email', 'Info Capturada',
+            'ID', 'Session ID', 'Estado del Flujo', 'Fecha', 'IP Usuario', 'Cliente Nombre', 'Cliente Teléfono', 'Cliente Email', 'Info Capturada',
             'Origen Ciudad', 'Origen ZIP', 'Destino Ciudad', 'Destino ZIP',
             'Tipo Tráiler', 'Tipo Vehículo', 'Marca', 'Modelo', 'Año', 'No Operativo',
             'Precio API', 'Confianza API', 'Precio por Milla', 'Precio Final', 'Ganancia Empresa',
             'Ajuste Confianza', 'Marítimo', 'Costo Marítimo', 'Puerto USA', 'ZIP Puerto',
-            'Costo Terrestre Total', 'Costo Marítimo Total', 'Mensaje Error'
+            'Costo Terrestre Total', 'Costo Marítimo Total', 'Mensaje Error', 'Fecha Actualización Estado'
         ));
         
         // Data rows
         foreach ($data as $row) {
             fputcsv($output, array(
                 $row['id'],
+                $row['session_id'],
+                $row['flow_status'],
                 $row['created_at'],
                 $row['user_ip'],
                 $row['client_name'],
@@ -1352,7 +1620,8 @@ class SDPI_History {
                 $row['us_port_zip'],
                 $row['total_terrestrial_cost'],
                 $row['total_maritime_cost'],
-                $row['error_message']
+                $row['error_message'],
+                $row['status_updated_at']
             ));
         }
         

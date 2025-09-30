@@ -103,7 +103,9 @@ class SDPI_Session {
 		if (!session_id()) {
 			session_start();
 		}
-		return isset($_SESSION['sdpi_quote_session_id']) ? sanitize_text_field($_SESSION['sdpi_quote_session_id']) : '';
+		$session_id = isset($_SESSION['sdpi_quote_session_id']) ? sanitize_text_field($_SESSION['sdpi_quote_session_id']) : '';
+		error_log("get_session_id: " . $session_id); // Log para depuración
+		return $session_id;
 	}
 
 	/**
@@ -114,6 +116,13 @@ class SDPI_Session {
 			session_start();
 		}
 		$_SESSION['sdpi_quote_session_id'] = $session_id;
+	}
+
+	/**
+	 * Helper para obtener el session_id actual para histórico
+	 */
+	public function get_current_session_id() {
+		return $this->get_session_id();
 	}
 
 	/**

@@ -743,6 +743,8 @@ class SDPI_Form {
         $session_id = $session->start_session($client_name, $client_email, $client_phone);
         $session->set_status($session_id, 'started');
 
+        error_log("ajax_save_client_info session_id: " . $session_id);
+
         // Create initial history record
         $history = new SDPI_History();
         $history->create_initial_record($session_id, $client_name, $client_email, $client_phone);
@@ -925,6 +927,8 @@ class SDPI_Form {
         $session = new SDPI_Session();
         $session_id = $this->ensure_quote_session();
 
+        error_log("ajax_get_quote session_id: " . $session_id);
+
         // Update history to 'cotizador' status
         $history = new SDPI_History();
         $form_data = array(
@@ -940,11 +944,11 @@ class SDPI_Form {
             'vehicle_model' => $vehicle_model,
             'vehicle_year' => $vehicle_year,
             'maritime_involved' => $involves_maritime,
-            'maritime_cost' => $involves_maritime ? $maritime_cost : 0,
-            'us_port_name' => $involves_maritime ? $us_port_name : '',
-            'us_port_zip' => $involves_maritime ? $us_port_zip : '',
-            'total_terrestrial_cost' => $involves_maritime ? $terrestrial_cost : 0,
-            'total_maritime_cost' => $involves_maritime ? $maritime_cost : 0
+            'maritime_cost' => $involves_maritime ? ($final_price_data['maritime_cost'] ?? 0) : 0,
+            'us_port_name' => $involves_maritime ? ($final_price_data['us_port']['port'] ?? '') : '',
+            'us_port_zip' => $involves_maritime ? ($final_price_data['us_port']['zip'] ?? '') : '',
+            'total_terrestrial_cost' => $involves_maritime ? ($final_price_data['terrestrial_cost'] ?? 0) : 0,
+            'total_maritime_cost' => $involves_maritime ? ($final_price_data['maritime_cost'] ?? 0) : 0
         );
 
         // Get client info from session
@@ -956,10 +960,7 @@ class SDPI_Form {
             $form_data['client_info_captured_at'] = $session_data['data']['__meta']['started_at'] ?? null;
         }
 
-        $history->update_to_cotizador($session_id, $form_data, $api_response, $final_price_data['total'], $price_breakdown);
-
-        // Log to history (legacy method for backward compatibility)
-        $this->log_to_history($pickup_zip, $delivery_zip, $trailer_type, $vehicle_type, $vehicle_inoperable, $vehicle_electric, $vehicle_make, $vehicle_model, $vehicle_year, $api_response, $final_price_data, $involves_maritime);
+        $history->update_to_cotizador($session_id, $form_data, $api_response, $final_price_data['final_price'], $final_price_data['breakdown']);
 
         // Persist quote data to consolidated session
         $session->update_data($session_id, array(

@@ -855,8 +855,8 @@ class SDPI_History {
                     </td>
                     <td>
                         <div class="sdpi-actions">
-                            <button class="button button-small" onclick="sdpiViewDetails(<?php echo $item->id; ?>)">Ver</button>
-                            <button class="button button-small button-link-delete" onclick="sdpiDeleteItem(<?php echo $item->id; ?>)">Eliminar</button>
+                            <button type="button" class="button button-small" onclick="sdpiViewDetails(<?php echo $item->id; ?>)">Ver</button>
+                            <button type="button" class="button button-small button-link-delete" onclick="sdpiDeleteItem(<?php echo $item->id; ?>)">Eliminar</button>
                         </div>
                     </td>
                 </tr>
@@ -881,12 +881,8 @@ class SDPI_History {
             </div>
         </div>
         
+
         <script>
-        function sdpiViewDetails(id) {
-            // TODO: Implement modal or detailed view
-            alert('Ver detalles del item ' + id);
-        }
-        
         function sdpiDeleteItem(id) {
             if (confirm('¿Estás seguro de que quieres eliminar este elemento?')) {
                 jQuery.post(ajaxurl, {

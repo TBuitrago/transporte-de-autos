@@ -43,6 +43,8 @@
 
 .sdpi-form-group input[type="text"],
 .sdpi-form-group input[type="number"],
+.sdpi-form-group input[type="tel"],
+.sdpi-form-group input[type="email"],
 .sdpi-form-group select {
     width: 100%;
     padding: 0.75rem;
@@ -55,6 +57,8 @@
 
 .sdpi-form-group input[type="text"]:focus,
 .sdpi-form-group input[type="number"]:focus,
+.sdpi-form-group input[type="tel"]:focus,
+.sdpi-form-group input[type="email"]:focus,
 .sdpi-form-group select:focus {
     outline: none;
     border-color: #3498db;
@@ -62,13 +66,17 @@
 }
 
 .sdpi-form-group input[type="text"].valid,
-.sdpi-form-group input[type="number"].valid {
+.sdpi-form-group input[type="number"].valid,
+.sdpi-form-group input[type="tel"].valid,
+.sdpi-form-group input[type="email"].valid {
     border-color: #27ae60;
     background-color: #f8fff9;
 }
 
 .sdpi-form-group input[type="text"].invalid,
-.sdpi-form-group input[type="number"].invalid {
+.sdpi-form-group input[type="number"].invalid,
+.sdpi-form-group input[type="tel"].invalid,
+.sdpi-form-group input[type="email"].invalid {
     border-color: #e74c3c;
     background-color: #fff8f8;
 }

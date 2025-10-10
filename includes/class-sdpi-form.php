@@ -41,6 +41,10 @@ class SDPI_Form {
         add_action('wp_ajax_sdpi_save_client_info', array($this, 'ajax_save_client_info'));
         add_action('wp_ajax_nopriv_sdpi_save_client_info', array($this, 'ajax_save_client_info'));
 
+        // Add new AJAX handler for finalizing quote with contact info
+        add_action('wp_ajax_sdpi_finalize_quote_with_contact', array($this, 'ajax_finalize_quote_with_contact'));
+        add_action('wp_ajax_nopriv_sdpi_finalize_quote_with_contact', array($this, 'ajax_finalize_quote_with_contact'));
+
         // Enqueue JavaScript
         add_action('wp_enqueue_scripts', array($this, 'enqueue_scripts'));
     }
@@ -107,10 +111,8 @@ class SDPI_Form {
         $this->enqueue_styles();
         $this->enqueue_scripts();
 
-        // Check if client info has been captured
-        if (!$this->has_client_info()) {
-            return $this->render_client_info_form();
-        }
+        // MODIFICADO: Ya no verificamos datos de contacto al inicio
+        // El formulario de cotización se muestra directamente
 
         ob_start();
         ?>
@@ -754,6 +756,112 @@ class SDPI_Form {
     }
 
     /**
+     * AJAX handler for finalizing quote with contact info
+     * This is called after quote calculation to capture contact details and show the final price
+     */
+    public function ajax_finalize_quote_with_contact() {
+        check_ajax_referer('sdpi_nonce', 'nonce');
+
+        // Get contact info from POST
+        $client_name = sanitize_text_field($_POST['client_name']);
+        $client_phone = sanitize_text_field($_POST['client_phone']);
+        $client_email = sanitize_email($_POST['client_email']);
+
+        // Get the stored quote data from POST
+        $quote_data = isset($_POST['quote_data']) ? json_decode(stripslashes($_POST['quote_data']), true) : null;
+
+        // Validation
+        if (empty($client_name) || empty($client_phone) || empty($client_email)) {
+            wp_send_json_error('Todos los campos de contacto son requeridos.');
+            exit;
+        }
+
+        if (!is_email($client_email)) {
+            wp_send_json_error('Por favor ingrese un correo electrónico válido.');
+            exit;
+        }
+
+        if (!$quote_data) {
+            wp_send_json_error('No se encontraron datos de cotización.');
+            exit;
+        }
+
+        // Start session if not started
+        if (!session_id()) {
+            session_start();
+        }
+
+        // Store client data in session
+        $_SESSION['sdpi_client_info'] = array(
+            'name' => $client_name,
+            'phone' => $client_phone,
+            'email' => $client_email,
+            'captured_at' => current_time('mysql')
+        );
+
+        // Start consolidated quote session
+        $session = new SDPI_Session();
+        $session_id = $session->start_session($client_name, $client_email, $client_phone);
+        $session->set_status($session_id, 'started');
+
+        // Create initial history record
+        $history = new SDPI_History();
+        $history->create_initial_record($session_id, $client_name, $client_email, $client_phone);
+
+        // Now update to cotizador status with the quote data
+        $form_data = array(
+            'pickup_zip' => $quote_data['pickup_zip'] ?? '',
+            'delivery_zip' => $quote_data['delivery_zip'] ?? '',
+            'pickup_city' => $quote_data['pickup_city'] ?? '',
+            'delivery_city' => $quote_data['delivery_city'] ?? '',
+            'trailer_type' => $quote_data['trailer_type'] ?? '',
+            'vehicle_type' => $quote_data['vehicle_type'] ?? '',
+            'vehicle_inoperable' => $quote_data['vehicle_inoperable'] ?? false,
+            'vehicle_electric' => $quote_data['vehicle_electric'] ?? false,
+            'vehicle_make' => $quote_data['vehicle_make'] ?? '',
+            'vehicle_model' => $quote_data['vehicle_model'] ?? '',
+            'vehicle_year' => $quote_data['vehicle_year'] ?? '',
+            'maritime_involved' => $quote_data['maritime_involved'] ?? false,
+            'maritime_cost' => $quote_data['maritime_cost'] ?? 0,
+            'us_port_name' => $quote_data['us_port']['port'] ?? '',
+            'us_port_zip' => $quote_data['us_port']['zip'] ?? '',
+            'total_terrestrial_cost' => $quote_data['terrestrial_cost'] ?? 0,
+            'total_maritime_cost' => $quote_data['maritime_cost'] ?? 0,
+            'client_name' => $client_name,
+            'client_email' => $client_email,
+            'client_phone' => $client_phone,
+            'client_info_captured_at' => current_time('mysql')
+        );
+
+        // Update history to cotizador status
+        $history->update_to_cotizador(
+            $session_id, 
+            $form_data, 
+            $quote_data['api_response'] ?? array(), 
+            $quote_data['final_price'] ?? 0, 
+            $quote_data['breakdown'] ?? ''
+        );
+
+        // Store quote data in session
+        $session->update_data($session_id, array(
+            'quote' => $quote_data,
+            'client_info' => array(
+                'name' => $client_name,
+                'email' => $client_email,
+                'phone' => $client_phone
+            )
+        ));
+
+        // Return the quote data with success flag
+        $response_data = $quote_data;
+        $response_data['session_id'] = $session_id;
+        $response_data['show_price'] = true; // Flag to show the price now
+
+        wp_send_json_success($response_data);
+        exit;
+    }
+
+    /**
      * AJAX handler for saving additional shipping info
      */
     public function ajax_save_additional_info() {
@@ -835,13 +943,15 @@ class SDPI_Form {
     }
 
     /**
-     * AJAX handler for getting a quote
+     * AJAX handler for getting a quote - MODIFIED to request contact info first
      */
     public function ajax_get_quote() {
         check_ajax_referer('sdpi_nonce', 'nonce');
 
         $pickup_zip = sanitize_text_field($_POST['pickup_zip']);
         $delivery_zip = sanitize_text_field($_POST['delivery_zip']);
+        $pickup_city = sanitize_text_field($_POST['pickup_city'] ?? '');
+        $delivery_city = sanitize_text_field($_POST['delivery_city'] ?? '');
         $trailer_type = sanitize_text_field($_POST['trailer_type']);
         $vehicle_type = sanitize_text_field($_POST['vehicle_type']);
         $vehicle_inoperable = !empty($_POST['vehicle_inoperable']);
@@ -852,6 +962,7 @@ class SDPI_Form {
 
         // Check if maritime transport is involved (San Juan, PR)
         $involves_maritime = SDPI_Maritime::involves_maritime($pickup_zip, $delivery_zip);
+        $api_response = null;
         
         if ($involves_maritime) {
             // For maritime routes, NEVER pass San Juan to API
@@ -923,19 +1034,12 @@ class SDPI_Form {
             $final_price_data = $this->calculate_final_price($api_response, $pickup_zip, $delivery_zip, $vehicle_electric);
         }
 
-        // Get session ID
-        $session = new SDPI_Session();
-        $session_id = $this->ensure_quote_session();
-
-        error_log("ajax_get_quote session_id: " . $session_id);
-
-        // Update history to 'cotizador' status
-        $history = new SDPI_History();
-        $form_data = array(
+        // NUEVO FLUJO: Preparar los datos de cotización pero NO mostrar el precio aún
+        $quote_data = array(
             'pickup_zip' => $pickup_zip,
             'delivery_zip' => $delivery_zip,
-            'pickup_city' => $this->get_city_from_zip($pickup_zip),
-            'delivery_city' => $this->get_city_from_zip($delivery_zip),
+            'pickup_city' => $pickup_city ?: $this->get_city_from_zip($pickup_zip),
+            'delivery_city' => $delivery_city ?: $this->get_city_from_zip($delivery_zip),
             'trailer_type' => $trailer_type,
             'vehicle_type' => $vehicle_type,
             'vehicle_inoperable' => $vehicle_inoperable,
@@ -945,48 +1049,26 @@ class SDPI_Form {
             'vehicle_year' => $vehicle_year,
             'maritime_involved' => $involves_maritime,
             'maritime_cost' => $involves_maritime ? ($final_price_data['maritime_cost'] ?? 0) : 0,
-            'us_port_name' => $involves_maritime ? ($final_price_data['us_port']['port'] ?? '') : '',
-            'us_port_zip' => $involves_maritime ? ($final_price_data['us_port']['zip'] ?? '') : '',
-            'total_terrestrial_cost' => $involves_maritime ? ($final_price_data['terrestrial_cost'] ?? 0) : 0,
-            'total_maritime_cost' => $involves_maritime ? ($final_price_data['maritime_cost'] ?? 0) : 0
+            'us_port' => $involves_maritime ? ($final_price_data['us_port'] ?? null) : null,
+            'terrestrial_cost' => $involves_maritime ? ($final_price_data['terrestrial_cost'] ?? 0) : 0,
+            'api_response' => $api_response,
+            'final_price' => $final_price_data['final_price'],
+            'base_price' => $final_price_data['base_price'] ?? 0,
+            'confidence' => $final_price_data['confidence'] ?? 0,
+            'confidence_percentage' => $final_price_data['confidence_percentage'] ?? 0,
+            'company_profit' => $final_price_data['company_profit'] ?? 0,
+            'confidence_adjustment' => $final_price_data['confidence_adjustment'] ?? 0,
+            'breakdown' => $final_price_data['breakdown'] ?? '',
+            'message' => $final_price_data['message'] ?? '',
+            'payment_available' => class_exists('WooCommerce')
         );
 
-        // Get client info from session
-        $session_data = $session->get($session_id);
-        if ($session_data) {
-            $form_data['client_name'] = $session_data['client_name'] ?? '';
-            $form_data['client_email'] = $session_data['client_email'] ?? '';
-            $form_data['client_phone'] = $session_data['client_phone'] ?? '';
-            $form_data['client_info_captured_at'] = $session_data['data']['__meta']['started_at'] ?? null;
-        }
-
-        $history->update_to_cotizador($session_id, $form_data, $api_response, $final_price_data['final_price'], $final_price_data['breakdown']);
-
-        // Persist quote data to consolidated session
-        $session->update_data($session_id, array(
-            'quote' => array(
-                'pickup_zip' => $pickup_zip,
-                'delivery_zip' => $delivery_zip,
-                'trailer_type' => $trailer_type,
-                'vehicle' => array(
-                    'type' => $vehicle_type,
-                    'inoperable' => $vehicle_inoperable,
-                    'electric' => $vehicle_electric,
-                    'make' => $vehicle_make,
-                    'model' => $vehicle_model,
-                    'year' => $vehicle_year
-                ),
-                'api' => is_wp_error($api_response) ? array('error' => $api_response->get_error_message()) : $api_response,
-                'final' => $final_price_data
-            )
+        // Retornar respuesta indicando que necesitamos información de contacto
+        wp_send_json_success(array(
+            'needs_contact_info' => true,
+            'quote_calculated' => true,
+            'quote_data' => $quote_data // Enviar los datos de cotización para usar después de capturar contacto
         ));
-
-        // DEFER Zapier: now we only send after completion/payment to reduce tasks
-
-        // Add payment availability
-        $final_price_data['payment_available'] = class_exists('WooCommerce');
-
-        wp_send_json_success($final_price_data);
         exit;
     }
 

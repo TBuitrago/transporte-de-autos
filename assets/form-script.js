@@ -1,7 +1,7 @@
 jQuery(document).ready(function($) {
     'use strict';
     
-    console.log('SDPI Form Script loaded');
+    console.log('SDPI Form Script loaded - NEW FLOW');
     console.log('sdpi_ajax object:', typeof sdpi_ajax !== 'undefined' ? sdpi_ajax : 'NOT DEFINED');
     
     // City search functionality
@@ -108,7 +108,7 @@ jQuery(document).ready(function($) {
         resultsContainer.html('<div class="sdpi-no-results">No se encontraron ciudades</div>').show();
     }
     
-    // Handle form submission
+    // MODIFICADO: Handle form submission - Nuevo flujo con captura de contacto después
     $('#sdpi-pricing-form').on('submit', function(e) {
         e.preventDefault();
         
@@ -118,6 +118,8 @@ jQuery(document).ready(function($) {
             nonce: sdpi_ajax.nonce,
             pickup_zip: $('#sdpi_pickup_zip').val(),
             delivery_zip: $('#sdpi_delivery_zip').val(),
+            pickup_city: $('#sdpi_pickup_city').val(),
+            delivery_city: $('#sdpi_delivery_city').val(),
             trailer_type: $('#sdpi_trailer_type').val(),
             vehicle_type: $('#sdpi_vehicle_type').val(),
             vehicle_inoperable: $('#sdpi_vehicle_inoperable').is(':checked') ? 1 : 0,
@@ -129,8 +131,6 @@ jQuery(document).ready(function($) {
         
         // Debug logging
         console.log('SDPI FRONTEND DEBUG - Form Data:', formData);
-        console.log('SDPI FRONTEND DEBUG - Pickup ZIP:', formData.pickup_zip);
-        console.log('SDPI FRONTEND DEBUG - Delivery ZIP:', formData.delivery_zip);
         
         // Validate required fields
         if (!formData.pickup_zip || !formData.delivery_zip || !formData.trailer_type || !formData.vehicle_type) {
@@ -141,6 +141,7 @@ jQuery(document).ready(function($) {
         // Show loading
         $('#sdpi-loading').show();
         $('#sdpi-results').hide();
+        $('#sdpi-submit-btn').prop('disabled', true).text('Calculando cotización...');
         
         // Make AJAX request
         $.ajax({
@@ -151,39 +152,23 @@ jQuery(document).ready(function($) {
             timeout: 30000,
             success: function(response) {
                 $('#sdpi-loading').hide();
+                $('#sdpi-submit-btn').prop('disabled', false).text('Obtener Cotización');
 
                 if (response.success) {
-                    // Clear any previous payment buttons before showing new results
-                    $('.sdpi-pay-btn').remove();
-
-                    // Show success results
-                    $('#sdpi-result-title').text('Cotización Obtenida');
-                    $('#sdpi-result-message').text(response.data.message);
-                    $('#sdpi-price').text('$' + response.data.final_price + ' USD');
-                    $('#sdpi-confidence').text(response.data.confidence_percentage + '%');
-
-                    // Show price breakdown
-                    if (response.data.breakdown) {
-                        $('#sdpi-result-details').html(response.data.breakdown);
+                    // NUEVO FLUJO: Verificar si necesitamos información de contacto
+                    if (response.data.needs_contact_info) {
+                        console.log('Necesita información de contacto, mostrando formulario...');
+                        
+                        // Guardar los datos de cotización temporalmente
+                        window.currentQuoteData = response.data.quote_data;
+                        
+                        // Mostrar formulario de contacto
+                        showContactForm();
                     } else {
-                        $('#sdpi-result-details').html(
-                            '<p><strong>Precio Final:</strong> $' + response.data.final_price + ' USD</p>' +
-                            '<p><strong>Nivel de Confianza:</strong> ' + response.data.confidence_percentage + '%</p>'
-                        );
-                    }
-
-                    $('#sdpi-result-details').show();
-                    $('#sdpi-results').removeClass('error').addClass('success').show();
-
-                    // Add continue button if payment available
-                    if (response.data.payment_available) {
-                        var payButton = '<button type="button" class="sdpi-pay-btn" data-quote=\'' + JSON.stringify(response.data) + '\'>Continuar</button>';
-                        $('#sdpi-results').append(payButton);
+                        // Este caso no debería ocurrir en el nuevo flujo, pero lo dejamos por compatibilidad
+                        displayQuoteResults(response.data);
                     }
                 } else {
-                    // Clear any previous payment buttons on error too
-                    $('.sdpi-pay-btn').remove();
-
                     // Show error
                     $('#sdpi-result-title').text('Error');
                     $('#sdpi-result-message').text(response.data || 'Error al obtener la cotización.');
@@ -193,6 +178,7 @@ jQuery(document).ready(function($) {
             },
             error: function(xhr, status, error) {
                 $('#sdpi-loading').hide();
+                $('#sdpi-submit-btn').prop('disabled', false).text('Obtener Cotización');
                 
                 var errorMessage = 'Error al conectar con el servidor.';
                 if (status === 'timeout') {
@@ -209,6 +195,154 @@ jQuery(document).ready(function($) {
         });
     });
     
+    // NUEVA FUNCIÓN: Mostrar formulario de contacto
+    function showContactForm() {
+        // Ocultar el formulario principal
+        $('#sdpi-pricing-form').hide();
+        
+        // Crear y mostrar el formulario de contacto
+        var contactFormHtml = `
+            <div id="sdpi-contact-form-container" class="sdpi-form-section">
+                <h3>Información de Contacto</h3>
+                <p>Para mostrarle su cotización personalizada, por favor proporcione sus datos de contacto:</p>
+
+                <form id="sdpi-contact-form" class="sdpi-form">
+                    <div class="sdpi-form-group">
+                        <label for="sdpi_contact_name">Nombre Completo *</label>
+                        <input type="text" id="sdpi_contact_name" name="contact_name" required
+                               placeholder="Ej: Juan Pérez">
+                    </div>
+
+                    <div class="sdpi-form-group">
+                        <label for="sdpi_contact_phone">Número de Teléfono *</label>
+                        <input type="tel" id="sdpi_contact_phone" name="contact_phone" required
+                               placeholder="Ej: (787) 123-4567" pattern="[0-9\\(\\)\\-\\+\\s]+">
+                    </div>
+
+                    <div class="sdpi-form-group">
+                        <label for="sdpi_contact_email">Correo Electrónico *</label>
+                        <input type="email" id="sdpi_contact_email" name="contact_email" required
+                               placeholder="Ej: juan@email.com">
+                    </div>
+
+                    <div class="sdpi-form-submit">
+                        <button type="submit" class="sdpi-submit-btn" id="sdpi-contact-submit-btn">Ver Mi Cotización</button>
+                        <button type="button" class="sdpi-clear-btn" id="sdpi-contact-back-btn">Volver</button>
+                    </div>
+                </form>
+            </div>
+        `;
+        
+        // Insertar el formulario de contacto después del formulario principal
+        $('#sdpi-pricing-form').after(contactFormHtml);
+        
+        // Manejar el envío del formulario de contacto
+        $('#sdpi-contact-form').on('submit', function(e) {
+            e.preventDefault();
+            submitContactInfo();
+        });
+        
+        // Manejar el botón de volver
+        $('#sdpi-contact-back-btn').on('click', function() {
+            $('#sdpi-contact-form-container').remove();
+            $('#sdpi-pricing-form').show();
+        });
+    }
+    
+    // NUEVA FUNCIÓN: Enviar información de contacto y obtener precio final
+    function submitContactInfo() {
+        var contactData = {
+            action: 'sdpi_finalize_quote_with_contact',
+            nonce: sdpi_ajax.nonce,
+            client_name: $('#sdpi_contact_name').val().trim(),
+            client_phone: $('#sdpi_contact_phone').val().trim(),
+            client_email: $('#sdpi_contact_email').val().trim(),
+            quote_data: JSON.stringify(window.currentQuoteData)
+        };
+        
+        // Validación básica
+        if (!contactData.client_name || !contactData.client_phone || !contactData.client_email) {
+            alert('Todos los campos de contacto son requeridos.');
+            return;
+        }
+        
+        // Validación de email
+        var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(contactData.client_email)) {
+            alert('Por favor ingrese un correo electrónico válido.');
+            return;
+        }
+        
+        // Mostrar loading
+        $('#sdpi-contact-submit-btn').prop('disabled', true).text('Procesando...');
+        $('#sdpi-loading').show();
+        
+        $.ajax({
+            url: sdpi_ajax.ajax_url,
+            type: 'POST',
+            data: contactData,
+            dataType: 'json',
+            success: function(response) {
+                $('#sdpi-loading').hide();
+                
+                if (response.success) {
+                    console.log('Contacto guardado, mostrando resultados con precio...');
+                    
+                    // Ocultar formulario de contacto
+                    $('#sdpi-contact-form-container').remove();
+                    
+                    // Guardar los datos actualizados
+                    window.currentQuoteData = response.data;
+                    
+                    // Mostrar los resultados con el precio
+                    displayQuoteResults(response.data);
+                    
+                    // Mostrar el formulario principal nuevamente (por si quieren hacer otra cotización)
+                    $('#sdpi-pricing-form').show();
+                } else {
+                    $('#sdpi-contact-submit-btn').prop('disabled', false).text('Ver Mi Cotización');
+                    alert(response.data || 'Error al procesar la información de contacto.');
+                }
+            },
+            error: function(xhr, status, error) {
+                $('#sdpi-loading').hide();
+                $('#sdpi-contact-submit-btn').prop('disabled', false).text('Ver Mi Cotización');
+                alert('Error de conexión. Por favor intente nuevamente.');
+            }
+        });
+    }
+    
+    // FUNCIÓN MODIFICADA: Mostrar resultados de cotización
+    function displayQuoteResults(data) {
+        // Clear any previous payment buttons before showing new results
+        $('.sdpi-pay-btn').remove();
+
+        // Show success results
+        $('#sdpi-result-title').text('Cotización Obtenida');
+        $('#sdpi-result-message').text(data.message || 'Su cotización ha sido calculada exitosamente.');
+        $('#sdpi-price').text('$' + data.final_price + ' USD');
+        $('#sdpi-confidence').text((data.confidence_percentage || 0) + '%');
+
+        // Show price breakdown
+        if (data.breakdown) {
+            $('#sdpi-result-details').html(data.breakdown);
+        } else {
+            $('#sdpi-result-details').html(
+                '<p><strong>Precio Final:</strong> $' + data.final_price + ' USD</p>' +
+                '<p><strong>Nivel de Confianza:</strong> ' + (data.confidence_percentage || 0) + '%</p>'
+            );
+        }
+
+        $('#sdpi-result-details').show();
+        $('#sdpi-results').removeClass('error').addClass('success').show();
+
+        // Add continue button if payment available
+        if (data.payment_available) {
+            var payButton = '<button type="button" class="sdpi-pay-btn" data-quote=\'' + JSON.stringify(data) + '\'>Continuar</button>';
+            $('#sdpi-results').append(payButton);
+        }
+    }
+    
     // Clear form button
     $('<button type="button" class="sdpi-clear-btn">Limpiar Formulario</button>').insertAfter('#sdpi-submit-btn');
     
@@ -218,7 +352,7 @@ jQuery(document).ready(function($) {
         $('#sdpi-loading').hide();
     });
 
-    // Handle payment button click
+    // Handle payment button click (mantener funcionalidad existente)
     $(document).on('click', '.sdpi-pay-btn', function() {
         var quoteData = $(this).data('quote');
         var button = $(this);

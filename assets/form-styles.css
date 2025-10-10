@@ -97,21 +97,22 @@
 }
 
 .sdpi-submit-btn {
-    background: linear-gradient(135deg, #3498db, #2980b9);
-    color: white;
+    background: #17205F;
+    color: #ffffff;
     border: none;
-    padding: 1rem 2rem;
-    font-size: 1.1rem;
+    padding: 1.05rem 2.5rem;
+    font-size: 1.05rem;
     font-weight: 600;
-    border-radius: 8px;
+    border-radius: 12px;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+    box-shadow: 0 14px 32px rgba(23, 32, 95, 0.35);
 }
 
 .sdpi-submit-btn:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
+    box-shadow: 0 18px 42px rgba(23, 32, 95, 0.4);
+    background: #1e2b7d;
 }
 
 .sdpi-submit-btn:disabled {
@@ -122,16 +123,16 @@
 
 /* Payment button styles */
 .sdpi-pay-btn {
-    background: linear-gradient(135deg, #27ae60, #2ecc71);
-    color: white;
+    background: linear-gradient(135deg, #2F7955, #256143);
+    color: #ffffff;
     border: none;
-    padding: 1rem 2rem;
-    font-size: 1.1rem;
+    padding: 1rem 2.3rem;
+    font-size: 1.05rem;
     font-weight: 600;
-    border-radius: 8px;
+    border-radius: 12px;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
+    box-shadow: 0 14px 30px rgba(47, 121, 85, 0.35);
     margin-top: 1rem;
     display: block;
     width: 100%;
@@ -139,7 +140,8 @@
 
 .sdpi-pay-btn:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(39, 174, 96, 0.4);
+    box-shadow: 0 18px 40px rgba(47, 121, 85, 0.4);
+    background: linear-gradient(135deg, #256143, #1d4d35);
 }
 
 .sdpi-pay-btn:disabled {
@@ -149,20 +151,20 @@
 }
 
 .sdpi-clear-btn {
-    background: #95a5a6;
-    color: white;
-    border: none;
-    padding: 0.75rem 1.5rem;
-    font-size: 1rem;
+    background: transparent;
+    color: #17205F;
+    border: 1px solid rgba(23, 32, 95, 0.3);
+    padding: 0.85rem 1.75rem;
+    font-size: 0.98rem;
     font-weight: 500;
-    border-radius: 6px;
+    border-radius: 12px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
     margin-left: 1rem;
 }
 
 .sdpi-clear-btn:hover {
-    background: #7f8c8d;
+    background: rgba(23, 32, 95, 0.06);
     transform: translateY(-1px);
 }
 
@@ -1064,12 +1066,46 @@
     transition: all 0.3s ease;
     color: #5c628f;
     font-weight: 500;
+    position: relative;
+    overflow: hidden;
 }
 
 .sdpi-progress-step.active {
     background: #17205F;
     color: #ffffff;
     box-shadow: 0 16px 36px rgba(23, 32, 95, 0.28);
+}
+
+.sdpi-progress-step.completed {
+    background: rgba(23, 32, 95, 0.08);
+    color: #17205F;
+    border-color: rgba(23, 32, 95, 0.12);
+}
+
+.sdpi-progress-step.completed .sdpi-progress-label {
+    color: #17205F;
+    font-weight: 600;
+}
+
+.sdpi-progress-step::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: -50%;
+    width: calc(100% + 1rem);
+    height: 3px;
+    background: rgba(23, 32, 95, 0.12);
+    transform: translateY(-50%);
+    z-index: -1;
+}
+
+.sdpi-progress-step:first-child::before {
+    display: none;
+}
+
+.sdpi-progress-step.active::before,
+.sdpi-progress-step.completed::before {
+    background: rgba(23, 32, 95, 0.35);
 }
 
 .sdpi-progress-number {
@@ -1082,10 +1118,29 @@
     background: rgba(23, 32, 95, 0.1);
     font-weight: 600;
     color: inherit;
+    position: relative;
 }
 
 .sdpi-progress-step.active .sdpi-progress-number {
     background: rgba(255, 255, 255, 0.25);
+}
+
+.sdpi-progress-label {
+    font-size: 0.95rem;
+    letter-spacing: 0.01em;
+}
+
+.sdpi-progress-step.completed .sdpi-progress-number {
+    background: #2F7955;
+    color: transparent;
+}
+
+.sdpi-progress-step.completed .sdpi-progress-number::after {
+    content: '✓';
+    position: absolute;
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 600;
 }
 
 .sdpi-summary-panel {

@@ -24,7 +24,12 @@
         currentProgressStep = step;
         $('.sdpi-progress-step').each(function() {
             var target = parseInt($(this).data('step'), 10);
-            $(this).toggleClass('active', target <= step);
+            $(this).removeClass('active completed');
+            if (target < step) {
+                $(this).addClass('completed');
+            } else if (target === step) {
+                $(this).addClass('active');
+            }
         });
     }
 
@@ -103,6 +108,7 @@
         }
         setSummaryValue('#sdpi-summary-vehicle', vehicleParts.join(' '));
 
+        setSummaryValue('#sdpi-summary-transport-type', '');
         if ($('#sdpi-pricing-form').is(':visible')) {
             if (vehicleType) {
                 setProgressStep(2);

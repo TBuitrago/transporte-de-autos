@@ -779,3 +779,107 @@
         max-width: none;
     }
 }
+
+/* Maritime form styles */
+.sdpi-form-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.sdpi-col-2 {
+    flex: 1 1 calc(50% - 7.5px);
+    min-width: 250px;
+}
+
+.sdpi-col-3 {
+    flex: 1 1 calc(33.333% - 10px);
+    min-width: 200px;
+}
+
+@media (max-width: 768px) {
+    .sdpi-col-2,
+    .sdpi-col-3 {
+        flex: 1 1 100%;
+    }
+}
+
+.sdpi-maritime-form .sdpi-form-section {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.sdpi-maritime-form h3 {
+    color: #2c3e50;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+/* Maritime form specific input styles */
+.sdpi-maritime-form input[readonly] {
+    background-color: #e9ecef;
+    cursor: not-allowed;
+}
+
+.sdpi-maritime-form .sdpi-form-group {
+    margin-bottom: 0;
+}
+
+.sdpi-maritime-form .sdpi-form-row .sdpi-form-group {
+    margin-bottom: 0;
+}
+
+/* Maritime buttons */
+#sdpi-maritime-continue {
+    background: linear-gradient(135deg, #007cba, #005a87);
+    color: white;
+    border: none;
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0, 124, 186, 0.3);
+}
+
+#sdpi-maritime-continue:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 124, 186, 0.4);
+    background: linear-gradient(135deg, #005a87, #004666);
+}
+
+#sdpi-maritime-cancel {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-left: 1rem;
+}
+
+#sdpi-maritime-cancel:hover {
+    background: #5a6268;
+    transform: translateY(-1px);
+}
+
+/* Transport type indicator */
+#sdpi-summary-transport-type-row {
+    background: #e3f2fd;
+    padding: 8px;
+    border-radius: 4px;
+    margin: 5px 0;
+}
+
+#sdpi-summary-transport-type {
+    font-weight: bold;
+    color: #007cba;
+}

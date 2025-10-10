@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * Custom form handler for Super Dispatch Pricing Insights - FIXED VERSION
  */
@@ -75,8 +75,8 @@ class SDPI_Form {
         wp_localize_script('sdpi-form-script', 'sdpi_ajax', array(
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('sdpi_nonce'),
-            'loading_text' => 'Obteniendo cotización...',
-            'error_text' => 'Error al obtener cotización'
+            'loading_text' => 'Obteniendo cotizaciÃ³n...',
+            'error_text' => 'Error al obtener cotizaciÃ³n'
         ));
     }
 
@@ -116,105 +116,175 @@ class SDPI_Form {
         $this->enqueue_scripts();
 
         // MODIFICADO: Ya no verificamos datos de contacto al inicio
-        // El formulario de cotización se muestra directamente
+        // El formulario de cotizaciÃ³n se muestra directamente
 
         ob_start();
         ?>
         <div class="sdpi-pricing-form">
-            <form method="post" class="sdpi-form" id="sdpi-pricing-form">
+            <div class="sdpi-progress-bar" id="sdpi-progress-bar">
+                <div class="sdpi-progress-step active" data-step="1">
+                    <span class="sdpi-progress-number">1</span>
+                    <span class="sdpi-progress-label">Datos de envio</span>
+                </div>
+                <div class="sdpi-progress-step" data-step="2">
+                    <span class="sdpi-progress-number">2</span>
+                    <span class="sdpi-progress-label">Datos del vehiculo</span>
+                </div>
+                <div class="sdpi-progress-step" data-step="3">
+                    <span class="sdpi-progress-number">3</span>
+                    <span class="sdpi-progress-label">Contacto</span>
+                </div>
+                <div class="sdpi-progress-step" data-step="4">
+                    <span class="sdpi-progress-number">4</span>
+                    <span class="sdpi-progress-label">Resumen</span>
+                </div>
+            </div>
+            <div class="sdpi-form-layout">
+                <form method="post" class="sdpi-form" id="sdpi-pricing-form">
                 <input type="hidden" name="sdpi_form_submit" value="1">
                 <input type="hidden" name="sdpi_nonce" value="<?php echo wp_create_nonce('sdpi_form_nonce'); ?>">
                 
-                <div class="sdpi-form-section">
-                    <h3>Información de Envío</h3>
-                    
+                <div class="sdpi-form-card sdpi-form-section">
+                    <h3>Datos de envio</h3>
+                    <p class="sdpi-section-subtitle">Ingresa las ciudades de origen y destino para comenzar tu cotizacion.</p>
+
                     <div class="sdpi-form-group">
-                        <label for="sdpi_pickup_city">Ciudad de Origen *</label>
+                        <label for="sdpi_pickup_city">Ciudad de origen *</label>
                         <div class="sdpi-search-container">
-                            <input type="text" id="sdpi_pickup_city" name="pickup_city" 
-                                   placeholder="Buscar ciudad o código postal..." required autocomplete="off">
+                            <input type="text" id="sdpi_pickup_city" name="pickup_city"
+                                   placeholder="Escribe ciudad o codigo postal..." required autocomplete="off">
                             <div class="sdpi-search-results" id="pickup-results"></div>
                         </div>
                         <input type="hidden" id="sdpi_pickup_zip" name="pickup_zip">
-                        <small class="sdpi-field-help">Escriba para buscar ciudades o códigos postales</small>
+                        <small class="sdpi-field-help">Escribe para buscar ciudades o codigos postales.</small>
                     </div>
 
                     <div class="sdpi-form-group">
-                        <label for="sdpi_delivery_city">Ciudad de Destino *</label>
+                        <label for="sdpi_delivery_city">Ciudad de destino *</label>
                         <div class="sdpi-search-container">
-                            <input type="text" id="sdpi_delivery_city" name="delivery_city" 
-                                   placeholder="Buscar ciudad o código postal..." required autocomplete="off">
+                            <input type="text" id="sdpi_delivery_city" name="delivery_city"
+                                   placeholder="Escribe ciudad o codigo postal..." required autocomplete="off">
                             <div class="sdpi-search-results" id="delivery-results"></div>
                         </div>
                         <input type="hidden" id="sdpi_delivery_zip" name="delivery_zip">
-                        <small class="sdpi-field-help">Escriba para buscar ciudades o códigos postales</small>
+                        <small class="sdpi-field-help">Escribe para buscar ciudades o codigos postales.</small>
                     </div>
 
                     <div class="sdpi-form-group">
-                        <label for="sdpi_trailer_type">Tipo de Tráiler *</label>
+                        <label for="sdpi_trailer_type">Tipo de trailer *</label>
                         <select id="sdpi_trailer_type" name="trailer_type" required>
-                            <option value="">Seleccione...</option>
+                            <option value="">Selecciona una opcion</option>
                             <option value="open">Abierto</option>
                             <option value="enclosed">Cerrado</option>
                         </select>
                     </div>
                 </div>
 
-                <div class="sdpi-form-section">
-                    <h3>Información del Vehículo</h3>
+                <div class="sdpi-form-card sdpi-form-section">
+                    <h3>Datos del vehiculo</h3>
+                    <p class="sdpi-section-subtitle">Comparte los detalles principales del vehiculo a transportar.</p>
                     
                     <div class="sdpi-form-group">
-                        <label for="sdpi_vehicle_type">Tipo de Vehículo *</label>
+                        <label for="sdpi_vehicle_type">Tipo de vehiculo *</label>
                         <select id="sdpi_vehicle_type" name="vehicle_type" required>
-                            <option value="">Seleccione...</option>
-                            <option value="sedan">Sedán</option>
+                            <option value="">Selecciona una opcion</option>
+                            <option value="sedan">Sedan</option>
                             <option value="suv">SUV</option>
                             <option value="van">Van</option>
-                            <option value="coupe_2_doors">Coupé 2 Puertas</option>
-                            <option value="pickup_2_doors">Pickup 2 Puertas</option>
-                            <option value="pickup_4_doors">Pickup 4 Puertas</option>
+                            <option value="coupe_2_doors">Coupe 2 puertas</option>
+                            <option value="pickup_2_doors">Pickup 2 puertas</option>
+                            <option value="pickup_4_doors">Pickup 4 puertas</option>
                         </select>
                     </div>
-
-                    <div class="sdpi-form-group">
-                        <label for="sdpi_vehicle_inoperable">
+                    
+                    <div class="sdpi-form-group sdpi-option-group">
+                        <label class="sdpi-checkbox">
                             <input type="checkbox" id="sdpi_vehicle_inoperable" name="vehicle_inoperable" value="1">
-                            ¿El vehículo no funciona? *
+                            El vehiculo no funciona
                         </label>
                     </div>
-
-                    <div class="sdpi-form-group">
-                        <label for="sdpi_vehicle_electric">
+                    
+                    <div class="sdpi-form-group sdpi-option-group">
+                        <label class="sdpi-checkbox">
                             <input type="checkbox" id="sdpi_vehicle_electric" name="vehicle_electric" value="1">
-                            ¿Es un vehículo eléctrico?
+                            Vehiculo electrico
                         </label>
-                        <small class="sdpi-field-help">Se agregarán $600 USD adicionales al precio total</small>
+                        <small class="sdpi-field-help">Se agregaran $600 USD adicionales al precio final.</small>
                     </div>
-
-                    <div class="sdpi-form-group">
-                        <label for="sdpi_vehicle_make">Marca del Vehículo</label>
-                        <input type="text" id="sdpi_vehicle_make" name="vehicle_make"
-                               placeholder="Ej: Toyota, Ford, Chevrolet">
+                    
+                    <div class="sdpi-form-grid">
+                        <div class="sdpi-form-group">
+                            <label for="sdpi_vehicle_make">Marca del vehiculo</label>
+                            <input type="text" id="sdpi_vehicle_make" name="vehicle_make" placeholder="Ej: Toyota, Ford, Chevrolet">
+                        </div>
+                        <div class="sdpi-form-group">
+                            <label for="sdpi_vehicle_model">Modelo del vehiculo</label>
+                            <input type="text" id="sdpi_vehicle_model" name="vehicle_model" placeholder="Ej: Corolla, F-150, Silverado">
+                        </div>
+                        <div class="sdpi-form-group">
+                            <label for="sdpi_vehicle_year">Año del vehiculo</label>
+                            <input type="number" id="sdpi_vehicle_year" name="vehicle_year" min="1900" max="<?php echo date('Y'); ?>" placeholder="Ej: 2020">
+                        </div>
                     </div>
+                </div>
 
-                    <div class="sdpi-form-group">
-                        <label for="sdpi_vehicle_model">Modelo del Vehículo</label>
-                        <input type="text" id="sdpi_vehicle_model" name="vehicle_model" 
-                               placeholder="Ej: Camry, Focus, Silverado">
-                    </div>
-
-                    <div class="sdpi-form-group">
-                        <label for="sdpi_vehicle_year">Año del Vehículo</label>
-                        <input type="number" id="sdpi_vehicle_year" name="vehicle_year" 
-                               min="1900" max="<?php echo date('Y'); ?>" 
-                               placeholder="Ej: 2020">
+                <div class="sdpi-form-card sdpi-form-section">
+                    <h3>Preferencias adicionales</h3>
+                    <p class="sdpi-section-subtitle">Agrega informacion opcional para preparar mejor tu servicio.</p>
+                    
+                    <div class="sdpi-form-grid">
+                        <div class="sdpi-form-group">
+                            <label for="sdpi_pickup_date">Fecha estimada de recogida</label>
+                            <input type="date" id="sdpi_pickup_date" name="pickup_date">
+                        </div>
+                        <div class="sdpi-form-group">
+                            <label for="sdpi_notes">Notas adicionales</label>
+                            <textarea id="sdpi_notes" name="notes" rows="4" placeholder="Comparte detalles importantes (opcional)"></textarea>
+                        </div>
                     </div>
                 </div>
 
                 <div class="sdpi-form-submit">
-                    <button type="submit" class="sdpi-submit-btn" id="sdpi-submit-btn">Obtener Cotización</button>
-                </div>
+                    <button type="submit" class="sdpi-submit-btn" id="sdpi-submit-btn">Obtener CotizaciÃ³n</button>
+                    <button type="submit" class="sdpi-submit-btn" id="sdpi-submit-btn">Obtener cotizacion</button>
             </form>
+
+            <aside class="sdpi-summary-panel" id="sdpi-summary-panel">
+                <div class="sdpi-summary-header">
+                    <h3>Resumen de tu cotizacion</h3>
+                    <p>Actualizamos esta seccion mientras avanzas en el formulario.</p>
+                </div>
+                <div class="sdpi-summary-body">
+                    <div class="sdpi-summary-item pending">
+                        <span class="sdpi-summary-label">Ciudad de origen</span>
+                        <span class="sdpi-summary-value" id="sdpi-summary-pickup">Pendiente</span>
+                    </div>
+                    <div class="sdpi-summary-item pending">
+                        <span class="sdpi-summary-label">Ciudad de destino</span>
+                        <span class="sdpi-summary-value" id="sdpi-summary-delivery">Pendiente</span>
+                    </div>
+                    <div class="sdpi-summary-item pending">
+                        <span class="sdpi-summary-label">Tipo de trailer</span>
+                        <span class="sdpi-summary-value" id="sdpi-summary-trailer">Pendiente</span>
+                    </div>
+                    <div class="sdpi-summary-item pending">
+                        <span class="sdpi-summary-label">Vehiculo</span>
+                        <span class="sdpi-summary-value" id="sdpi-summary-vehicle">Pendiente</span>
+                    </div>
+                    <div class="sdpi-summary-item pending" id="sdpi-summary-transport-type-row" style="display:none;">
+                        <span class="sdpi-summary-label">Tipo de transporte</span>
+                        <span class="sdpi-summary-value" id="sdpi-summary-transport-type">Pendiente</span>
+                    </div>
+                </div>
+                <div class="sdpi-summary-total pending">
+                    <span class="sdpi-summary-total-label">Precio estimado</span>
+                    <span class="sdpi-summary-total-value" id="sdpi-summary-price">Pendiente</span>
+                </div>
+                <div class="sdpi-summary-footer">
+                    <p>DespuAï¿½s de ingresar tus datos de contacto verA?s el total final y podrA?s continuar al pago.</p>
+                </div>
+            </aside>
+            </div>
 
             <!-- Results container -->
             <div id="sdpi-results" class="sdpi-results" style="display: none;">
@@ -228,7 +298,7 @@ class SDPI_Form {
 
             <!-- Loading indicator -->
             <div id="sdpi-loading" class="sdpi-loading" style="display: none;">
-                <p>Obteniendo cotización...</p>
+                <p>Obteniendo cotizaciÃ³n...</p>
             </div>
 
             <!-- Debug info (only for admins) -->
@@ -477,16 +547,16 @@ class SDPI_Form {
         ?>
         <div id="sdpi-additional-info" class="sdpi-client-info-form" style="display:none;">
             <div class="sdpi-form-section">
-                <h3>Información adicional para el envío</h3>
-                <p>Revise los datos de la cotización y complete la información de recogida y entrega antes de continuar al pago.</p>
+                <h3>InformaciÃ³n adicional para el envÃ­o</h3>
+                <p>Revise los datos de la cotizaciÃ³n y complete la informaciÃ³n de recogida y entrega antes de continuar al pago.</p>
 
-                <!-- Resumen no editable de la cotización previa -->
+                <!-- Resumen no editable de la cotizaciÃ³n previa -->
                 <div class="sdpi-price-breakdown" id="sdpi-additional-summary">
-                    <h4>Resumen de la Cotización</h4>
+                    <h4>Resumen de la CotizaciÃ³n</h4>
                     <div class="sdpi-price-item"><span class="sdpi-price-label">Origen:</span><span class="sdpi-price-value" id="sdpi-summary-pickup"></span></div>
                     <div class="sdpi-price-item"><span class="sdpi-price-label">Destino:</span><span class="sdpi-price-value" id="sdpi-summary-delivery"></span></div>
-                    <div class="sdpi-price-item"><span class="sdpi-price-label">Tipo de Tráiler:</span><span class="sdpi-price-value" id="sdpi-summary-trailer"></span></div>
-                    <div class="sdpi-price-item"><span class="sdpi-price-label">Vehículo:</span><span class="sdpi-price-value" id="sdpi-summary-vehicle"></span></div>
+                    <div class="sdpi-price-item"><span class="sdpi-price-label">Tipo de TrÃ¡iler:</span><span class="sdpi-price-value" id="sdpi-summary-trailer"></span></div>
+                    <div class="sdpi-price-item"><span class="sdpi-price-label">VehÃ­culo:</span><span class="sdpi-price-value" id="sdpi-summary-vehicle"></span></div>
                     <div class="sdpi-price-item" id="sdpi-summary-transport-type-row" style="display:none;"><span class="sdpi-price-label">Tipo de Transporte:</span><span class="sdpi-price-value" id="sdpi-summary-transport-type"></span></div>
                     <div class="sdpi-price-item sdpi-price-total"><span class="sdpi-price-label">Precio Final:</span><span class="sdpi-price-value" id="sdpi-summary-price"></span></div>
                 </div>
@@ -497,9 +567,9 @@ class SDPI_Form {
                     <input type="hidden" id="sdpi_transport_type" name="transport_type" value="terrestrial">
 
                     <div class="sdpi-form-section">
-                        <h3>Datos del vehículo</h3>
+                        <h3>Datos del vehÃ­culo</h3>
                         <div class="sdpi-form-group">
-                            <label for="sdpi_ai_vehicle_year">Año</label>
+                            <label for="sdpi_ai_vehicle_year">AÃ±o</label>
                             <input type="number" id="sdpi_ai_vehicle_year" disabled>
                         </div>
                         <div class="sdpi-form-group">
@@ -513,13 +583,13 @@ class SDPI_Form {
                     </div>
 
                     <div class="sdpi-form-section">
-                        <h3>Información de recogida</h3>
+                        <h3>InformaciÃ³n de recogida</h3>
                         <div class="sdpi-form-group">
                             <label for="sdpi_ai_p_name">Nombre de quien entrega *</label>
                             <input type="text" id="sdpi_ai_p_name" required>
                         </div>
                         <div class="sdpi-form-group">
-                            <label for="sdpi_ai_p_street">Dirección de recogida *</label>
+                            <label for="sdpi_ai_p_street">DirecciÃ³n de recogida *</label>
                             <input type="text" id="sdpi_ai_p_street" required>
                         </div>
                         <div class="sdpi-form-group">
@@ -533,13 +603,13 @@ class SDPI_Form {
                     </div>
 
                     <div class="sdpi-form-section">
-                        <h3>Información de entrega</h3>
+                        <h3>InformaciÃ³n de entrega</h3>
                         <div class="sdpi-form-group">
                             <label for="sdpi_ai_d_name">Nombre de quien recibe *</label>
                             <input type="text" id="sdpi_ai_d_name" required>
                         </div>
                         <div class="sdpi-form-group">
-                            <label for="sdpi_ai_d_street">Dirección de entrega *</label>
+                            <label for="sdpi_ai_d_street">DirecciÃ³n de entrega *</label>
                             <input type="text" id="sdpi_ai_d_street" required>
                         </div>
                         <div class="sdpi-form-group">
@@ -555,7 +625,7 @@ class SDPI_Form {
                     <div class="sdpi-form-section">
                         <h3>Tipo de recogida</h3>
                         <div class="sdpi-form-group">
-                            <label for="sdpi_ai_pickup_type">Seleccione una opción *</label>
+                            <label for="sdpi_ai_pickup_type">Seleccione una opciÃ³n *</label>
                             <select id="sdpi_ai_pickup_type" required>
                                 <option value="">Seleccione...</option>
                                 <option value="Subasta">Subasta</option>
@@ -571,7 +641,7 @@ class SDPI_Form {
                     </div>
                 </form>
 
-                <!-- Formulario adicional para transporte MARÍTIMO -->
+                <!-- Formulario adicional para transporte MARÃTIMO -->
                 <form id="sdpi-maritime-info-form" class="sdpi-maritime-form" style="display:none;">
                     <input type="hidden" name="sdpi_nonce" value="<?php echo wp_create_nonce('sdpi_nonce'); ?>">
                     <input type="hidden" id="sdpi_maritime_direction" name="maritime_direction" value="">
@@ -855,8 +925,8 @@ class SDPI_Form {
         ?>
         <div class="sdpi-client-info-form">
             <div class="sdpi-form-section">
-                <h3>Información de Contacto</h3>
-                <p>Para poder contactarlo en caso de que necesite asistencia con su cotización o proceso de envío, por favor complete la siguiente información:</p>
+                <h3>InformaciÃ³n de Contacto</h3>
+                <p>Para poder contactarlo en caso de que necesite asistencia con su cotizaciÃ³n o proceso de envÃ­o, por favor complete la siguiente informaciÃ³n:</p>
 
                 <form method="post" class="sdpi-form" id="sdpi-registration-form">
                     <input type="hidden" name="sdpi_registration_submit" value="1">
@@ -865,36 +935,36 @@ class SDPI_Form {
                     <div class="sdpi-form-group">
                         <label for="sdpi_user_name">Nombre Completo *</label>
                         <input type="text" id="sdpi_user_name" name="user_name" required
-                               placeholder="Ej: Juan Pérez">
+                               placeholder="Ej: Juan PÃ©rez">
                     </div>
 
                     <div class="sdpi-form-group">
-                        <label for="sdpi_user_phone">Número de Teléfono *</label>
+                        <label for="sdpi_user_phone">NÃºmero de TelÃ©fono *</label>
                         <input type="tel" id="sdpi_user_phone" name="user_phone" required
                                placeholder="Ej: (787) 123-4567" pattern="[0-9\(\)\-\+\s]+">
                     </div>
 
                     <div class="sdpi-form-group">
-                        <label for="sdpi_user_email">Correo Electrónico *</label>
+                        <label for="sdpi_user_email">Correo ElectrÃ³nico *</label>
                         <input type="email" id="sdpi_user_email" name="user_email" required
                                placeholder="Ej: juan@email.com">
                     </div>
 
                     <div class="sdpi-form-submit">
-                        <button type="submit" class="sdpi-submit-btn" id="sdpi-client-info-btn">Continuar con la Cotización</button>
+                        <button type="submit" class="sdpi-submit-btn" id="sdpi-client-info-btn">Continuar con la CotizaciÃ³n</button>
                     </div>
                 </form>
             </div>
 
             <!-- Client info results container -->
             <div id="sdpi-client-info-results" class="sdpi-results" style="display: none;">
-                <h3 id="sdpi-client-info-title">Información Guardada</h3>
+                <h3 id="sdpi-client-info-title">InformaciÃ³n Guardada</h3>
                 <p id="sdpi-client-info-message"></p>
             </div>
 
             <!-- Loading indicator -->
             <div id="sdpi-client-info-loading" class="sdpi-loading" style="display: none;">
-                <p>Guardando información...</p>
+                <p>Guardando informaciÃ³n...</p>
             </div>
         </div>
 
@@ -924,7 +994,7 @@ class SDPI_Form {
                 var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                 if (!emailRegex.test(formData.client_email)) {
                     $('#sdpi-client-info-title').text('Error');
-                    $('#sdpi-client-info-message').text('Por favor ingrese un correo electrónico válido.');
+                    $('#sdpi-client-info-message').text('Por favor ingrese un correo electrÃ³nico vÃ¡lido.');
                     $('#sdpi-client-info-results').removeClass('success').addClass('error').show();
                     return;
                 }
@@ -941,11 +1011,11 @@ class SDPI_Form {
                     dataType: 'json',
                     success: function(response) {
                         $('#sdpi-client-info-loading').hide();
-                        $('#sdpi-client-info-btn').prop('disabled', false).text('Continuar con la Cotización');
+                        $('#sdpi-client-info-btn').prop('disabled', false).text('Continuar con la CotizaciÃ³n');
 
                         if (response.success) {
-                            $('#sdpi-client-info-title').text('Información Guardada');
-                            $('#sdpi-client-info-message').text('¡Perfecto! Continuando con la cotización...');
+                            $('#sdpi-client-info-title').text('InformaciÃ³n Guardada');
+                            $('#sdpi-client-info-message').text('Â¡Perfecto! Continuando con la cotizaciÃ³n...');
                             $('#sdpi-client-info-results').removeClass('error').addClass('success').show();
 
                             // Reload the page to show the quote form
@@ -954,17 +1024,17 @@ class SDPI_Form {
                             }, 1500);
                         } else {
                             $('#sdpi-client-info-title').text('Error');
-                            $('#sdpi-client-info-message').text(response.data || 'Error al guardar la información.');
+                            $('#sdpi-client-info-message').text(response.data || 'Error al guardar la informaciÃ³n.');
                             $('#sdpi-client-info-results').removeClass('success').addClass('error').show();
                         }
                     },
                     error: function(xhr, status, error) {
                         $('#sdpi-client-info-loading').hide();
-                        $('#sdpi-client-info-btn').prop('disabled', false).text('Continuar con la Cotización');
+                        $('#sdpi-client-info-btn').prop('disabled', false).text('Continuar con la CotizaciÃ³n');
 
-                        var errorMessage = 'Error de conexión. Intente nuevamente.';
+                        var errorMessage = 'Error de conexiÃ³n. Intente nuevamente.';
                         if (status === 'timeout') {
-                            errorMessage = 'La solicitud tardó demasiado. Intente nuevamente.';
+                            errorMessage = 'La solicitud tardÃ³ demasiado. Intente nuevamente.';
                         } else if (xhr.responseJSON && xhr.responseJSON.data) {
                             errorMessage = xhr.responseJSON.data;
                         }
@@ -998,7 +1068,7 @@ class SDPI_Form {
         }
 
         if (!is_email($client_email)) {
-            wp_send_json_error('Por favor ingrese un correo electrónico válido.');
+            wp_send_json_error('Por favor ingrese un correo electrÃ³nico vÃ¡lido.');
             exit;
         }
 
@@ -1026,7 +1096,7 @@ class SDPI_Form {
         $history = new SDPI_History();
         $history->create_initial_record($session_id, $client_name, $client_email, $client_phone);
 
-        wp_send_json_success(array('message' => 'Información del cliente guardada exitosamente.', 'session_id' => $session_id));
+        wp_send_json_success(array('message' => 'InformaciÃ³n del cliente guardada exitosamente.', 'session_id' => $session_id));
         exit;
     }
 
@@ -1052,12 +1122,12 @@ class SDPI_Form {
         }
 
         if (!is_email($client_email)) {
-            wp_send_json_error('Por favor ingrese un correo electrónico válido.');
+            wp_send_json_error('Por favor ingrese un correo electrÃ³nico vÃ¡lido.');
             exit;
         }
 
         if (!$quote_data) {
-            wp_send_json_error('No se encontraron datos de cotización.');
+            wp_send_json_error('No se encontraron datos de cotizaciÃ³n.');
             exit;
         }
 
@@ -1165,14 +1235,14 @@ class SDPI_Form {
 
         // Validate ZIP codes
         if (!preg_match('/^\d{5}$/', $p_zip) || !preg_match('/^\d{5}$/', $d_zip)) {
-            wp_send_json_error('Los códigos postales deben tener 5 dígitos.');
+            wp_send_json_error('Los cÃ³digos postales deben tener 5 dÃ­gitos.');
             exit;
         }
 
         // Validate pickup type
         $valid_pickup_types = array('Subasta', 'Residencia', 'Dealer o negocio');
         if (!in_array($pickup_type, $valid_pickup_types)) {
-            wp_send_json_error('Tipo de recogida inválido.');
+            wp_send_json_error('Tipo de recogida invÃ¡lido.');
             exit;
         }
 
@@ -1217,7 +1287,7 @@ class SDPI_Form {
             'transport_type' => 'terrestrial'
         ));
 
-        wp_send_json_success('Información adicional guardada exitosamente.');
+        wp_send_json_success('InformaciÃ³n adicional guardada exitosamente.');
         exit;
     }
 
@@ -1231,7 +1301,7 @@ class SDPI_Form {
         $valid_directions = array('usa_to_pr', 'pr_to_usa', 'pr_pr');
 
         if (empty($direction) || !in_array($direction, $valid_directions, true)) {
-            wp_send_json_error('DirecciA3n marA-tima invA�lida.');
+            wp_send_json_error('DirecciA3n marA-tima invAï¿½lida.');
             exit;
         }
 
@@ -1261,7 +1331,7 @@ class SDPI_Form {
         }
 
         if (empty($vehicle_conditions) || empty($fuel_type) || empty($color) || $unit_value <= 0) {
-            wp_send_json_error('Complete la informaciA3n del vehA-culo (condiciA3n, combustible, valor y color).');
+            wp_send_json_error('Complete la Datos del vehiculo (condiciA3n, combustible, valor y color).');
             exit;
         }
 
@@ -1351,7 +1421,7 @@ class SDPI_Form {
 
         foreach (array($shipper['zip'], $consignee['zip'], $pickup['zip'], $dropoff['zip']) as $zip_value) {
             if (!empty($zip_value) && !preg_match('/^[0-9A-Za-z\\- ]{4,10}$/', $zip_value)) {
-                wp_send_json_error('Use un formato de cA3digo postal vA�lido.');
+                wp_send_json_error('Use un formato de cA3digo postal vAï¿½lido.');
                 exit;
             }
         }
@@ -1498,7 +1568,7 @@ class SDPI_Form {
             $final_price_data = $this->calculate_final_price($api_response, $pickup_zip, $delivery_zip, $vehicle_electric);
         }
 
-        // NUEVO FLUJO: Preparar los datos de cotización pero NO mostrar el precio aún
+        // NUEVO FLUJO: Preparar los datos de cotizaciÃ³n pero NO mostrar el precio aÃºn
         $quote_data = array(
             'pickup_zip' => $pickup_zip,
             'delivery_zip' => $delivery_zip,
@@ -1529,11 +1599,11 @@ class SDPI_Form {
             'transport_type' => $involves_maritime ? 'maritime' : 'terrestrial'
         );
 
-        // Retornar respuesta indicando que necesitamos información de contacto
+        // Retornar respuesta indicando que necesitamos informaciÃ³n de contacto
         wp_send_json_success(array(
             'needs_contact_info' => true,
             'quote_calculated' => true,
-            'quote_data' => $quote_data // Enviar los datos de cotización para usar después de capturar contacto
+            'quote_data' => $quote_data // Enviar los datos de cotizaciÃ³n para usar despuÃ©s de capturar contacto
         ));
         exit;
     }
@@ -1622,17 +1692,17 @@ class SDPI_Form {
         $total_cost = $maritime_cost + $electric_surcharge;
 
         $breakdown = '<div class="sdpi-maritime-breakdown">';
-        $breakdown .= '<h4>Desglose de Costos - Transporte Marítimo</h4>';
+        $breakdown .= '<h4>Desglose de Costos - Transporte MarÃ­timo</h4>';
 
         $breakdown .= '<div class="sdpi-cost-section">';
         $breakdown .= '<h5>Tramo Terrestre</h5>';
-        $breakdown .= '<p><em>No aplica - Transporte directo marítimo</em></p>';
+        $breakdown .= '<p><em>No aplica - Transporte directo marÃ­timo</em></p>';
         $breakdown .= '</div>';
 
         $breakdown .= '<div class="sdpi-cost-section">';
-        $breakdown .= '<h5>Tramo Marítimo</h5>';
-        $breakdown .= '<p><strong>Ruta:</strong> San Juan, PR → San Juan, PR</p>';
-        $breakdown .= '<p><strong>Tarifa Marítima:</strong> $' . number_format($maritime_cost, 2) . ' USD</p>';
+        $breakdown .= '<h5>Tramo MarÃ­timo</h5>';
+        $breakdown .= '<p><strong>Ruta:</strong> San Juan, PR â†’ San Juan, PR</p>';
+        $breakdown .= '<p><strong>Tarifa MarÃ­tima:</strong> $' . number_format($maritime_cost, 2) . ' USD</p>';
         $breakdown .= '</div>';
 
         // Electric vehicle surcharge
@@ -1640,7 +1710,7 @@ class SDPI_Form {
             $breakdown .= '<div class="sdpi-cost-section">';
             $breakdown .= '<h5>Recargos Adicionales</h5>';
             $breakdown .= '<div class="sdpi-price-item">';
-            $breakdown .= '<span class="sdpi-price-label">Recargo por vehículo eléctrico:</span>';
+            $breakdown .= '<span class="sdpi-price-label">Recargo por vehÃ­culo elÃ©ctrico:</span>';
             $breakdown .= '<span class="sdpi-price-value">+$' . number_format($electric_surcharge, 2) . ' USD</span>';
             $breakdown .= '</div>';
             $breakdown .= '</div>';
@@ -1649,7 +1719,7 @@ class SDPI_Form {
         $breakdown .= '<div class="sdpi-cost-total">';
         $breakdown .= '<h5>Total Final</h5>';
         $breakdown .= '<p><strong>Costo Total:</strong> $' . number_format($total_cost, 2) . ' USD</p>';
-        $breakdown .= '<p class="sdpi-maritime-note">* Transporte marítimo directo</p>';
+        $breakdown .= '<p class="sdpi-maritime-note">* Transporte marÃ­timo directo</p>';
         $breakdown .= '</div>';
 
         $breakdown .= '</div>';
@@ -1658,7 +1728,7 @@ class SDPI_Form {
             'base_price' => 0,
             'confidence' => 0.85,
             'final_price' => $total_cost,
-            'message' => 'El precio recomendado incluye transporte marítimo directo.',
+            'message' => 'El precio recomendado incluye transporte marÃ­timo directo.',
             'breakdown' => $breakdown,
             'price' => $total_cost,
             'confidence_percentage' => 85,
@@ -1685,7 +1755,7 @@ class SDPI_Form {
                 'base_price' => $base_price,
                 'confidence' => $confidence,
                 'final_price' => $maritime_result['total_cost'],
-                'message' => 'El precio recomendado incluye transporte marítimo entre ' . $maritime_result['us_port']['port'] . ' y San Juan, PR.',
+                'message' => 'El precio recomendado incluye transporte marÃ­timo entre ' . $maritime_result['us_port']['port'] . ' y San Juan, PR.',
                 'breakdown' => $maritime_result['breakdown'],
                 'price' => $maritime_result['total_cost'],
                 'confidence_percentage' => $confidence * 100,
@@ -1711,7 +1781,7 @@ class SDPI_Form {
             $remaining_percentage = 100 - $confidence;
             $confidence_adjustment = $base_price * ($remaining_percentage / 100);
             $confidence_description = sprintf(
-                'Ajuste por confianza (%s%% → 100%%): +$%s USD',
+                'Ajuste por confianza (%s%% â†’ 100%%): +$%s USD',
                 number_format($confidence, 1),
                 number_format($confidence_adjustment, 2)
             );
@@ -1767,7 +1837,7 @@ class SDPI_Form {
             number_format($company_profit, 2),
             $vehicle_electric ? sprintf(
                 '<div class="sdpi-price-item">
-                    <span class="sdpi-price-label">Recargo por vehículo eléctrico:</span>
+                    <span class="sdpi-price-label">Recargo por vehÃ­culo elÃ©ctrico:</span>
                     <span class="sdpi-price-value">+$%s USD</span>
                 </div>',
                 number_format($electric_surcharge, 2)
@@ -1821,7 +1891,7 @@ class SDPI_Form {
         if (is_wp_error($api_response)) {
             $_SESSION['sdpi_result'] = array(
                 'success' => false,
-                'message' => 'No se pudo obtener la cotización en este momento. Por favor, intente nuevamente.'
+                'message' => 'No se pudo obtener la cotizaciÃ³n en este momento. Por favor, intente nuevamente.'
             );
             return;
         }
@@ -1857,11 +1927,11 @@ class SDPI_Form {
 
         // Validate ZIP codes
         if (!preg_match('/^\d{5}$/', $post_data['pickup_zip'])) {
-            return new WP_Error('invalid_zip', 'El código postal de origen debe tener 5 dígitos.');
+            return new WP_Error('invalid_zip', 'El cÃ³digo postal de origen debe tener 5 dÃ­gitos.');
         }
 
         if (!preg_match('/^\d{5}$/', $post_data['delivery_zip'])) {
-            return new WP_Error('invalid_zip', 'El código postal de destino debe tener 5 dígitos.');
+            return new WP_Error('invalid_zip', 'El cÃ³digo postal de destino debe tener 5 dÃ­gitos.');
         }
 
         $form_data['pickup']['zip'] = sanitize_text_field($post_data['pickup_zip']);
@@ -1887,7 +1957,7 @@ class SDPI_Form {
         $result = $_SESSION['sdpi_result'];
         ?>
         <div class="sdpi-results <?php echo $result['success'] ? 'success' : 'error'; ?>">
-            <h3><?php echo $result['success'] ? 'Cotización Obtenida' : 'Error'; ?></h3>
+            <h3><?php echo $result['success'] ? 'CotizaciÃ³n Obtenida' : 'Error'; ?></h3>
             <p><?php echo esc_html($result['message']); ?></p>
         </div>
         <?php
@@ -2116,3 +2186,11 @@ class SDPI_Form {
         }
     }
 }
+
+
+
+
+
+
+
+

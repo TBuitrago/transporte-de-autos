@@ -1,4 +1,6 @@
-jQuery(document).ready(function($) {
+﻿jQuery(document).ready(function($) {
+    $("#sdpi_trailer_type, #sdpi_vehicle_type").on("change", updateLiveSummary);
+    $("#sdpi_vehicle_make, #sdpi_vehicle_model, #sdpi_vehicle_year").on("input change", updateLiveSummary);
     'use strict';
     
     console.log('SDPI Form Script loaded - NEW FLOW');
@@ -16,6 +18,99 @@ jQuery(document).ready(function($) {
         '#sdpi_d_name', '#sdpi_d_street', '#sdpi_d_city', '#sdpi_d_state',
         '#sdpi_d_country', '#sdpi_d_zip_code', '#sdpi_d_phone1'
     ];
+    var currentProgressStep = 1;
+
+    function setProgressStep(step) {
+        currentProgressStep = step;
+        $('.sdpi-progress-step').each(function() {
+            var target = parseInt($(this).data('step'), 10);
+            $(this).toggleClass('active', target <= step);
+        });
+    }
+
+    function formatCityDisplay(city, zip) {
+        if (!city) { return ''; }
+        return zip ? city + ' (' + zip + ')' : city;
+    }
+
+    function formatTransportLabel(type) {
+        if (!type) { return ''; }
+        if (type === 'maritime') { return 'Transporte maritimo'; }
+        if (type === 'terrestrial') { return 'Transporte terrestre'; }
+        return type;
+    }
+
+    function setSummaryValue(selector, value) {
+        var $value = $(selector);
+        if (!$value.length) { return; }
+        var $item = $value.closest('.sdpi-summary-item');
+        if (value && value.trim() !== '') {
+            $value.text(value);
+            if ($item.length) { $item.removeClass('pending'); }
+        } else {
+            $value.text('Pendiente');
+            if ($item.length) { $item.addClass('pending'); }
+        }
+
+        if ($value.attr('id') === 'sdpi-summary-transport-type') {
+            if (value && value.trim() !== '') {
+            } else {
+            }
+        }
+    }
+
+    function setSummaryPrice(value) {
+        var $total = $('.sdpi-summary-total');
+        if (value && value.trim() !== '') {
+            $('#sdpi-summary-price').text(value);
+            $total.removeClass('pending');
+        } else {
+            $('#sdpi-summary-price').text('Pendiente');
+            $total.addClass('pending');
+        }
+    }
+
+    function updateLiveSummary() {
+        var pickupCity = $('#sdpi_pickup_city').val();
+        var pickupZip = $('#sdpi_pickup_zip').val();
+        var deliveryCity = $('#sdpi_delivery_city').val();
+        var deliveryZip = $('#sdpi_delivery_zip').val();
+        var trailerType = $('#sdpi_trailer_type').val();
+        var vehicleType = $('#sdpi_vehicle_type').val();
+        var vehicleMake = $('#sdpi_vehicle_make').val();
+        var vehicleModel = $('#sdpi_vehicle_model').val();
+        var vehicleYear = $('#sdpi_vehicle_year').val();
+
+        setSummaryValue('#sdpi-summary-pickup', formatCityDisplay(pickupCity, pickupZip));
+        setSummaryValue('#sdpi-summary-delivery', formatCityDisplay(deliveryCity, deliveryZip));
+
+        var trailerLabel = '';
+        if (trailerType === 'open') {
+            trailerLabel = 'Abierto';
+        } else if (trailerType === 'enclosed') {
+            trailerLabel = 'Cerrado';
+        } else if (trailerType) {
+            trailerLabel = trailerType;
+        }
+        setSummaryValue('#sdpi-summary-trailer', trailerLabel);
+
+        var vehicleParts = [];
+        if (vehicleYear) { vehicleParts.push(vehicleYear); }
+        if (vehicleMake) { vehicleParts.push(vehicleMake); }
+        if (vehicleModel) { vehicleParts.push(vehicleModel); }
+        if (!vehicleParts.length && vehicleType) {
+            vehicleParts.push(vehicleType);
+        }
+        setSummaryValue('#sdpi-summary-vehicle', vehicleParts.join(' '));
+
+        if ($('#sdpi-pricing-form').is(':visible')) {
+            if (vehicleType) {
+                setProgressStep(2);
+            } else {
+                setProgressStep(1);
+            }
+        }
+    }
 
     function setRequiredFields(fields, required) {
         fields.forEach(function(selector) {
@@ -72,7 +167,12 @@ jQuery(document).ready(function($) {
         searchTimeout = setTimeout(function() {
             searchCities(query, fieldId);
         }, 300);
+
+        updateLiveSummary();
     });
+    $("#sdpi_trailer_type, #sdpi_vehicle_type").on("change", updateLiveSummary);
+    $("#sdpi_vehicle_make, #sdpi_vehicle_model, #sdpi_vehicle_year").on("input change", updateLiveSummary);
+
     
     // Handle city selection
     $(document).on('click', '.sdpi-city-option', function() {
@@ -86,6 +186,8 @@ jQuery(document).ready(function($) {
         
         // Hide results
         $('#' + resultsId).empty().hide();
+
+        updateLiveSummary();
     });
     
     // Hide results when clicking outside
@@ -146,7 +248,7 @@ jQuery(document).ready(function($) {
         resultsContainer.html('<div class="sdpi-no-results">No se encontraron ciudades</div>').show();
     }
     
-    // MODIFICADO: Handle form submission - Nuevo flujo con captura de contacto después
+    // MODIFICADO: Handle form submission - Nuevo flujo con captura de contacto despuÃ©s
     $('#sdpi-pricing-form').on('submit', function(e) {
         e.preventDefault();
         
@@ -179,7 +281,9 @@ jQuery(document).ready(function($) {
         // Show loading
         $('#sdpi-loading').show();
         $('#sdpi-results').hide();
-        $('#sdpi-submit-btn').prop('disabled', true).text('Calculando cotización...');
+        $('#sdpi-submit-btn').prop('disabled', true).text('Calculando cotizaciÃ³n...');
+        setSummaryPrice('');
+        setProgressStep(2);
         
         // Make AJAX request
         $.ajax({
@@ -190,37 +294,37 @@ jQuery(document).ready(function($) {
             timeout: 30000,
             success: function(response) {
                 $('#sdpi-loading').hide();
-                $('#sdpi-submit-btn').prop('disabled', false).text('Obtener Cotización');
+                $('#sdpi-submit-btn').prop('disabled', false).text('Obtener CotizaciÃ³n');
 
                 if (response.success) {
-                    // NUEVO FLUJO: Verificar si necesitamos información de contacto
+                    // NUEVO FLUJO: Verificar si necesitamos informaciÃ³n de contacto
                     if (response.data.needs_contact_info) {
-                        console.log('Necesita información de contacto, mostrando formulario...');
+                        console.log('Necesita informaciÃ³n de contacto, mostrando formulario...');
                         
-                        // Guardar los datos de cotización temporalmente
+                        // Guardar los datos de cotizaciÃ³n temporalmente
                         window.currentQuoteData = response.data.quote_data;
                         
                         // Mostrar formulario de contacto
                         showContactForm();
                     } else {
-                        // Este caso no debería ocurrir en el nuevo flujo, pero lo dejamos por compatibilidad
+                        // Este caso no deberÃ­a ocurrir en el nuevo flujo, pero lo dejamos por compatibilidad
                         displayQuoteResults(response.data);
                     }
                 } else {
                     // Show error
                     $('#sdpi-result-title').text('Error');
-                    $('#sdpi-result-message').text(response.data || 'Error al obtener la cotización.');
+                    $('#sdpi-result-message').text(response.data || 'Error al obtener la cotizaciÃ³n.');
                     $('#sdpi-result-details').hide();
                     $('#sdpi-results').removeClass('success').addClass('error').show();
                 }
             },
             error: function(xhr, status, error) {
                 $('#sdpi-loading').hide();
-                $('#sdpi-submit-btn').prop('disabled', false).text('Obtener Cotización');
+                $('#sdpi-submit-btn').prop('disabled', false).text('Obtener CotizaciÃ³n');
                 
                 var errorMessage = 'Error al conectar con el servidor.';
                 if (status === 'timeout') {
-                    errorMessage = 'La solicitud tardó demasiado. Intente nuevamente.';
+                    errorMessage = 'La solicitud tardÃ³ demasiado. Intente nuevamente.';
                 } else if (xhr.responseJSON && xhr.responseJSON.data) {
                     errorMessage = xhr.responseJSON.data;
                 }
@@ -233,61 +337,64 @@ jQuery(document).ready(function($) {
         });
     });
     
-    // NUEVA FUNCIÓN: Mostrar formulario de contacto
+    // NUEVA FUNCIÃ“N: Mostrar formulario de contacto
     function showContactForm() {
         // Ocultar el formulario principal
         $('#sdpi-pricing-form').hide();
+        setProgressStep(3);
         
         // Crear y mostrar el formulario de contacto
         var contactFormHtml = `
             <div id="sdpi-contact-form-container" class="sdpi-form-section">
-                <h3>Información de Contacto</h3>
-                <p>Para mostrarle su cotización personalizada, por favor proporcione sus datos de contacto:</p>
+                <h3>InformaciÃ³n de Contacto</h3>
+                <p>Para mostrarle su cotizaciÃ³n personalizada, por favor proporcione sus datos de contacto:</p>
 
                 <form id="sdpi-contact-form" class="sdpi-form">
                     <div class="sdpi-form-group">
                         <label for="sdpi_contact_name">Nombre Completo *</label>
                         <input type="text" id="sdpi_contact_name" name="contact_name" required
-                               placeholder="Ej: Juan Pérez">
+                               placeholder="Ej: Juan PÃ©rez">
                     </div>
 
                     <div class="sdpi-form-group">
-                        <label for="sdpi_contact_phone">Número de Teléfono *</label>
+                        <label for="sdpi_contact_phone">NÃºmero de TelÃ©fono *</label>
                         <input type="tel" id="sdpi_contact_phone" name="contact_phone" required
                                placeholder="Ej: (787) 123-4567" pattern="[0-9\\(\\)\\-\\+\\s]+">
                     </div>
 
                     <div class="sdpi-form-group">
-                        <label for="sdpi_contact_email">Correo Electrónico *</label>
+                        <label for="sdpi_contact_email">Correo ElectrÃ³nico *</label>
                         <input type="email" id="sdpi_contact_email" name="contact_email" required
                                placeholder="Ej: juan@email.com">
                     </div>
 
                     <div class="sdpi-form-submit">
-                        <button type="submit" class="sdpi-submit-btn" id="sdpi-contact-submit-btn">Ver Mi Cotización</button>
+                        <button type="submit" class="sdpi-submit-btn" id="sdpi-contact-submit-btn">Ver Mi CotizaciÃ³n</button>
                         <button type="button" class="sdpi-clear-btn" id="sdpi-contact-back-btn">Volver</button>
                     </div>
                 </form>
             </div>
         `;
         
-        // Insertar el formulario de contacto después del formulario principal
+        // Insertar el formulario de contacto despuÃ©s del formulario principal
         $('#sdpi-pricing-form').after(contactFormHtml);
         
-        // Manejar el envío del formulario de contacto
+        // Manejar el envÃ­o del formulario de contacto
         $('#sdpi-contact-form').on('submit', function(e) {
             e.preventDefault();
             submitContactInfo();
         });
         
-        // Manejar el botón de volver
+        // Manejar el botÃ³n de volver
         $('#sdpi-contact-back-btn').on('click', function() {
             $('#sdpi-contact-form-container').remove();
+            setProgressStep($("#sdpi_vehicle_type").val() ? 2 : 1);
+            updateLiveSummary();
             $('#sdpi-pricing-form').show();
         });
     }
     
-    // NUEVA FUNCIÓN: Enviar información de contacto y obtener precio final
+    // NUEVA FUNCIÃ“N: Enviar informaciÃ³n de contacto y obtener precio final
     function submitContactInfo() {
         var contactData = {
             action: 'sdpi_finalize_quote_with_contact',
@@ -298,16 +405,16 @@ jQuery(document).ready(function($) {
             quote_data: JSON.stringify(window.currentQuoteData)
         };
         
-        // Validación básica
+        // ValidaciÃ³n bÃ¡sica
         if (!contactData.client_name || !contactData.client_phone || !contactData.client_email) {
             alert('Todos los campos de contacto son requeridos.');
             return;
         }
         
-        // Validación de email
+        // ValidaciÃ³n de email
         var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(contactData.client_email)) {
-            alert('Por favor ingrese un correo electrónico válido.');
+            alert('Por favor ingrese un correo electrÃ³nico vÃ¡lido.');
             return;
         }
         
@@ -335,22 +442,22 @@ jQuery(document).ready(function($) {
                     // Mostrar los resultados con el precio
                     displayQuoteResults(response.data);
                     
-                    // Mostrar el formulario principal nuevamente (por si quieren hacer otra cotización)
+                    // Mostrar el formulario principal nuevamente (por si quieren hacer otra cotizaciÃ³n)
                     $('#sdpi-pricing-form').show();
                 } else {
-                    $('#sdpi-contact-submit-btn').prop('disabled', false).text('Ver Mi Cotización');
-                    alert(response.data || 'Error al procesar la información de contacto.');
+                    $('#sdpi-contact-submit-btn').prop('disabled', false).text('Ver Mi CotizaciÃ³n');
+                    alert(response.data || 'Error al procesar la informaciÃ³n de contacto.');
                 }
             },
             error: function(xhr, status, error) {
                 $('#sdpi-loading').hide();
-                $('#sdpi-contact-submit-btn').prop('disabled', false).text('Ver Mi Cotización');
-                alert('Error de conexión. Por favor intente nuevamente.');
+                $('#sdpi-contact-submit-btn').prop('disabled', false).text('Ver Mi CotizaciÃ³n');
+                alert('Error de conexiÃ³n. Por favor intente nuevamente.');
             }
         });
     }
     
-    // FUNCIÓN MODIFICADA: Mostrar resultados de cotización
+    // FUNCIÃ“N MODIFICADA: Mostrar resultados de cotizaciÃ³n
     function displayQuoteResults(data) {
         // Clear any previous payment buttons before showing new results
         $('.sdpi-pay-btn').remove();
@@ -358,10 +465,15 @@ jQuery(document).ready(function($) {
         data.transport_type = data.transport_type || (data.maritime_involved ? 'maritime' : 'terrestrial');
 
         // Show success results
-        $('#sdpi-result-title').text('Cotización Obtenida');
-        $('#sdpi-result-message').text(data.message || 'Su cotización ha sido calculada exitosamente.');
+        $('#sdpi-result-title').text('CotizaciÃ³n Obtenida');
+        $('#sdpi-result-message').text(data.message || 'Su cotizaciÃ³n ha sido calculada exitosamente.');
         $('#sdpi-price').text('$' + data.final_price + ' USD');
         $('#sdpi-confidence').text((data.confidence_percentage || 0) + '%');
+        setSummaryPrice('$' + data.final_price + ' USD');
+        if (data.transport_type) {
+            setSummaryValue('#sdpi-summary-transport-type', formatTransportLabel(data.transport_type));
+        }
+        setProgressStep(4);
 
         // Show price breakdown
         if (data.breakdown) {
@@ -416,9 +528,12 @@ jQuery(document).ready(function($) {
     $('<button type="button" class="sdpi-clear-btn">Limpiar Formulario</button>').insertAfter('#sdpi-submit-btn');
     
     $('.sdpi-clear-btn').on('click', function() {
-        $('#sdpi-pricing-form')[0].reset();
-        $('#sdpi-results').hide();
-        $('#sdpi-loading').hide();
+        $("#sdpi-pricing-form")[0].reset();
+        $("#sdpi-results").hide();
+        $("#sdpi-loading").hide();
+        setSummaryPrice('');
+        updateLiveSummary();
+        setProgressStep(1);
     });
 
     // Handle payment button click
@@ -441,13 +556,16 @@ jQuery(document).ready(function($) {
             var conditionsValue = isInoperable ? 'Non-Running' : 'Running';
             var fuelValue = isElectric ? 'Electric' : 'Gasoline';
 
-            $('#sdpi-summary-pickup').text(pickupLabel);
-            $('#sdpi-summary-delivery').text(deliveryLabel);
-            $('#sdpi-summary-trailer').text(trailerText);
-            $('#sdpi-summary-vehicle').text(vehicleSummary);
-            $('#sdpi-summary-price').text('$' + quoteData.final_price + ' USD');
-            $('#sdpi-summary-transport-type').text(isMaritime ? 'Transporte MarA-timo' : 'Transporte Terrestre');
-            $('#sdpi-summary-transport-type-row').show();
+            if (!vehicleSummary && vehicleTypeLabel) {
+                vehicleSummary = vehicleTypeLabel;
+            }
+
+            setSummaryValue('#sdpi-summary-pickup', pickupLabel);
+            setSummaryValue('#sdpi-summary-delivery', deliveryLabel);
+            setSummaryValue('#sdpi-summary-trailer', trailerText);
+            setSummaryValue('#sdpi-summary-vehicle', vehicleSummary);
+            setSummaryPrice('$' + quoteData.final_price + ' USD');
+            setSummaryValue('#sdpi-summary-transport-type', formatTransportLabel(isMaritime ? 'maritime' : 'terrestrial'));
 
             $('#sdpi_ai_vehicle_year').val(vehicleYear);
             $('#sdpi_ai_vehicle_make').val(vehicleMake);
@@ -535,7 +653,7 @@ jQuery(document).ready(function($) {
 
 
 
-    // Botón cancelar en pantalla adicional
+    // BotÃ³n cancelar en pantalla adicional
     $(document).on('click', '#sdpi-ai-cancel', function() {
         $('#sdpi-additional-info').hide();
         $('#sdpi-pricing-form').show();
@@ -565,7 +683,7 @@ jQuery(document).ready(function($) {
         if (!payload.p_name || !payload.p_street || !payload.p_city || !/^\d{5}$/.test(payload.p_zip) ||
             !payload.d_name || !payload.d_street || !payload.d_city || !/^\d{5}$/.test(payload.d_zip) ||
             !payload.pickup_type) {
-            alert('Por favor complete todos los campos obligatorios con informaciA3n vA�lida.');
+            alert('Por favor complete todos los campos obligatorios con informaciA3n vAï¿½lida.');
             return;
         }
 
@@ -720,4 +838,6 @@ jQuery(document).ready(function($) {
             $(this).removeClass('valid error');
         }
     });
+    setSummaryPrice('');
+    updateLiveSummary();
 });

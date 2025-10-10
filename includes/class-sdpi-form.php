@@ -600,21 +600,23 @@ class SDPI_Form {
                             </div>
                             <div class="sdpi-form-group sdpi-col-3">
                                 <label for="sdpi_m_vehicle_conditions">Car Conditions *</label>
-                                <select id="sdpi_m_vehicle_conditions" required>
+                                <select id="sdpi_m_vehicle_conditions" required disabled>
                                     <option value="">Select...</option>
                                     <option value="Running">Running</option>
                                     <option value="Non-Running">Non-Running</option>
                                 </select>
+                                <input type="hidden" id="sdpi_m_vehicle_conditions_value">
                             </div>
                             <div class="sdpi-form-group sdpi-col-3">
                                 <label for="sdpi_m_fuel_type">Fuel Type *</label>
-                                <select id="sdpi_m_fuel_type" required>
+                                <select id="sdpi_m_fuel_type" required disabled>
                                     <option value="">Select...</option>
                                     <option value="Gasoline">Gasoline</option>
                                     <option value="Diesel">Diesel</option>
                                     <option value="Electric">Electric</option>
                                     <option value="Hybrid">Hybrid</option>
                                 </select>
+                                <input type="hidden" id="sdpi_m_fuel_type_value">
                             </div>
                         </div>
                         <div class="sdpi-form-row">
@@ -1238,6 +1240,25 @@ class SDPI_Form {
         $unit_value = isset($_POST['unit_value']) ? floatval($_POST['unit_value']) : 0;
         $color = sanitize_text_field($_POST['color'] ?? '');
         $dimensions = sanitize_text_field($_POST['dimensions'] ?? '');
+
+        if (empty($vehicle_conditions) || empty($fuel_type)) {
+            $session = new SDPI_Session();
+            $session_id = $session->get_session_id();
+            if ($session_id) {
+                $session_row = $session->get($session_id);
+                if (!empty($session_row) && isset($session_row['data']['quote'])) {
+                    $quote_data = $session_row['data']['quote'];
+                    if (empty($vehicle_conditions)) {
+                        $is_inoperable = !empty($quote_data['vehicle_inoperable']);
+                        $vehicle_conditions = $is_inoperable ? 'Non-Running' : 'Running';
+                    }
+                    if (empty($fuel_type)) {
+                        $is_electric = !empty($quote_data['vehicle_electric']);
+                        $fuel_type = $is_electric ? 'Electric' : 'Gasoline';
+                    }
+                }
+            }
+        }
 
         if (empty($vehicle_conditions) || empty($fuel_type) || empty($color) || $unit_value <= 0) {
             wp_send_json_error('Complete la informaciA3n del vehA-culo (condiciA3n, combustible, valor y color).');

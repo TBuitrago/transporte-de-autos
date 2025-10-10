@@ -436,6 +436,10 @@ jQuery(document).ready(function($) {
             var vehicleModel = $('#sdpi_vehicle_model').val();
             var vehicleTypeLabel = $('#sdpi_vehicle_type option:selected').text() || (quoteData.vehicle_type || '');
             var vehicleSummary = (vehicleYear + ' ' + vehicleMake + ' ' + vehicleModel).trim();
+            var isInoperable = !!quoteData.vehicle_inoperable;
+            var isElectric = !!quoteData.vehicle_electric;
+            var conditionsValue = isInoperable ? 'Non-Running' : 'Running';
+            var fuelValue = isElectric ? 'Electric' : 'Gasoline';
 
             $('#sdpi-summary-pickup').text(pickupLabel);
             $('#sdpi-summary-delivery').text(deliveryLabel);
@@ -453,6 +457,10 @@ jQuery(document).ready(function($) {
             $('#sdpi_m_vehicle_make').val(vehicleMake);
             $('#sdpi_m_vehicle_model').val(vehicleModel);
             $('#sdpi_m_vehicle_type').val(vehicleTypeLabel);
+            $('#sdpi_m_vehicle_conditions').val(conditionsValue).prop('disabled', true);
+            $('#sdpi_m_vehicle_conditions_value').val(conditionsValue);
+            $('#sdpi_m_fuel_type').val(fuelValue).prop('disabled', true);
+            $('#sdpi_m_fuel_type_value').val(fuelValue);
 
             $('#sdpi_ai_p_city').val($('#sdpi_pickup_city').val());
             $('#sdpi_ai_p_zip').val($('#sdpi_pickup_zip').val());
@@ -631,8 +639,8 @@ jQuery(document).ready(function($) {
             action: 'sdpi_save_maritime_info',
             nonce: sdpi_ajax.nonce,
             maritime_direction: $('#sdpi_maritime_direction').val(),
-            vehicle_conditions: $('#sdpi_m_vehicle_conditions').val(),
-            fuel_type: $('#sdpi_m_fuel_type').val(),
+            vehicle_conditions: $('#sdpi_m_vehicle_conditions_value').val() || $('#sdpi_m_vehicle_conditions').val(),
+            fuel_type: $('#sdpi_m_fuel_type_value').val() || $('#sdpi_m_fuel_type').val(),
             unit_value: $('#sdpi_m_unit_value').val(),
             color: $('#sdpi_m_color').val().trim(),
             dimensions: $('#sdpi_m_dimensions').val().trim(),

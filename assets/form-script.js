@@ -7,6 +7,44 @@ jQuery(document).ready(function($) {
     // City search functionality
     var searchTimeout;
     var currentSearchField = null;
+
+    var maritimePickupFields = [
+        '#sdpi_p_name', '#sdpi_p_street', '#sdpi_p_city', '#sdpi_p_state',
+        '#sdpi_p_country', '#sdpi_p_zip_code', '#sdpi_p_phone1'
+    ];
+    var maritimeDropoffFields = [
+        '#sdpi_d_name', '#sdpi_d_street', '#sdpi_d_city', '#sdpi_d_state',
+        '#sdpi_d_country', '#sdpi_d_zip_code', '#sdpi_d_phone1'
+    ];
+
+    function setRequiredFields(fields, required) {
+        fields.forEach(function(selector) {
+            var $field = $(selector);
+            if (!$field.length) { return; }
+            if (required) {
+                $field.attr('required', 'required');
+            } else {
+                $field.removeAttr('required');
+            }
+        });
+    }
+
+    function toggleMaritimeSection(sectionSelector, show, requiredFields) {
+        var $section = $(sectionSelector);
+        if (!$section.length) { return; }
+
+        if (show) {
+            $section.show();
+            if (requiredFields) {
+                setRequiredFields(requiredFields, true);
+            }
+        } else {
+            $section.hide();
+            if (requiredFields) {
+                setRequiredFields(requiredFields, false);
+            }
+        }
+    }
     
     // Initialize city search for both fields
     $('#sdpi_pickup_city, #sdpi_delivery_city').on('input', function() {
@@ -317,6 +355,8 @@ jQuery(document).ready(function($) {
         // Clear any previous payment buttons before showing new results
         $('.sdpi-pay-btn').remove();
 
+        data.transport_type = data.transport_type || (data.maritime_involved ? 'maritime' : 'terrestrial');
+
         // Show success results
         $('#sdpi-result-title').text('Cotización Obtenida');
         $('#sdpi-result-message').text(data.message || 'Su cotización ha sido calculada exitosamente.');
@@ -342,6 +382,35 @@ jQuery(document).ready(function($) {
             $('#sdpi-results').append(payButton);
         }
     }
+
+    function initiateCheckout(btn, quoteData, originalText) {
+        $.ajax({
+            url: sdpi_ajax.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'sdpi_initiate_payment',
+                nonce: sdpi_ajax.nonce,
+                quote_data: JSON.stringify(quoteData)
+            },
+            dataType: 'json',
+            success: function(response) {
+                if (response.success && response.data && response.data.checkout_url) {
+                    window.location.href = response.data.checkout_url;
+                } else {
+                    alert('Error al iniciar el pago: ' + ((response && response.data) || 'Error desconocido'));
+                    if (btn) {
+                        btn.prop('disabled', false).text(originalText);
+                    }
+                }
+            },
+            error: function() {
+                alert('Error de conexiA3n al iniciar el pago.');
+                if (btn) {
+                    btn.prop('disabled', false).text(originalText);
+                }
+            }
+        });
+    }
     
     // Clear form button
     $('<button type="button" class="sdpi-clear-btn">Limpiar Formulario</button>').insertAfter('#sdpi-submit-btn');
@@ -352,44 +421,111 @@ jQuery(document).ready(function($) {
         $('#sdpi-loading').hide();
     });
 
-    // Handle payment button click (mantener funcionalidad existente)
+    // Handle payment button click
     $(document).on('click', '.sdpi-pay-btn', function() {
-        var quoteData = $(this).data('quote');
-        var button = $(this);
+        var quoteData = $(this).data('quote') || {};
+        quoteData.transport_type = quoteData.transport_type || (quoteData.maritime_involved ? 'maritime' : 'terrestrial');
+        var isMaritime = quoteData.transport_type === 'maritime';
 
-        // Mostrar pantalla adicional antes del pago
         try {
-            // Completar resumen
-            $('#sdpi-summary-pickup').text(quoteData.pickup_city ? (quoteData.pickup_city + ' (' + quoteData.pickup_zip + ')') : $('#sdpi_pickup_city').val() + ' (' + $('#sdpi_pickup_zip').val() + ')');
-            $('#sdpi-summary-delivery').text(quoteData.delivery_city ? (quoteData.delivery_city + ' (' + quoteData.delivery_zip + ')') : $('#sdpi_delivery_city').val() + ' (' + $('#sdpi_delivery_zip').val() + ')');
-            $('#sdpi-summary-trailer').text($('#sdpi_trailer_type option:selected').text());
-            var vehicleSummary = $('#sdpi_vehicle_year').val() + ' ' + $('#sdpi_vehicle_make').val() + ' ' + $('#sdpi_vehicle_model').val();
-            $('#sdpi-summary-vehicle').text(vehicleSummary.trim());
+            var pickupLabel = quoteData.pickup_city ? (quoteData.pickup_city + ' (' + quoteData.pickup_zip + ')') : ($('#sdpi_pickup_city').val() + ' (' + $('#sdpi_pickup_zip').val() + ')');
+            var deliveryLabel = quoteData.delivery_city ? (quoteData.delivery_city + ' (' + quoteData.delivery_zip + ')') : ($('#sdpi_delivery_city').val() + ' (' + $('#sdpi_delivery_zip').val() + ')');
+            var trailerText = $('#sdpi_trailer_type option[value="' + (quoteData.trailer_type || '') + '"]').text() || $('#sdpi_trailer_type option:selected').text();
+            var vehicleYear = $('#sdpi_vehicle_year').val();
+            var vehicleMake = $('#sdpi_vehicle_make').val();
+            var vehicleModel = $('#sdpi_vehicle_model').val();
+            var vehicleTypeLabel = $('#sdpi_vehicle_type option:selected').text() || (quoteData.vehicle_type || '');
+            var vehicleSummary = (vehicleYear + ' ' + vehicleMake + ' ' + vehicleModel).trim();
+
+            $('#sdpi-summary-pickup').text(pickupLabel);
+            $('#sdpi-summary-delivery').text(deliveryLabel);
+            $('#sdpi-summary-trailer').text(trailerText);
+            $('#sdpi-summary-vehicle').text(vehicleSummary);
             $('#sdpi-summary-price').text('$' + quoteData.final_price + ' USD');
+            $('#sdpi-summary-transport-type').text(isMaritime ? 'Transporte MarA-timo' : 'Transporte Terrestre');
+            $('#sdpi-summary-transport-type-row').show();
 
-            // Prellenar datos no editables del vehículo
-            $('#sdpi_ai_vehicle_year').val($('#sdpi_vehicle_year').val());
-            $('#sdpi_ai_vehicle_make').val($('#sdpi_vehicle_make').val());
-            $('#sdpi_ai_vehicle_model').val($('#sdpi_vehicle_model').val());
+            $('#sdpi_ai_vehicle_year').val(vehicleYear);
+            $('#sdpi_ai_vehicle_make').val(vehicleMake);
+            $('#sdpi_ai_vehicle_model').val(vehicleModel);
 
-            // Prellenar ciudad/zip reutilizables
+            $('#sdpi_m_vehicle_year').val(vehicleYear);
+            $('#sdpi_m_vehicle_make').val(vehicleMake);
+            $('#sdpi_m_vehicle_model').val(vehicleModel);
+            $('#sdpi_m_vehicle_type').val(vehicleTypeLabel);
+
             $('#sdpi_ai_p_city').val($('#sdpi_pickup_city').val());
             $('#sdpi_ai_p_zip').val($('#sdpi_pickup_zip').val());
             $('#sdpi_ai_d_city').val($('#sdpi_delivery_city').val());
             $('#sdpi_ai_d_zip').val($('#sdpi_delivery_zip').val());
 
-            // Mostrar nueva pantalla y ocultar cotizador
+            if (isMaritime) {
+                $('#sdpi_transport_type').val('maritime');
+                $('#sdpi-additional-info-form').hide();
+                $('#sdpi-maritime-info-form').show();
+
+                var direction = quoteData.maritime_direction || '';
+                if (!direction) {
+                    if ((quoteData.pickup_zip || '').indexOf('009') === 0) {
+                        direction = 'pr_to_usa';
+                    } else if ((quoteData.delivery_zip || '').indexOf('009') === 0) {
+                        direction = 'usa_to_pr';
+                    } else {
+                        direction = 'pr_pr';
+                    }
+                }
+                $('#sdpi_maritime_direction').val(direction);
+
+                if (direction === 'usa_to_pr') {
+                    $('#sdpi_s_country').val('USA');
+                    $('#sdpi_c_country').val('Puerto Rico');
+                } else if (direction === 'pr_to_usa') {
+                    $('#sdpi_s_country').val('Puerto Rico');
+                    $('#sdpi_c_country').val('USA');
+                }
+
+                toggleMaritimeSection('#sdpi-pickup-section', direction !== 'pr_to_usa', maritimePickupFields);
+                toggleMaritimeSection('#sdpi-dropoff-section', direction !== 'usa_to_pr', maritimeDropoffFields);
+
+                if (direction !== 'pr_to_usa') {
+                    $('#sdpi_p_city').val($('#sdpi_pickup_city').val()).prop('readonly', true);
+                    $('#sdpi_p_zip_code').val($('#sdpi_pickup_zip').val()).prop('readonly', true);
+                } else {
+                    $('#sdpi_p_city').val('').prop('readonly', false);
+                    $('#sdpi_p_zip_code').val('').prop('readonly', false);
+                }
+
+                if (direction !== 'usa_to_pr') {
+                    $('#sdpi_d_city').val($('#sdpi_delivery_city').val()).prop('readonly', true);
+                    $('#sdpi_d_zip_code').val($('#sdpi_delivery_zip').val()).prop('readonly', true);
+                } else {
+                    $('#sdpi_d_city').val('').prop('readonly', false);
+                    $('#sdpi_d_zip_code').val('').prop('readonly', false);
+                }
+
+                $('#sdpi-maritime-info-form').data('quote', quoteData);
+            } else {
+                $('#sdpi_transport_type').val('terrestrial');
+                $('#sdpi-maritime-info-form').hide();
+                toggleMaritimeSection('#sdpi-pickup-section', false, maritimePickupFields);
+                toggleMaritimeSection('#sdpi-dropoff-section', false, maritimeDropoffFields);
+                $('#sdpi-additional-info-form').show();
+                $('#sdpi_ai_p_city, #sdpi_ai_p_zip, #sdpi_ai_d_city, #sdpi_ai_d_zip').prop('readonly', true);
+            }
+
             $('#sdpi-pricing-form').hide();
             $('#sdpi-results').hide();
             $('#sdpi-additional-info').show();
             $('html, body').animate({ scrollTop: $('#sdpi-additional-info').offset().top - 40 }, 300);
 
-            // Guardar quote en data para uso posterior
             $('#sdpi-additional-info').data('quote', quoteData);
-        } catch (e) {
-            console.error('Error preparando pantalla adicional:', e);
+            window.currentQuoteData = quoteData;
+        } catch (error) {
+            console.error('Error preparando pantalla adicional:', error);
         }
     });
+
+
 
     // Botón cancelar en pantalla adicional
     $(document).on('click', '#sdpi-ai-cancel', function() {
@@ -418,14 +554,15 @@ jQuery(document).ready(function($) {
             pickup_type: $('#sdpi_ai_pickup_type').val().trim()
         };
 
-        // Validación básica
         if (!payload.p_name || !payload.p_street || !payload.p_city || !/^\d{5}$/.test(payload.p_zip) ||
             !payload.d_name || !payload.d_street || !payload.d_city || !/^\d{5}$/.test(payload.d_zip) ||
             !payload.pickup_type) {
-            alert('Por favor complete todos los campos obligatorios con información válida.');
+            alert('Por favor complete todos los campos obligatorios con informaciA3n vA�lida.');
             return;
         }
 
+        var originalText = btn.data('original-text') || btn.text();
+        btn.data('original-text', originalText);
         btn.prop('disabled', true).text('Guardando...');
 
         $.ajax({
@@ -435,42 +572,135 @@ jQuery(document).ready(function($) {
             dataType: 'json',
             success: function(resp) {
                 if (!resp.success) {
-                    alert(resp.data || 'Error al guardar la información adicional.');
-                    btn.prop('disabled', false).text('Continuar al Pago');
+                    alert(resp.data || 'Error al guardar la informaciA3n adicional.');
+                    btn.prop('disabled', false).text(originalText);
                     return;
                 }
 
-                // Iniciar pago con WooCommerce usando el flujo existente
-                $.ajax({
-                    url: sdpi_ajax.ajax_url,
-                    type: 'POST',
-                    data: {
-                        action: 'sdpi_initiate_payment',
-                        nonce: sdpi_ajax.nonce,
-                        quote_data: JSON.stringify(quoteData)
+                var shippingDetails = {
+                    pickup: {
+                        name: payload.p_name,
+                        street: payload.p_street,
+                        city: payload.p_city,
+                        zip: payload.p_zip,
+                        type: payload.pickup_type
                     },
-                    dataType: 'json',
-                    success: function(response) {
-                        if (response.success) {
-                            window.location.href = response.data.checkout_url;
-                        } else {
-                            alert('Error al iniciar el pago: ' + (response.data || 'Error desconocido'));
-                            btn.prop('disabled', false).text('Continuar al Pago');
-                        }
-                    },
-                    error: function() {
-                        alert('Error de conexión al iniciar el pago.');
-                        btn.prop('disabled', false).text('Continuar al Pago');
+                    delivery: {
+                        name: payload.d_name,
+                        street: payload.d_street,
+                        city: payload.d_city,
+                        zip: payload.d_zip
                     }
-                });
+                };
+
+                quoteData.shipping = shippingDetails;
+                quoteData.transport_type = 'terrestrial';
+                window.currentQuoteData = quoteData;
+                $('#sdpi-additional-info').data('quote', quoteData);
+
+                initiateCheckout(btn, quoteData, originalText);
             },
             error: function() {
-                alert('Error de conexión al guardar la información adicional.');
-                btn.prop('disabled', false).text('Continuar al Pago');
+                alert('Error de conexiA3n al guardar la informaciA3n adicional.');
+                btn.prop('disabled', false).text(originalText);
             }
         });
     });
-    
+
+    $(document).on('click', '#sdpi-maritime-cancel', function() {
+        $('#sdpi-additional-info').hide();
+        $('#sdpi-pricing-form').show();
+        $('#sdpi-results').show();
+    });
+
+    $(document).on('click', '#sdpi-maritime-continue', function() {
+        var btn = $(this);
+        var form = $('#sdpi-maritime-info-form')[0];
+
+        if (form && !form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+
+        var quoteData = $('#sdpi-maritime-info-form').data('quote') || {};
+        var originalText = btn.data('original-text') || btn.text();
+        btn.data('original-text', originalText);
+        btn.prop('disabled', true).text('Guardando...');
+
+        var payload = {
+            action: 'sdpi_save_maritime_info',
+            nonce: sdpi_ajax.nonce,
+            maritime_direction: $('#sdpi_maritime_direction').val(),
+            vehicle_conditions: $('#sdpi_m_vehicle_conditions').val(),
+            fuel_type: $('#sdpi_m_fuel_type').val(),
+            unit_value: $('#sdpi_m_unit_value').val(),
+            color: $('#sdpi_m_color').val().trim(),
+            dimensions: $('#sdpi_m_dimensions').val().trim(),
+            shipper_name: $('#sdpi_s_name').val().trim(),
+            shipper_street: $('#sdpi_s_street').val().trim(),
+            shipper_city: $('#sdpi_s_city').val().trim(),
+            shipper_state: $('#sdpi_s_state').val().trim(),
+            shipper_country: $('#sdpi_s_country').val().trim(),
+            shipper_zip: $('#sdpi_s_zip').val().trim(),
+            shipper_phone1: $('#sdpi_s_phone1').val().trim(),
+            shipper_phone2: $('#sdpi_s_phone2').val().trim(),
+            consignee_name: $('#sdpi_c_name').val().trim(),
+            consignee_street: $('#sdpi_c_street').val().trim(),
+            consignee_city: $('#sdpi_c_city').val().trim(),
+            consignee_state: $('#sdpi_c_state').val().trim(),
+            consignee_country: $('#sdpi_c_country').val().trim(),
+            consignee_zip: $('#sdpi_c_zip').val().trim(),
+            consignee_phone1: $('#sdpi_c_phone1').val().trim(),
+            consignee_phone2: $('#sdpi_c_phone2').val().trim(),
+            pickup_name: $('#sdpi_p_name').val().trim(),
+            pickup_street: $('#sdpi_p_street').val().trim(),
+            pickup_city: $('#sdpi_p_city').val().trim(),
+            pickup_state: $('#sdpi_p_state').val().trim(),
+            pickup_country: $('#sdpi_p_country').val().trim(),
+            pickup_zip: $('#sdpi_p_zip_code').val().trim(),
+            pickup_phone1: $('#sdpi_p_phone1').val().trim(),
+            pickup_phone2: $('#sdpi_p_phone2').val().trim(),
+            dropoff_name: $('#sdpi_d_name').val().trim(),
+            dropoff_street: $('#sdpi_d_street').val().trim(),
+            dropoff_city: $('#sdpi_d_city').val().trim(),
+            dropoff_state: $('#sdpi_d_state').val().trim(),
+            dropoff_country: $('#sdpi_d_country').val().trim(),
+            dropoff_zip: $('#sdpi_d_zip_code').val().trim(),
+            dropoff_phone1: $('#sdpi_d_phone1').val().trim(),
+            dropoff_phone2: $('#sdpi_d_phone2').val().trim(),
+            title: $('#sdpi_m_title').val().trim(),
+            registration: $('#sdpi_m_registration').val().trim(),
+            other_id: $('#sdpi_m_id').val().trim()
+        };
+
+        $.ajax({
+            url: sdpi_ajax.ajax_url,
+            type: 'POST',
+            data: payload,
+            dataType: 'json',
+            success: function(resp) {
+                if (!resp.success) {
+                    alert(resp.data || 'Error al guardar la informaciA3n marA-tima.');
+                    btn.prop('disabled', false).text(originalText);
+                    return;
+                }
+
+                quoteData.transport_type = 'maritime';
+                quoteData.maritime_details = resp.data && resp.data.maritime_details ? resp.data.maritime_details : null;
+                quoteData.maritime_direction = resp.data && resp.data.direction ? resp.data.direction : payload.maritime_direction;
+                window.currentQuoteData = quoteData;
+                $('#sdpi-maritime-info-form').data('quote', quoteData);
+                $('#sdpi-additional-info').data('quote', quoteData);
+
+                initiateCheckout(btn, quoteData, originalText);
+            },
+            error: function() {
+                alert('Error de conexiA3n al guardar la informaciA3n marA-tima.');
+                btn.prop('disabled', false).text(originalText);
+            }
+        });
+    });
+
     // Real-time ZIP code validation
     $('#sdpi_pickup_zip, #sdpi_delivery_zip').on('input', function() {
         var zip = $(this).val();

@@ -60,11 +60,13 @@ class SDPI_History {
             company_profit decimal(10,2),
             confidence_adjustment decimal(10,2),
             maritime_involved tinyint(1) DEFAULT 0,
+            maritime_direction varchar(20) DEFAULT NULL,
             maritime_cost decimal(10,2),
             us_port_name varchar(100),
             us_port_zip varchar(10),
             total_terrestrial_cost decimal(10,2),
             total_maritime_cost decimal(10,2),
+            maritime_details longtext,
             price_breakdown text,
             error_message text,
             zapier_status varchar(20) DEFAULT 'pending',
@@ -78,7 +80,8 @@ class SDPI_History {
             KEY delivery_zip (delivery_zip),
             KEY created_at (created_at),
             KEY flow_status (flow_status),
-            KEY maritime_involved (maritime_involved)
+            KEY maritime_involved (maritime_involved),
+            KEY maritime_direction (maritime_direction)
         ) $charset_collate;";
         
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
@@ -1043,6 +1046,8 @@ class SDPI_History {
         $us_port_zip = '';
         $total_terrestrial_cost = 0;
         $total_maritime_cost = 0;
+        $maritime_direction = sanitize_text_field($form_data['maritime_direction'] ?? '');
+        $maritime_details = '';
         
         if (isset($form_data['maritime_involved']) && $form_data['maritime_involved']) {
             $maritime_involved = 1;
@@ -1051,6 +1056,10 @@ class SDPI_History {
             $us_port_zip = sanitize_text_field($form_data['us_port_zip'] ?? '');
             $total_terrestrial_cost = floatval($form_data['total_terrestrial_cost'] ?? 0);
             $total_maritime_cost = floatval($form_data['total_maritime_cost'] ?? 0);
+
+            if (!empty($form_data['maritime_details'])) {
+                $maritime_details = wp_json_encode($form_data['maritime_details']);
+            }
         }
         
         // Calculate adjustments
@@ -1093,11 +1102,13 @@ class SDPI_History {
                 'company_profit' => $company_profit,
                 'confidence_adjustment' => $confidence_adjustment,
                 'maritime_involved' => $maritime_involved,
+                'maritime_direction' => $maritime_direction,
                 'maritime_cost' => $maritime_cost,
                 'us_port_name' => $us_port_name,
                 'us_port_zip' => $us_port_zip,
                 'total_terrestrial_cost' => $total_terrestrial_cost,
                 'total_maritime_cost' => $total_maritime_cost,
+                'maritime_details' => $maritime_details,
                 'price_breakdown' => $price_breakdown,
                 'error_message' => $error_message,
                 'status_updated_at' => current_time('mysql')
@@ -1105,8 +1116,8 @@ class SDPI_History {
             array('session_id' => $session_id),
             array(
                 '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
-                '%s', '%f', '%f', '%f', '%f', '%f', '%f', '%d', '%f', '%s', '%s', '%f', '%f',
-                '%s', '%s', '%s'
+                '%s', '%f', '%f', '%f', '%f', '%f', '%f', '%d', '%s', '%f', '%s', '%s', '%f', '%f',
+                '%s', '%s', '%s', '%s'
             ),
             array('%s')
         );
@@ -1131,6 +1142,38 @@ class SDPI_History {
             array('%s')
         );
         
+        return $result !== false;
+    }
+    
+    /**
+     * Store maritime details captured after quote confirmation
+     */
+    public function update_maritime_details($session_id, $maritime_details, $direction = '') {
+        global $wpdb;
+
+        if (empty($session_id)) {
+            return false;
+        }
+
+        $data = array(
+            'maritime_details' => wp_json_encode($maritime_details),
+            'status_updated_at' => current_time('mysql')
+        );
+        $formats = array('%s', '%s');
+
+        if (!empty($direction)) {
+            $data['maritime_direction'] = sanitize_text_field($direction);
+            $formats[] = '%s';
+        }
+
+        $result = $wpdb->update(
+            $this->table_name,
+            $data,
+            array('session_id' => sanitize_text_field($session_id)),
+            $formats,
+            array('%s')
+        );
+
         return $result !== false;
     }
     
@@ -1211,6 +1254,8 @@ class SDPI_History {
         $us_port_zip = '';
         $total_terrestrial_cost = 0;
         $total_maritime_cost = 0;
+        $maritime_direction = sanitize_text_field($form_data['maritime_direction'] ?? '');
+        $maritime_details = '';
         
         if (isset($form_data['maritime_involved']) && $form_data['maritime_involved']) {
             $maritime_involved = 1;
@@ -1219,6 +1264,10 @@ class SDPI_History {
             $us_port_zip = sanitize_text_field($form_data['us_port_zip'] ?? '');
             $total_terrestrial_cost = floatval($form_data['total_terrestrial_cost'] ?? 0);
             $total_maritime_cost = floatval($form_data['total_maritime_cost'] ?? 0);
+
+            if (!empty($form_data['maritime_details'])) {
+                $maritime_details = wp_json_encode($form_data['maritime_details']);
+            }
         }
         
         // Calculate adjustments
@@ -1262,18 +1311,20 @@ class SDPI_History {
                 'company_profit' => $company_profit,
                 'confidence_adjustment' => $confidence_adjustment,
                 'maritime_involved' => $maritime_involved,
+                'maritime_direction' => $maritime_direction,
                 'maritime_cost' => $maritime_cost,
                 'us_port_name' => $us_port_name,
                 'us_port_zip' => $us_port_zip,
                 'total_terrestrial_cost' => $total_terrestrial_cost,
                 'total_maritime_cost' => $total_maritime_cost,
+                'maritime_details' => $maritime_details,
                 'price_breakdown' => $price_breakdown,
                 'error_message' => $error_message
             ),
             array(
                 '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s',
                 '%s', '%s', '%s', '%s',
-                '%s', '%f', '%f', '%f', '%f', '%f', '%f', '%d', '%f', '%s', '%s', '%f', '%f',
+                '%s', '%f', '%f', '%f', '%f', '%f', '%f', '%d', '%s', '%f', '%s', '%s', '%f', '%f',
                 '%s', '%s'
             )
         );

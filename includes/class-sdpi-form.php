@@ -34,6 +34,10 @@ class SDPI_Form {
         add_action('wp_ajax_sdpi_save_additional_info', array($this, 'ajax_save_additional_info'));
         add_action('wp_ajax_nopriv_sdpi_save_additional_info', array($this, 'ajax_save_additional_info'));
 
+        // Add AJAX handler for maritime additional info
+        add_action('wp_ajax_sdpi_save_maritime_info', array($this, 'ajax_save_maritime_info'));
+        add_action('wp_ajax_nopriv_sdpi_save_maritime_info', array($this, 'ajax_save_maritime_info'));
+
         // WooCommerce payment completion hook
         add_action('woocommerce_payment_complete', array($this, 'handle_payment_complete'));
 
@@ -573,7 +577,7 @@ class SDPI_Form {
                     <input type="hidden" id="sdpi_maritime_direction" name="maritime_direction" value="">
 
                     <!-- Vehicle Information (No editable) -->
-                    <div class="sdpi-form-section">
+                    <div class="sdpi-form-section sdpi-maritime-vehicle-section">
                         <h3>Vehicle Information</h3>
                         <div class="sdpi-form-row">
                             <div class="sdpi-form-group sdpi-col-3">
@@ -630,7 +634,7 @@ class SDPI_Form {
                     </div>
 
                     <!-- Shipper Information -->
-                    <div class="sdpi-form-section">
+                    <div class="sdpi-form-section sdpi-maritime-overseas-section sdpi-maritime-shipper-section">
                         <h3>Shipper Information</h3>
                         <div class="sdpi-form-row">
                             <div class="sdpi-form-group sdpi-col-2">
@@ -677,7 +681,7 @@ class SDPI_Form {
                     </div>
 
                     <!-- Consignee Information -->
-                    <div class="sdpi-form-section">
+                    <div class="sdpi-form-section sdpi-maritime-overseas-section sdpi-maritime-consignee-section">
                         <h3>Consignee Information</h3>
                         <div class="sdpi-form-row">
                             <div class="sdpi-form-group sdpi-col-2">
@@ -724,7 +728,7 @@ class SDPI_Form {
                     </div>
 
                     <!-- Pick Up Information (Solo si es USA -> PR) -->
-                    <div class="sdpi-form-section" id="sdpi-pickup-section" style="display:none;">
+                    <div class="sdpi-form-section sdpi-maritime-pickup-section" id="sdpi-pickup-section" style="display:none;">
                         <h3>Pick Up Information</h3>
                         <div class="sdpi-form-row">
                             <div class="sdpi-form-group sdpi-col-2">
@@ -767,7 +771,7 @@ class SDPI_Form {
                     </div>
 
                     <!-- Drop Off Information (Solo si es PR -> USA) -->
-                    <div class="sdpi-form-section" id="sdpi-dropoff-section" style="display:none;">
+                    <div class="sdpi-form-section sdpi-maritime-dropoff-section" id="sdpi-dropoff-section" style="display:none;">
                         <h3>Drop Off Information</h3>
                         <div class="sdpi-form-row">
                             <div class="sdpi-form-group sdpi-col-2">
@@ -1096,6 +1100,9 @@ class SDPI_Form {
             'us_port_zip' => $quote_data['us_port']['zip'] ?? '',
             'total_terrestrial_cost' => $quote_data['terrestrial_cost'] ?? 0,
             'total_maritime_cost' => $quote_data['maritime_cost'] ?? 0,
+            'maritime_direction' => $quote_data['maritime_direction'] ?? '',
+            'transport_type' => $quote_data['transport_type'] ?? (($quote_data['maritime_involved'] ?? false) ? 'maritime' : 'terrestrial'),
+            'maritime_details' => $quote_data['maritime_details'] ?? array(),
             'client_name' => $client_name,
             'client_email' => $client_email,
             'client_phone' => $client_phone,
@@ -1204,10 +1211,168 @@ class SDPI_Form {
                     'city' => $d_city,
                     'zip' => $d_zip
                 )
-            )
+            ),
+            'transport_type' => 'terrestrial'
         ));
 
         wp_send_json_success('Información adicional guardada exitosamente.');
+        exit;
+    }
+
+    /**
+     * AJAX handler for saving maritime-specific additional info
+     */
+    public function ajax_save_maritime_info() {
+        check_ajax_referer('sdpi_nonce', 'nonce');
+
+        $direction = sanitize_text_field($_POST['maritime_direction'] ?? '');
+        $valid_directions = array('usa_to_pr', 'pr_to_usa', 'pr_pr');
+
+        if (empty($direction) || !in_array($direction, $valid_directions, true)) {
+            wp_send_json_error('DirecciA3n marA-tima invA�lida.');
+            exit;
+        }
+
+        $vehicle_conditions = sanitize_text_field($_POST['vehicle_conditions'] ?? '');
+        $fuel_type = sanitize_text_field($_POST['fuel_type'] ?? '');
+        $unit_value = isset($_POST['unit_value']) ? floatval($_POST['unit_value']) : 0;
+        $color = sanitize_text_field($_POST['color'] ?? '');
+        $dimensions = sanitize_text_field($_POST['dimensions'] ?? '');
+
+        if (empty($vehicle_conditions) || empty($fuel_type) || empty($color) || $unit_value <= 0) {
+            wp_send_json_error('Complete la informaciA3n del vehA-culo (condiciA3n, combustible, valor y color).');
+            exit;
+        }
+
+        $shipper = array(
+            'name' => sanitize_text_field($_POST['shipper_name'] ?? ''),
+            'street' => sanitize_text_field($_POST['shipper_street'] ?? ''),
+            'city' => sanitize_text_field($_POST['shipper_city'] ?? ''),
+            'state' => sanitize_text_field($_POST['shipper_state'] ?? ''),
+            'country' => sanitize_text_field($_POST['shipper_country'] ?? ''),
+            'zip' => sanitize_text_field($_POST['shipper_zip'] ?? ''),
+            'phone1' => sanitize_text_field($_POST['shipper_phone1'] ?? ''),
+            'phone2' => sanitize_text_field($_POST['shipper_phone2'] ?? '')
+        );
+
+        foreach (array('name', 'street', 'city', 'state', 'country', 'zip', 'phone1') as $field) {
+            if (empty($shipper[$field])) {
+                wp_send_json_error('Complete toda la informaciA3n del shipper.');
+                exit;
+            }
+        }
+
+        $consignee = array(
+            'name' => sanitize_text_field($_POST['consignee_name'] ?? ''),
+            'street' => sanitize_text_field($_POST['consignee_street'] ?? ''),
+            'city' => sanitize_text_field($_POST['consignee_city'] ?? ''),
+            'state' => sanitize_text_field($_POST['consignee_state'] ?? ''),
+            'country' => sanitize_text_field($_POST['consignee_country'] ?? ''),
+            'zip' => sanitize_text_field($_POST['consignee_zip'] ?? ''),
+            'phone1' => sanitize_text_field($_POST['consignee_phone1'] ?? ''),
+            'phone2' => sanitize_text_field($_POST['consignee_phone2'] ?? '')
+        );
+
+        foreach (array('name', 'street', 'city', 'state', 'country', 'zip', 'phone1') as $field) {
+            if (empty($consignee[$field])) {
+                wp_send_json_error('Complete toda la informaciA3n del consignee.');
+                exit;
+            }
+        }
+
+        $pickup_required = in_array($direction, array('usa_to_pr', 'pr_pr'), true);
+        $pickup = array(
+            'name' => sanitize_text_field($_POST['pickup_name'] ?? ''),
+            'street' => sanitize_text_field($_POST['pickup_street'] ?? ''),
+            'city' => sanitize_text_field($_POST['pickup_city'] ?? ''),
+            'state' => sanitize_text_field($_POST['pickup_state'] ?? ''),
+            'country' => sanitize_text_field($_POST['pickup_country'] ?? ''),
+            'zip' => sanitize_text_field($_POST['pickup_zip'] ?? ''),
+            'phone1' => sanitize_text_field($_POST['pickup_phone1'] ?? ''),
+            'phone2' => sanitize_text_field($_POST['pickup_phone2'] ?? '')
+        );
+
+        if ($pickup_required) {
+            foreach (array('name', 'street', 'city', 'state', 'country', 'zip', 'phone1') as $field) {
+                if (empty($pickup[$field])) {
+                    wp_send_json_error('Complete la informaciA3n de recogida.');
+                    exit;
+                }
+            }
+        }
+
+        $dropoff_required = in_array($direction, array('pr_to_usa', 'pr_pr'), true);
+        $dropoff = array(
+            'name' => sanitize_text_field($_POST['dropoff_name'] ?? ''),
+            'street' => sanitize_text_field($_POST['dropoff_street'] ?? ''),
+            'city' => sanitize_text_field($_POST['dropoff_city'] ?? ''),
+            'state' => sanitize_text_field($_POST['dropoff_state'] ?? ''),
+            'country' => sanitize_text_field($_POST['dropoff_country'] ?? ''),
+            'zip' => sanitize_text_field($_POST['dropoff_zip'] ?? ''),
+            'phone1' => sanitize_text_field($_POST['dropoff_phone1'] ?? ''),
+            'phone2' => sanitize_text_field($_POST['dropoff_phone2'] ?? '')
+        );
+
+        if ($dropoff_required) {
+            foreach (array('name', 'street', 'city', 'state', 'country', 'zip', 'phone1') as $field) {
+                if (empty($dropoff[$field])) {
+                    wp_send_json_error('Complete la informaciA3n de entrega.');
+                    exit;
+                }
+            }
+        }
+
+        $others = array(
+            'title' => sanitize_text_field($_POST['title'] ?? ''),
+            'registration' => sanitize_text_field($_POST['registration'] ?? ''),
+            'id' => sanitize_text_field($_POST['other_id'] ?? '')
+        );
+
+        foreach (array($shipper['zip'], $consignee['zip'], $pickup['zip'], $dropoff['zip']) as $zip_value) {
+            if (!empty($zip_value) && !preg_match('/^[0-9A-Za-z\\- ]{4,10}$/', $zip_value)) {
+                wp_send_json_error('Use un formato de cA3digo postal vA�lido.');
+                exit;
+            }
+        }
+
+        $maritime_details = array(
+            'direction' => $direction,
+            'vehicle' => array(
+                'conditions' => $vehicle_conditions,
+                'fuel_type' => $fuel_type,
+                'unit_value' => $unit_value,
+                'color' => $color,
+                'dimensions' => $dimensions
+            ),
+            'shipper' => $shipper,
+            'consignee' => $consignee,
+            'pickup' => $pickup,
+            'dropoff' => $dropoff,
+            'others' => $others,
+            'saved_at' => current_time('mysql')
+        );
+
+        if (!session_id()) {
+            session_start();
+        }
+
+        $_SESSION['sdpi_maritime_info'] = $maritime_details;
+
+        $session = new SDPI_Session();
+        $session_id = $this->ensure_quote_session();
+        $session->update_data($session_id, array(
+            'maritime' => $maritime_details,
+            'transport_type' => 'maritime'
+        ));
+
+        $history = new SDPI_History();
+        $history->update_maritime_details($session_id, $maritime_details, $direction);
+
+        wp_send_json_success(array(
+            'message' => 'InformaciA3n marA-tima guardada exitosamente.',
+            'maritime_details' => $maritime_details,
+            'direction' => $direction
+        ));
         exit;
     }
 
@@ -1231,12 +1396,21 @@ class SDPI_Form {
 
         // Check if maritime transport is involved (San Juan, PR)
         $involves_maritime = SDPI_Maritime::involves_maritime($pickup_zip, $delivery_zip);
+        $maritime_direction = '';
         $api_response = null;
         
         if ($involves_maritime) {
             // For maritime routes, NEVER pass San Juan to API
             $pickup_is_san_juan = SDPI_Maritime::is_san_juan_zip($pickup_zip);
             $delivery_is_san_juan = SDPI_Maritime::is_san_juan_zip($delivery_zip);
+
+            if ($pickup_is_san_juan && !$delivery_is_san_juan) {
+                $maritime_direction = 'pr_to_usa';
+            } elseif (!$pickup_is_san_juan && $delivery_is_san_juan) {
+                $maritime_direction = 'usa_to_pr';
+            } elseif ($pickup_is_san_juan && $delivery_is_san_juan) {
+                $maritime_direction = 'pr_pr';
+            }
             
             if ($pickup_is_san_juan && $delivery_is_san_juan) {
                 // San Juan to San Juan - only maritime, no API call needed
@@ -1317,6 +1491,7 @@ class SDPI_Form {
             'vehicle_model' => $vehicle_model,
             'vehicle_year' => $vehicle_year,
             'maritime_involved' => $involves_maritime,
+            'maritime_direction' => $maritime_direction,
             'maritime_cost' => $involves_maritime ? ($final_price_data['maritime_cost'] ?? 0) : 0,
             'us_port' => $involves_maritime ? ($final_price_data['us_port'] ?? null) : null,
             'terrestrial_cost' => $involves_maritime ? ($final_price_data['terrestrial_cost'] ?? 0) : 0,
@@ -1329,7 +1504,8 @@ class SDPI_Form {
             'confidence_adjustment' => $final_price_data['confidence_adjustment'] ?? 0,
             'breakdown' => $final_price_data['breakdown'] ?? '',
             'message' => $final_price_data['message'] ?? '',
-            'payment_available' => class_exists('WooCommerce')
+            'payment_available' => class_exists('WooCommerce'),
+            'transport_type' => $involves_maritime ? 'maritime' : 'terrestrial'
         );
 
         // Retornar respuesta indicando que necesitamos información de contacto

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Super Dispatch Pricing Insights
  * Description: Get real-time freight pricing quotes with custom forms or Gravity Forms integration
- * Version: 1.2.0
+ * Version: 1.2.1
  * Author: Your Name
  * License: GPL v2 or later
  * Text Domain: super-dispatch-pricing
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
 // Define plugin constants
 define('SDPI_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDPI_PLUGIN_URL', plugin_dir_url(__FILE__));
-define('SDPI_VERSION', '1.2.0');
+define('SDPI_VERSION', '1.2.1');
 
 // Include required files
 require_once SDPI_PLUGIN_DIR . 'includes/class-sdpi-settings.php';

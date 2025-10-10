@@ -1,4 +1,4 @@
-﻿jQuery(document).ready(function($) {
+jQuery(document).ready(function($) {
     $("#sdpi_trailer_type, #sdpi_vehicle_type").on("change", updateLiveSummary);
     $("#sdpi_vehicle_make, #sdpi_vehicle_model, #sdpi_vehicle_year").on("input change", updateLiveSummary);
     'use strict';
@@ -522,7 +522,7 @@
                 }
             },
             error: function() {
-                alert('Error de conexiA3n al iniciar el pago.');
+                alert('Error de conexion al iniciar el pago.');
                 if (btn) {
                     btn.prop('disabled', false).text(originalText);
                 }
@@ -689,7 +689,7 @@
         if (!payload.p_name || !payload.p_street || !payload.p_city || !/^\d{5}$/.test(payload.p_zip) ||
             !payload.d_name || !payload.d_street || !payload.d_city || !/^\d{5}$/.test(payload.d_zip) ||
             !payload.pickup_type) {
-            alert('Por favor complete todos los campos obligatorios con informaciA3n vAï¿½lida.');
+            alert('Por favor complete todos los campos obligatorios con Informacion vAï¿½lida.');
             return;
         }
 
@@ -704,7 +704,7 @@
             dataType: 'json',
             success: function(resp) {
                 if (!resp.success) {
-                    alert(resp.data || 'Error al guardar la informaciA3n adicional.');
+                    alert(resp.data || 'Error al guardar la Informacion adicional.');
                     btn.prop('disabled', false).text(originalText);
                     return;
                 }
@@ -733,7 +733,7 @@
                 initiateCheckout(btn, quoteData, originalText);
             },
             error: function() {
-                alert('Error de conexiA3n al guardar la informaciA3n adicional.');
+                alert('Error de conexion al guardar la Informacion adicional.');
                 btn.prop('disabled', false).text(originalText);
             }
         });
@@ -812,7 +812,7 @@
             dataType: 'json',
             success: function(resp) {
                 if (!resp.success) {
-                    alert(resp.data || 'Error al guardar la informaciA3n marA-tima.');
+                    alert(resp.data || 'Error al guardar la Informacion maritima.');
                     btn.prop('disabled', false).text(originalText);
                     return;
                 }
@@ -827,7 +827,7 @@
                 initiateCheckout(btn, quoteData, originalText);
             },
             error: function() {
-                alert('Error de conexiA3n al guardar la informaciA3n marA-tima.');
+                alert('Error de conexion al guardar la Informacion maritima.');
                 btn.prop('disabled', false).text(originalText);
             }
         });
@@ -847,3 +847,4 @@
     setSummaryPrice('');
     updateLiveSummary();
 });
+

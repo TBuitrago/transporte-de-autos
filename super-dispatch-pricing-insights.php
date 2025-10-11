@@ -85,7 +85,19 @@ add_action('woocommerce_order_status_completed', function($order_id) {
             isset($quote_data['vehicle']['model']) ? $quote_data['vehicle']['model'] : (isset($quote_data['vehicle_model']) ? $quote_data['vehicle_model'] : ''),
             isset($quote_data['vehicle']['year']) ? $quote_data['vehicle']['year'] : (isset($quote_data['vehicle_year']) ? $quote_data['vehicle_year'] : ''),
             isset($quote_data['final']) ? $quote_data['final'] : $quote_data,
-            isset($quote_data['maritime_involved']) ? $quote_data['maritime_involved'] : false
+            isset($quote_data['maritime_involved']) ? $quote_data['maritime_involved'] : false,
+            array(
+                'shipping' => isset($quote_data['shipping']) && is_array($quote_data['shipping']) ? $quote_data['shipping'] : array(),
+                'maritime_details' => isset($quote_data['maritime_details']) && is_array($quote_data['maritime_details']) ? $quote_data['maritime_details'] : array(),
+                'client' => array(
+                    'name' => isset($quote_data['client_name']) ? $quote_data['client_name'] : (isset($quote_data['client']['name']) ? $quote_data['client']['name'] : ''),
+                    'email' => isset($quote_data['client_email']) ? $quote_data['client_email'] : (isset($quote_data['client']['email']) ? $quote_data['client']['email'] : ''),
+                    'phone' => isset($quote_data['client_phone']) ? $quote_data['client_phone'] : (isset($quote_data['client']['phone']) ? $quote_data['client']['phone'] : ''),
+                    'captured_at' => isset($quote_data['client_info_captured_at']) ? $quote_data['client_info_captured_at'] : (isset($quote_data['client']['captured_at']) ? $quote_data['client']['captured_at'] : null)
+                ),
+                'transport_type' => isset($quote_data['transport_type']) ? $quote_data['transport_type'] : ((isset($quote_data['maritime_involved']) && $quote_data['maritime_involved']) ? 'maritime' : 'terrestrial'),
+                'session_id' => isset($quote_data['session_id']) ? $quote_data['session_id'] : ''
+            )
         );
 
         // Update history Zapier status if possible

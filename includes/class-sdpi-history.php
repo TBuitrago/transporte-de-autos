@@ -11,6 +11,9 @@ class SDPI_History {
     public function __construct() {
         global $wpdb;
         $this->table_name = $wpdb->prefix . 'sdpi_history';
+
+        // Ensure table schema is up to date
+        $this->maybe_upgrade_schema();
         
         // Add admin menu
         add_action('admin_menu', array($this, 'add_admin_menu'));
@@ -48,6 +51,13 @@ class SDPI_History {
             vehicle_make varchar(50),
             vehicle_model varchar(50),
             vehicle_year varchar(4),
+            vehicle_electric tinyint(1) DEFAULT 0,
+            pickup_contact_name varchar(100),
+            pickup_contact_street varchar(255),
+            pickup_contact_type varchar(50),
+            delivery_contact_name varchar(100),
+            delivery_contact_street varchar(255),
+            additional_shipping longtext,
             client_name varchar(100),
             client_phone varchar(20),
             client_email varchar(100),
@@ -1076,52 +1086,63 @@ class SDPI_History {
         }
         
         // Update record
+        $data = array(
+            'flow_status' => 'cotizador',
+            'pickup_zip' => $pickup_zip,
+            'delivery_zip' => $delivery_zip,
+            'pickup_city' => $pickup_city,
+            'delivery_city' => $delivery_city,
+            'trailer_type' => $trailer_type,
+            'vehicle_type' => $vehicle_type,
+            'vehicle_inoperable' => $vehicle_inoperable,
+            'vehicle_make' => $vehicle_make,
+            'vehicle_model' => $vehicle_model,
+            'vehicle_year' => $vehicle_year,
+            'vehicle_electric' => $vehicle_electric,
+            'client_name' => $client_name,
+            'client_phone' => $client_phone,
+            'client_email' => $client_email,
+            'client_info_captured_at' => $client_info_captured_at,
+            'api_response' => json_encode($api_response),
+            'api_price' => $api_price,
+            'api_confidence' => $api_confidence,
+            'api_price_per_mile' => $api_price_per_mile,
+            'final_price' => $final_price,
+            'company_profit' => $company_profit,
+            'confidence_adjustment' => $confidence_adjustment,
+            'maritime_involved' => $maritime_involved,
+            'maritime_direction' => $maritime_direction,
+            'maritime_cost' => $maritime_cost,
+            'us_port_name' => $us_port_name,
+            'us_port_zip' => $us_port_zip,
+            'total_terrestrial_cost' => $total_terrestrial_cost,
+            'total_maritime_cost' => $total_maritime_cost,
+            'maritime_details' => $maritime_details,
+            'additional_shipping' => $additional_shipping_json,
+            'pickup_contact_name' => $pickup_contact_name,
+            'pickup_contact_street' => $pickup_contact_street,
+            'pickup_contact_type' => $pickup_contact_type,
+            'delivery_contact_name' => $delivery_contact_name,
+            'delivery_contact_street' => $delivery_contact_street,
+            'price_breakdown' => $price_breakdown,
+            'error_message' => $error_message,
+            'status_updated_at' => current_time('mysql')
+        );
+
+        $formats = array(
+            '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%d', '%s', '%s', '%s',
+            '%s', '%s', '%f', '%f', '%f', '%f', '%f', '%f', '%d', '%s', '%f', '%s', '%s', '%f', '%f',
+            '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s'
+        );
+
         $result = $wpdb->update(
             $this->table_name,
-            array(
-                'flow_status' => 'cotizador',
-                'pickup_zip' => $pickup_zip,
-                'delivery_zip' => $delivery_zip,
-                'pickup_city' => $pickup_city,
-                'delivery_city' => $delivery_city,
-                'trailer_type' => $trailer_type,
-                'vehicle_type' => $vehicle_type,
-                'vehicle_inoperable' => $vehicle_inoperable,
-                'vehicle_make' => $vehicle_make,
-                'vehicle_model' => $vehicle_model,
-                'vehicle_year' => $vehicle_year,
-                'client_name' => $client_name,
-                'client_phone' => $client_phone,
-                'client_email' => $client_email,
-                'client_info_captured_at' => $client_info_captured_at,
-                'api_response' => json_encode($api_response),
-                'api_price' => $api_price,
-                'api_confidence' => $api_confidence,
-                'api_price_per_mile' => $api_price_per_mile,
-                'final_price' => $final_price,
-                'company_profit' => $company_profit,
-                'confidence_adjustment' => $confidence_adjustment,
-                'maritime_involved' => $maritime_involved,
-                'maritime_direction' => $maritime_direction,
-                'maritime_cost' => $maritime_cost,
-                'us_port_name' => $us_port_name,
-                'us_port_zip' => $us_port_zip,
-                'total_terrestrial_cost' => $total_terrestrial_cost,
-                'total_maritime_cost' => $total_maritime_cost,
-                'maritime_details' => $maritime_details,
-                'price_breakdown' => $price_breakdown,
-                'error_message' => $error_message,
-                'status_updated_at' => current_time('mysql')
-            ),
+            $data,
             array('session_id' => $session_id),
-            array(
-                '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
-                '%s', '%f', '%f', '%f', '%f', '%f', '%f', '%d', '%s', '%f', '%s', '%s', '%f', '%f',
-                '%s', '%s', '%s', '%s'
-            ),
+            $formats,
             array('%s')
         );
-        
+
         return $result !== false;
     }
     
@@ -1163,6 +1184,53 @@ class SDPI_History {
 
         if (!empty($direction)) {
             $data['maritime_direction'] = sanitize_text_field($direction);
+            $formats[] = '%s';
+        }
+
+        $result = $wpdb->update(
+            $this->table_name,
+            $data,
+            array('session_id' => sanitize_text_field($session_id)),
+            $formats,
+            array('%s')
+        );
+
+        return $result !== false;
+    }
+
+    /**
+     * Store additional terrestrial shipping details captured after quote confirmation
+     */
+    public function update_additional_shipping($session_id, $shipping_details = array()) {
+        global $wpdb;
+
+        if (empty($session_id)) {
+            return false;
+        }
+
+        $pickup = is_array($shipping_details) && isset($shipping_details['pickup']) ? $shipping_details['pickup'] : array();
+        $delivery = is_array($shipping_details) && isset($shipping_details['delivery']) ? $shipping_details['delivery'] : array();
+
+        $pickup_name = sanitize_text_field($pickup['name'] ?? '');
+        $pickup_street = sanitize_text_field($pickup['street'] ?? '');
+        $pickup_type = sanitize_text_field($pickup['type'] ?? '');
+        $delivery_name = sanitize_text_field($delivery['name'] ?? '');
+        $delivery_street = sanitize_text_field($delivery['street'] ?? '');
+
+        $shipping_json = !empty($shipping_details) ? wp_json_encode($shipping_details) : null;
+
+        $data = array(
+            'pickup_contact_name' => $pickup_name,
+            'pickup_contact_street' => $pickup_street,
+            'pickup_contact_type' => $pickup_type,
+            'delivery_contact_name' => $delivery_name,
+            'delivery_contact_street' => $delivery_street,
+            'status_updated_at' => current_time('mysql')
+        );
+        $formats = array('%s', '%s', '%s', '%s', '%s', '%s');
+
+        if (!is_null($shipping_json)) {
+            $data['additional_shipping'] = $shipping_json;
             $formats[] = '%s';
         }
 
@@ -1487,18 +1555,50 @@ class SDPI_History {
         $html .= '</div>';
 
         // Shipping Info
+        $additional_shipping = array();
+        if (!empty($quote->additional_shipping)) {
+            $decoded_shipping = json_decode($quote->additional_shipping, true);
+            if (is_array($decoded_shipping)) {
+                $additional_shipping = $decoded_shipping;
+            }
+        }
+
         $html .= '<div style="margin-bottom: 25px;">';
         $html .= '<h3 style="color: #0073aa; margin-bottom: 15px; font-size: 16px;">🚛 Información del Envío</h3>';
         $html .= '<div style="background: #f8f9fa; padding: 15px; border-radius: 6px;">';
         $html .= '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">';
         $html .= '<div><strong>Origen:</strong> ' . esc_html($quote->pickup_city) . ' (' . esc_html($quote->pickup_zip) . ')</div>';
         $html .= '<div><strong>Destino:</strong> ' . esc_html($quote->delivery_city) . ' (' . esc_html($quote->delivery_zip) . ')</div>';
-        $html .= '<div><strong>Tipo de Tráiler:</strong> ' . esc_html(ucfirst($quote->trailer_type)) . '</div>';
+        $html .= '<div><strong>Tipo de Tr�iler:</strong> ' . esc_html(ucfirst($quote->trailer_type)) . '</div>';
         $html .= '<div><strong>Tipo de Transporte:</strong> ';
         if ($quote->maritime_involved) {
-            $html .= '<span style="background: #0073aa; color: white; padding: 2px 8px; border-radius: 3px; font-size: 12px;">🚢 Marítimo</span>';
+            $html .= '<span style="background: #0073aa; color: white; padding: 2px 8px; border-radius: 3px; font-size: 12px;">&#128674; Mar�timo</span>';
         } else {
-            $html .= '<span style="background: #00a32a; color: white; padding: 2px 8px; border-radius: 3px; font-size: 12px;">🚛 Terrestre</span>';
+            $html .= '<span style="background: #00a32a; color: white; padding: 2px 8px; border-radius: 3px; font-size: 12px;">&#128667; Terrestre</span>';
+        }
+        $html .= '</div>';
+        $html .= '</div>';
+        if ($quote->pickup_contact_name || $quote->pickup_contact_street || $quote->pickup_contact_type || $quote->delivery_contact_name || $quote->delivery_contact_street) {
+            $html .= '<div style="margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">';
+            if ($quote->pickup_contact_name) {
+                $html .= '<div><strong>Contacto Origen:</strong> ' . esc_html($quote->pickup_contact_name) . '</div>';
+            }
+            if ($quote->pickup_contact_street) {
+                $html .= '<div><strong>Direcci�n Origen:</strong> ' . esc_html($quote->pickup_contact_street) . '</div>';
+            }
+            if ($quote->pickup_contact_type) {
+                $html .= '<div><strong>Tipo de Recogida:</strong> ' . esc_html($quote->pickup_contact_type) . '</div>';
+            }
+            if ($quote->delivery_contact_name) {
+                $html .= '<div><strong>Contacto Destino:</strong> ' . esc_html($quote->delivery_contact_name) . '</div>';
+            }
+            if ($quote->delivery_contact_street) {
+                $html .= '<div><strong>Direcci�n Destino:</strong> ' . esc_html($quote->delivery_contact_street) . '</div>';
+            }
+            $html .= '</div>';
+        }
+        if (!empty($additional_shipping['saved_at'])) {
+            $html .= '<p style="margin-top: 10px; font-size: 12px; color: #6c757d;"><em>Actualizado: ' . date('d/m/Y H:i', strtotime($additional_shipping['saved_at'])) . '</em></p>';
         }
         $html .= '</div>';
         $html .= '</div>';
@@ -1515,6 +1615,7 @@ class SDPI_History {
         $html .= '<div><strong>Modelo:</strong> ' . esc_html($quote->vehicle_model) . '</div>';
         $html .= '<div><strong>Año:</strong> ' . esc_html($quote->vehicle_year) . '</div>';
         $html .= '<div><strong>Estado:</strong> ' . ($quote->vehicle_inoperable ? '❌ No Operativo' : '✅ Operativo') . '</div>';
+        $html .= '<div><strong>El�ctrico:</strong> ' . ($quote->vehicle_electric ? 'S�' : 'No') . '</div>';
         $html .= '</div>';
         $html .= '</div>';
         $html .= '</div>';
@@ -1625,12 +1726,13 @@ class SDPI_History {
         
         // Headers
         fputcsv($output, array(
-            'ID', 'Session ID', 'Estado del Flujo', 'Fecha', 'IP Usuario', 'Cliente Nombre', 'Cliente Teléfono', 'Cliente Email', 'Info Capturada',
+            'ID', 'Session ID', 'Estado del Flujo', 'Fecha', 'IP Usuario', 'Cliente Nombre', 'Cliente Tel�fono', 'Cliente Email', 'Info Capturada',
             'Origen Ciudad', 'Origen ZIP', 'Destino Ciudad', 'Destino ZIP',
-            'Tipo Tráiler', 'Tipo Vehículo', 'Marca', 'Modelo', 'Año', 'No Operativo',
+            'Tipo Tr�iler', 'Tipo Veh�culo', 'Marca', 'Modelo', 'A�o', 'No Operativo', 'Veh�culo El�ctrico',
+            'Contacto Origen', 'Direcci�n Origen', 'Tipo de Recogida', 'Contacto Destino', 'Direcci�n Destino', 'Detalle Adicional de Env�o',
             'Precio API', 'Confianza API', 'Precio por Milla', 'Precio Final', 'Ganancia Empresa',
-            'Ajuste Confianza', 'Marítimo', 'Costo Marítimo', 'Puerto USA', 'ZIP Puerto',
-            'Costo Terrestre Total', 'Costo Marítimo Total', 'Mensaje Error', 'Fecha Actualización Estado'
+            'Ajuste Confianza', 'Mar�timo', 'Costo Mar�timo', 'Puerto USA', 'ZIP Puerto',
+            'Costo Terrestre Total', 'Costo Mar�timo Total', 'Mensaje Error', 'Fecha Actualizaci�n Estado'
         ));
         
         // Data rows
@@ -1654,14 +1756,21 @@ class SDPI_History {
                 $row['vehicle_make'],
                 $row['vehicle_model'],
                 $row['vehicle_year'],
-                $row['vehicle_inoperable'] ? 'Sí' : 'No',
+                $row['vehicle_inoperable'] ? 'S�' : 'No',
+                $row['vehicle_electric'] ? 'S�' : 'No',
+                $row['pickup_contact_name'],
+                $row['pickup_contact_street'],
+                $row['pickup_contact_type'],
+                $row['delivery_contact_name'],
+                $row['delivery_contact_street'],
+                $row['additional_shipping'],
                 $row['api_price'],
                 $row['api_confidence'],
                 $row['api_price_per_mile'],
                 $row['final_price'],
                 $row['company_profit'],
                 $row['confidence_adjustment'],
-                $row['maritime_involved'] ? 'Sí' : 'No',
+                $row['maritime_involved'] ? 'S�' : 'No',
                 $row['maritime_cost'],
                 $row['us_port_name'],
                 $row['us_port_zip'],
@@ -1705,6 +1814,42 @@ class SDPI_History {
             $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$this->table_name} WHERE id = %d", $id));
             if (!$row) { $failed++; continue; }
             $api_response = json_decode($row->api_response, true);
+            $shipping_details = array();
+            if (!empty($row->additional_shipping)) {
+                $decoded_shipping = json_decode($row->additional_shipping, true);
+                if (is_array($decoded_shipping)) {
+                    $shipping_details = $decoded_shipping;
+                }
+            }
+            if (empty($shipping_details)) {
+                $shipping_details = array(
+                    'pickup' => array(
+                        'name' => $row->pickup_contact_name,
+                        'street' => $row->pickup_contact_street,
+                        'city' => $row->pickup_city,
+                        'zip' => $row->pickup_zip,
+                        'type' => $row->pickup_contact_type
+                    ),
+                    'delivery' => array(
+                        'name' => $row->delivery_contact_name,
+                        'street' => $row->delivery_contact_street,
+                        'city' => $row->delivery_city,
+                        'zip' => $row->delivery_zip
+                    )
+                );
+            }
+            if (empty($shipping_details['saved_at'])) {
+                $shipping_details['saved_at'] = $row->status_updated_at;
+            }
+
+            $maritime_details = array();
+            if (!empty($row->maritime_details)) {
+                $decoded_maritime = json_decode($row->maritime_details, true);
+                if (is_array($decoded_maritime)) {
+                    $maritime_details = $decoded_maritime;
+                }
+            }
+
             $final = array(
                 'final_price' => floatval($row->final_price),
                 'base_price' => floatval($row->api_price),
@@ -1724,12 +1869,24 @@ class SDPI_History {
                     $row->trailer_type,
                     $row->vehicle_type,
                     intval($row->vehicle_inoperable) === 1,
-                    false,
+                    intval($row->vehicle_electric) === 1,
                     $row->vehicle_make,
                     $row->vehicle_model,
                     $row->vehicle_year,
                     $final,
-                    intval($row->maritime_involved) === 1
+                    intval($row->maritime_involved) === 1,
+                    array(
+                        'shipping' => $shipping_details,
+                        'maritime_details' => $maritime_details,
+                        'client' => array(
+                            'name' => $row->client_name,
+                            'email' => $row->client_email,
+                            'phone' => $row->client_phone,
+                            'captured_at' => $row->client_info_captured_at
+                        ),
+                        'transport_type' => intval($row->maritime_involved) === 1 ? 'maritime' : 'terrestrial',
+                        'session_id' => $row->session_id
+                    )
                 );
                 // mark as sent
                 $wpdb->update($this->table_name, array(
@@ -1748,3 +1905,36 @@ class SDPI_History {
         wp_send_json_success(array('sent' => $sent, 'failed' => $failed));
     }
 }
+    /**
+     * Ensure history table has latest columns
+     */
+    private function maybe_upgrade_schema() {
+        global $wpdb;
+
+        if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $this->table_name)) !== $this->table_name) {
+            return;
+        }
+
+        $columns = $wpdb->get_col("SHOW COLUMNS FROM {$this->table_name}", 0);
+        $missing = array();
+
+        $target_columns = array(
+            'vehicle_electric' => "ALTER TABLE {$this->table_name} ADD COLUMN vehicle_electric TINYINT(1) DEFAULT 0 AFTER vehicle_year",
+            'pickup_contact_name' => "ALTER TABLE {$this->table_name} ADD COLUMN pickup_contact_name VARCHAR(100) AFTER vehicle_electric",
+            'pickup_contact_street' => "ALTER TABLE {$this->table_name} ADD COLUMN pickup_contact_street VARCHAR(255) AFTER pickup_contact_name",
+            'pickup_contact_type' => "ALTER TABLE {$this->table_name} ADD COLUMN pickup_contact_type VARCHAR(50) AFTER pickup_contact_street",
+            'delivery_contact_name' => "ALTER TABLE {$this->table_name} ADD COLUMN delivery_contact_name VARCHAR(100) AFTER pickup_contact_type",
+            'delivery_contact_street' => "ALTER TABLE {$this->table_name} ADD COLUMN delivery_contact_street VARCHAR(255) AFTER delivery_contact_name",
+            'additional_shipping' => "ALTER TABLE {$this->table_name} ADD COLUMN additional_shipping LONGTEXT AFTER delivery_contact_street"
+        );
+
+        foreach ($target_columns as $column => $ddl) {
+            if (!in_array($column, $columns, true)) {
+                $missing[$column] = $ddl;
+            }
+        }
+
+        foreach ($missing as $ddl) {
+            $wpdb->query($ddl);
+        }
+    }

@@ -1346,6 +1346,33 @@
     }
 }
 
+.sdpi-form-locked input[readonly],
+.sdpi-form-locked textarea[readonly] {
+    background: #edf1fb;
+    color: #5c628f;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.sdpi-form-locked input[readonly]::placeholder,
+.sdpi-form-locked textarea[readonly]::placeholder {
+    color: #9aa2c0;
+}
+
+.sdpi-form-locked select:disabled,
+.sdpi-form-locked input[type="checkbox"]:disabled,
+.sdpi-form-locked input[type="radio"]:disabled {
+    background: #edf1fb;
+    color: #7a81aa;
+    cursor: not-allowed;
+    opacity: 0.85;
+}
+
+.sdpi-form-locked .sdpi-submit-btn,
+.sdpi-form-locked .sdpi-clear-btn {
+    display: none !important;
+}
+
 #sdpi-review-summary-transport-type-row {
     display: none;
 }

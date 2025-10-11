@@ -19,6 +19,7 @@
         '#sdpi_d_country', '#sdpi_d_zip_code', '#sdpi_d_phone1'
     ];
     var currentProgressStep = 1;
+    var formLocked = false;
     var defaultSummaryFooter = 'Completa el formulario para calcular tu cotizacion y continuar.';
 
     function setProgressStep(step) {
@@ -57,6 +58,7 @@
     function toggleContinueButton(data) {
         var $btn = $('#sdpi-summary-continue-btn');
         var $actions = $('#sdpi-summary-actions');
+        var $inlineBtn = $('#sdpi-inline-continue-btn');
         if (!$btn.length) { return; }
 
         if (data && data.payment_available) {
@@ -67,10 +69,27 @@
             } catch (error) {
                 $btn.removeAttr('data-quote');
             }
+
+            if ($inlineBtn.length) {
+                if (formLocked) {
+                    $inlineBtn.show().prop('disabled', false).data('quote', data);
+                    try {
+                        $inlineBtn.attr('data-quote', JSON.stringify(data));
+                    } catch (error) {
+                        $inlineBtn.removeAttr('data-quote');
+                    }
+                } else {
+                    $inlineBtn.hide().removeData('quote').removeAttr('data-quote');
+                }
+            }
         } else {
             if ($actions.length) { $actions.hide(); }
             $btn.hide().prop('disabled', false).removeData('quote');
             $btn.removeAttr('data-quote');
+
+            if ($inlineBtn.length) {
+                $inlineBtn.hide().prop('disabled', false).removeData('quote').removeAttr('data-quote');
+            }
         }
     }
 
@@ -177,6 +196,62 @@
         }
 
         updateReviewSummaryPrice(details.price || '');
+    }
+
+    function lockPricingForm(data) {
+        var $form = $('#sdpi-pricing-form');
+        if (!$form.length) { return; }
+
+        formLocked = true;
+        $form.addClass('sdpi-form-locked');
+
+        $form.find('input[type="text"], input[type="number"], input[type="tel"], input[type="email"], textarea')
+            .not(':hidden')
+            .prop('readonly', true);
+
+        $form.find('select, input[type="checkbox"], input[type="radio"]').prop('disabled', true);
+
+        $('#sdpi-submit-btn').hide();
+        $('.sdpi-clear-btn').hide();
+
+        var $inlineBtn = $('#sdpi-inline-continue-btn');
+        if ($inlineBtn.length) {
+            $inlineBtn.show().prop('disabled', false);
+            if (data) {
+                try {
+                    $inlineBtn.attr('data-quote', JSON.stringify(data));
+                } catch (error) {
+                    $inlineBtn.removeAttr('data-quote');
+                }
+                $inlineBtn.data('quote', data);
+            }
+        }
+
+        toggleContinueButton(data || $('#sdpi-summary-continue-btn').data('quote'));
+    }
+
+    function unlockPricingForm() {
+        var $form = $('#sdpi-pricing-form');
+        if (!$form.length) { return; }
+
+        formLocked = false;
+        $form.removeClass('sdpi-form-locked');
+
+        $form.find('input[type="text"], input[type="number"], input[type="tel"], input[type="email"], textarea')
+            .prop('readonly', false);
+
+        $form.find('select, input[type="checkbox"], input[type="radio"]').prop('disabled', false);
+
+        $('#sdpi-submit-btn').show();
+        $('.sdpi-clear-btn').show();
+
+        var $inlineBtn = $('#sdpi-inline-continue-btn');
+        if ($inlineBtn.length) {
+            $inlineBtn.hide().prop('disabled', false).removeAttr('data-quote').removeData('quote');
+        }
+
+        $('#sdpi-summary-panel').show();
+        $('#sdpi-review-summary-panel').hide();
     }
 
     function updateLiveSummary() {
@@ -417,6 +492,7 @@
                     } else {
                         // Este caso no deberia ocurrir en el nuevo flujo, pero lo dejamos por compatibilidad
                         displayQuoteResults(response.data);
+                    lockPricingForm(response.data);
                     }
                 } else {
                     toggleContinueButton();
@@ -552,6 +628,7 @@
                     
                     // Mostrar los resultados con el precio
                     displayQuoteResults(response.data);
+                    lockPricingForm(response.data);
                     
                     // Mostrar el formulario principal nuevamente (por si quieren hacer otra cotizaciÃƒÆ’Ã‚Â³n)
                     $('#sdpi-pricing-form').show();
@@ -628,6 +705,7 @@
         updateSummaryFooter('info', defaultSummaryFooter);
         updateLiveSummary();
         setProgressStep(1);
+        unlockPricingForm();
     });
 
     // Handle payment button click
@@ -950,6 +1028,7 @@
             $(this).removeClass('valid error');
         }
     });
+    unlockPricingForm();
     setSummaryPrice('');
     toggleContinueButton();
     resetReviewSummary();

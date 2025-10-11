@@ -245,6 +245,7 @@ class SDPI_Form {
                 </div>
                 <div class="sdpi-form-submit">
                     <button type="submit" class="sdpi-submit-btn" id="sdpi-submit-btn">Obtener cotizacion</button>
+                    <button type="button" class="sdpi-pay-btn" id="sdpi-inline-continue-btn" style="display:none;">Continuar</button>
                 </div>
             </form>
 
@@ -890,7 +891,7 @@ class SDPI_Form {
                     </form>
                 </div>
 
-                <aside class="sdpi-summary-panel sdpi-review-summary-panel" id="sdpi-review-summary-panel">
+                <aside class="sdpi-summary-panel sdpi-review-summary-panel" id="sdpi-review-summary-panel" style="display:none;">
                     <div class="sdpi-summary-header">
                         <h3>Resumen de tu cotizacion</h3>
                         <p>Verifica los datos antes de continuar.</p>

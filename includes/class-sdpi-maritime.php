@@ -27,6 +27,8 @@ class SDPI_Maritime {
     const PENN_TERMINALS_NAME = 'Eddystone, PA';
     const JACKSONVILLE_NAME = 'Jacksonville, FL';
     
+    const INOPERABLE_FEE = 500.00;
+    
     // ZIP ranges for Penn Terminals (inclusive)
     const PENN_TERMINALS_RANGES = [
         'CT' => ['06002', '06903'],
@@ -121,7 +123,7 @@ class SDPI_Maritime {
     /**
      * Calculate total cost with maritime transport
      */
-    public static function calculate_maritime_cost($pickup_zip, $delivery_zip, $terrestrial_cost, $confidence_percentage, $vehicle_electric = false) {
+    public static function calculate_maritime_cost($pickup_zip, $delivery_zip, $terrestrial_cost, $confidence_percentage, $vehicle_electric = false, $vehicle_inoperable = false) {
         $involves_maritime = self::involves_maritime($pickup_zip, $delivery_zip);
 
         if (!$involves_maritime) {
@@ -133,7 +135,8 @@ class SDPI_Maritime {
                 'maritime_cost' => 0,
                 'maritime_involved' => false,
                 'us_port' => null,
-                'breakdown' => null
+                'breakdown' => null,
+                'inoperable_fee' => 0
             ];
         }
 
@@ -150,6 +153,7 @@ class SDPI_Maritime {
 
         // Electric vehicle surcharge
         $electric_surcharge = $vehicle_electric ? 600.00 : 0.00;
+        $inoperable_fee = $vehicle_inoperable ? self::INOPERABLE_FEE : 0.00;
 
         // Calculate terrestrial cost (only if there's a terrestrial leg)
         $terrestrial_cost_with_markup = 0;
@@ -168,8 +172,8 @@ class SDPI_Maritime {
             $markup_applied = true;
         }
 
-        // Total cost (including electric surcharge)
-        $total_cost = $terrestrial_cost_with_markup + $maritime_cost + $electric_surcharge;
+        // Total cost (including surcharges)
+        $total_cost = $terrestrial_cost_with_markup + $maritime_cost + $electric_surcharge + $inoperable_fee;
 
         // Create breakdown
         $breakdown = self::create_maritime_breakdown(
@@ -182,7 +186,9 @@ class SDPI_Maritime {
             $markup_applied,
             $confidence_adjustment,
             $confidence_description,
-            $vehicle_electric
+            $vehicle_electric,
+            $vehicle_inoperable,
+            $inoperable_fee
         );
 
         return [
@@ -191,7 +197,8 @@ class SDPI_Maritime {
             'maritime_cost' => $maritime_cost,
             'maritime_involved' => true,
             'us_port' => $us_port,
-            'breakdown' => $breakdown
+            'breakdown' => $breakdown,
+            'inoperable_fee' => $inoperable_fee
         ];
     }
     
@@ -241,7 +248,7 @@ class SDPI_Maritime {
     /**
      * Create detailed breakdown for maritime transport
      */
-    private static function create_maritime_breakdown($terrestrial_raw, $terrestrial_with_markup, $maritime_cost, $electric_surcharge, $total_cost, $us_port, $markup_applied, $confidence_adjustment = 0, $confidence_description = '', $vehicle_electric = false) {
+    private static function create_maritime_breakdown($terrestrial_raw, $terrestrial_with_markup, $maritime_cost, $electric_surcharge, $total_cost, $us_port, $markup_applied, $confidence_adjustment = 0, $confidence_description = '', $vehicle_electric = false, $vehicle_inoperable = false, $inoperable_fee = 0) {
         $breakdown = '<div class="sdpi-maritime-breakdown">';
         $breakdown .= '<h4>Desglose de Costos - Transporte Marítimo</h4>';
 
@@ -288,14 +295,21 @@ class SDPI_Maritime {
         $breakdown .= '</div>';
         $breakdown .= '</div>';
 
-        // Electric vehicle surcharge
-        if ($vehicle_electric && $electric_surcharge > 0) {
+        if (($vehicle_electric && $electric_surcharge > 0) || ($vehicle_inoperable && $inoperable_fee > 0)) {
             $breakdown .= '<div class="sdpi-cost-section">';
             $breakdown .= '<h5>Recargos Adicionales</h5>';
-            $breakdown .= '<div class="sdpi-price-item">';
-            $breakdown .= '<span class="sdpi-price-label">Recargo por vehículo eléctrico:</span>';
-            $breakdown .= '<span class="sdpi-price-value">+$' . number_format($electric_surcharge, 2) . ' USD</span>';
-            $breakdown .= '</div>';
+            if ($vehicle_electric && $electric_surcharge > 0) {
+                $breakdown .= '<div class="sdpi-price-item">';
+                $breakdown .= '<span class="sdpi-price-label">Recargo por vehículo eléctrico:</span>';
+                $breakdown .= '<span class="sdpi-price-value">+$' . number_format($electric_surcharge, 2) . ' USD</span>';
+                $breakdown .= '</div>';
+            }
+            if ($vehicle_inoperable && $inoperable_fee > 0) {
+                $breakdown .= '<div class="sdpi-price-item">';
+                $breakdown .= '<span class="sdpi-price-label">Recargo por vehículo inoperable:</span>';
+                $breakdown .= '<span class="sdpi-price-value">+$' . number_format($inoperable_fee, 2) . ' USD</span>';
+                $breakdown .= '</div>';
+            }
             $breakdown .= '</div>';
         }
 

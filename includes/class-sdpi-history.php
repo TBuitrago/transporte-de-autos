@@ -76,6 +76,7 @@ class SDPI_History {
             us_port_zip varchar(10),
             total_terrestrial_cost decimal(10,2),
             total_maritime_cost decimal(10,2),
+            inoperable_fee decimal(10,2) DEFAULT 0,
             maritime_details longtext,
             price_breakdown text,
             error_message text,
@@ -1925,7 +1926,8 @@ class SDPI_History {
             'pickup_contact_type' => "ALTER TABLE {$this->table_name} ADD COLUMN pickup_contact_type VARCHAR(50) AFTER pickup_contact_street",
             'delivery_contact_name' => "ALTER TABLE {$this->table_name} ADD COLUMN delivery_contact_name VARCHAR(100) AFTER pickup_contact_type",
             'delivery_contact_street' => "ALTER TABLE {$this->table_name} ADD COLUMN delivery_contact_street VARCHAR(255) AFTER delivery_contact_name",
-            'additional_shipping' => "ALTER TABLE {$this->table_name} ADD COLUMN additional_shipping LONGTEXT AFTER delivery_contact_street"
+            'additional_shipping' => "ALTER TABLE {$this->table_name} ADD COLUMN additional_shipping LONGTEXT AFTER delivery_contact_street",
+            'inoperable_fee' => "ALTER TABLE {$this->table_name} ADD COLUMN inoperable_fee DECIMAL(10,2) DEFAULT 0 AFTER total_maritime_cost"
         );
 
         foreach ($target_columns as $column => $ddl) {

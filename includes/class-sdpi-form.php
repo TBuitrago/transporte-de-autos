@@ -1176,6 +1176,7 @@ class SDPI_Form {
             'us_port_zip' => $quote_data['us_port']['zip'] ?? '',
             'total_terrestrial_cost' => $quote_data['terrestrial_cost'] ?? 0,
             'total_maritime_cost' => $quote_data['maritime_cost'] ?? 0,
+            'inoperable_fee' => $quote_data['inoperable_fee'] ?? 0,
             'maritime_direction' => $quote_data['maritime_direction'] ?? '',
             'transport_type' => $quote_data['transport_type'] ?? (($quote_data['maritime_involved'] ?? false) ? 'maritime' : 'terrestrial'),
             'maritime_details' => $quote_data['maritime_details'] ?? array(),
@@ -1555,7 +1556,7 @@ class SDPI_Form {
             
             if ($pickup_is_san_juan && $delivery_is_san_juan) {
                 // San Juan to San Juan - only maritime, no API call needed
-                $final_price_data = $this->calculate_maritime_only_quote($pickup_zip, $delivery_zip, $vehicle_electric);
+                $final_price_data = $this->calculate_maritime_only_quote($pickup_zip, $delivery_zip, $vehicle_electric, $vehicle_inoperable);
             } else {
                 // One side is San Juan, one side is continental
                 $continental_zip = $pickup_is_san_juan ? $delivery_zip : $pickup_zip;
@@ -1588,7 +1589,7 @@ class SDPI_Form {
                 }
 
                 // Calculate final price with maritime transport
-                $final_price_data = $this->calculate_final_price($api_response, $pickup_zip, $delivery_zip, $vehicle_electric);
+                $final_price_data = $this->calculate_final_price($api_response, $pickup_zip, $delivery_zip, $vehicle_electric, $vehicle_inoperable);
             }
         } else {
             // For terrestrial routes, use original ZIPs
@@ -1615,10 +1616,12 @@ class SDPI_Form {
             }
 
             // Calculate final price with company profit and confidence adjustments
-            $final_price_data = $this->calculate_final_price($api_response, $pickup_zip, $delivery_zip, $vehicle_electric);
+            $final_price_data = $this->calculate_final_price($api_response, $pickup_zip, $delivery_zip, $vehicle_electric, $vehicle_inoperable);
         }
 
         // NUEVO FLUJO: Preparar los datos de cotizacion pero NO mostrar el precio aÃƒÂºn
+        $inoperable_fee = $involves_maritime ? ($final_price_data['inoperable_fee'] ?? 0) : 0;
+
         $quote_data = array(
             'pickup_zip' => $pickup_zip,
             'delivery_zip' => $delivery_zip,
@@ -1632,10 +1635,12 @@ class SDPI_Form {
             'vehicle_model' => $vehicle_model,
             'vehicle_year' => $vehicle_year,
             'maritime_involved' => $involves_maritime,
+            'inoperable_fee' => $inoperable_fee,
             'maritime_direction' => $maritime_direction,
             'maritime_cost' => $involves_maritime ? ($final_price_data['maritime_cost'] ?? 0) : 0,
             'us_port' => $involves_maritime ? ($final_price_data['us_port'] ?? null) : null,
             'terrestrial_cost' => $involves_maritime ? ($final_price_data['terrestrial_cost'] ?? 0) : 0,
+            'inoperable_fee' => $inoperable_fee,
             'api_response' => $api_response,
             'final_price' => $final_price_data['final_price'],
             'base_price' => $final_price_data['base_price'] ?? 0,
@@ -1697,16 +1702,15 @@ class SDPI_Form {
                 'client_info_captured_at' => isset($client_info['captured_at']) ? $client_info['captured_at'] : null
             );
             
-            // Add maritime data if applicable
-            if ($involves_maritime && isset($final_price_data['maritime_data'])) {
-                $maritime_data = $final_price_data['maritime_data'];
-                $form_data['maritime_cost'] = $maritime_data['maritime_cost'];
-                $form_data['us_port_name'] = $maritime_data['us_port']['port'];
-                $form_data['us_port_zip'] = $maritime_data['us_port']['zip'];
-                $form_data['total_terrestrial_cost'] = $maritime_data['terrestrial_cost'];
-                $form_data['total_maritime_cost'] = $maritime_data['maritime_cost'];
-            }
-            
+        // Add maritime data if applicable
+        if ($involves_maritime) {
+            $form_data['maritime_cost'] = $final_price_data['maritime_cost'] ?? 0;
+            $form_data['us_port_name'] = isset($final_price_data['us_port']['port']) ? $final_price_data['us_port']['port'] : '';
+            $form_data['us_port_zip'] = isset($final_price_data['us_port']['zip']) ? $final_price_data['us_port']['zip'] : '';
+            $form_data['total_terrestrial_cost'] = $final_price_data['terrestrial_cost'] ?? 0;
+            $form_data['total_maritime_cost'] = $final_price_data['maritime_cost'] ?? 0;
+            $form_data['maritime_direction'] = $maritime_direction;
+        }
             // Log to history
             $history = new SDPI_History();
             return $history->log_quote($form_data, $api_response, $final_price_data['final_price'], $final_price_data['breakdown']);
@@ -1733,43 +1737,51 @@ class SDPI_Form {
     /**
      * Calculate maritime-only quote without API call (San Juan to San Juan)
      */
-    private function calculate_maritime_only_quote($pickup_zip, $delivery_zip, $vehicle_electric = false) {
+    private function calculate_maritime_only_quote($pickup_zip, $delivery_zip, $vehicle_electric = false, $vehicle_inoperable = false) {
         // This should only be called for San Juan to San Juan routes
         $maritime_cost = SDPI_Maritime::get_maritime_rate($pickup_zip, $delivery_zip);
 
-        // Electric vehicle surcharge
+        // Surcharges
         $electric_surcharge = $vehicle_electric ? 600.00 : 0.00;
-        $total_cost = $maritime_cost + $electric_surcharge;
+        $inoperable_fee = $vehicle_inoperable ? SDPI_Maritime::INOPERABLE_FEE : 0.00;
+        $total_cost = $maritime_cost + $electric_surcharge + $inoperable_fee;
 
         $breakdown = '<div class="sdpi-maritime-breakdown">';
-        $breakdown .= '<h4>Desglose de Costos - Transporte MarÃƒÂ­timo</h4>';
+        $breakdown .= '<h4>Desglose de Costos - Transporte Marítimo</h4>';
 
         $breakdown .= '<div class="sdpi-cost-section">';
         $breakdown .= '<h5>Tramo Terrestre</h5>';
-        $breakdown .= '<p><em>No aplica - Transporte directo marÃƒÂ­timo</em></p>';
+        $breakdown .= '<p><em>No aplica - Transporte directo marítimo</em></p>';
         $breakdown .= '</div>';
 
         $breakdown .= '<div class="sdpi-cost-section">';
-        $breakdown .= '<h5>Tramo MarÃƒÂ­timo</h5>';
-        $breakdown .= '<p><strong>Ruta:</strong> San Juan, PR Ã¢â€ â€™ San Juan, PR</p>';
-        $breakdown .= '<p><strong>Tarifa MarÃƒÂ­tima:</strong> $' . number_format($maritime_cost, 2) . ' USD</p>';
+        $breakdown .= '<h5>Tramo Marítimo</h5>';
+        $breakdown .= '<p><strong>Ruta:</strong> San Juan, PR → San Juan, PR</p>';
+        $breakdown .= '<p><strong>Tarifa Marítima:</strong> $' . number_format($maritime_cost, 2) . ' USD</p>';
         $breakdown .= '</div>';
 
-        // Electric vehicle surcharge
-        if ($vehicle_electric && $electric_surcharge > 0) {
+        if (($vehicle_electric && $electric_surcharge > 0) || ($vehicle_inoperable && $inoperable_fee > 0)) {
             $breakdown .= '<div class="sdpi-cost-section">';
             $breakdown .= '<h5>Recargos Adicionales</h5>';
-            $breakdown .= '<div class="sdpi-price-item">';
-            $breakdown .= '<span class="sdpi-price-label">Recargo por vehÃƒÂ­culo elÃƒÂ©ctrico:</span>';
-            $breakdown .= '<span class="sdpi-price-value">+$' . number_format($electric_surcharge, 2) . ' USD</span>';
-            $breakdown .= '</div>';
+            if ($vehicle_electric && $electric_surcharge > 0) {
+                $breakdown .= '<div class="sdpi-price-item">';
+                $breakdown .= '<span class="sdpi-price-label">Recargo por vehículo eléctrico:</span>';
+                $breakdown .= '<span class="sdpi-price-value">+$' . number_format($electric_surcharge, 2) . ' USD</span>';
+                $breakdown .= '</div>';
+            }
+            if ($vehicle_inoperable && $inoperable_fee > 0) {
+                $breakdown .= '<div class="sdpi-price-item">';
+                $breakdown .= '<span class="sdpi-price-label">Recargo por vehículo inoperable:</span>';
+                $breakdown .= '<span class="sdpi-price-value">+$' . number_format($inoperable_fee, 2) . ' USD</span>';
+                $breakdown .= '</div>';
+            }
             $breakdown .= '</div>';
         }
 
         $breakdown .= '<div class="sdpi-cost-total">';
         $breakdown .= '<h5>Total Final</h5>';
         $breakdown .= '<p><strong>Costo Total:</strong> $' . number_format($total_cost, 2) . ' USD</p>';
-        $breakdown .= '<p class="sdpi-maritime-note">* Transporte marÃƒÂ­timo directo</p>';
+        $breakdown .= '<p class="sdpi-maritime-note">* Transporte marítimo directo</p>';
         $breakdown .= '</div>';
 
         $breakdown .= '</div>';
@@ -1778,26 +1790,27 @@ class SDPI_Form {
             'base_price' => 0,
             'confidence' => 0.85,
             'final_price' => $total_cost,
-            'message' => 'El precio recomendado incluye transporte marÃƒÂ­timo directo.',
+            'message' => 'El precio recomendado incluye transporte marítimo directo.',
             'breakdown' => $breakdown,
             'price' => $total_cost,
             'confidence_percentage' => 85,
             'maritime_involved' => true,
             'us_port' => null,
             'terrestrial_cost' => 0,
-            'maritime_cost' => $maritime_cost
+            'maritime_cost' => $maritime_cost,
+            'inoperable_fee' => $inoperable_fee
         );
     }
 
     /**
      * Calculate final price with company profit and confidence adjustments including maritime transport
      */
-    private function calculate_final_price($api_response, $pickup_zip = '', $delivery_zip = '', $vehicle_electric = false) {
+    private function calculate_final_price($api_response, $pickup_zip = '', $delivery_zip = '', $vehicle_electric = false, $vehicle_inoperable = false) {
         $base_price = floatval($api_response['recommended_price'] ?? 0);
         $confidence = floatval($api_response['confidence'] ?? 0);
         
         // Check if maritime transport is involved
-        $maritime_result = SDPI_Maritime::calculate_maritime_cost($pickup_zip, $delivery_zip, $base_price, $confidence, $vehicle_electric);
+        $maritime_result = SDPI_Maritime::calculate_maritime_cost($pickup_zip, $delivery_zip, $base_price, $confidence, $vehicle_electric, $vehicle_inoperable);
         
         if ($maritime_result['maritime_involved']) {
             // Return maritime calculation result
@@ -1904,7 +1917,8 @@ class SDPI_Form {
             'message' => $message,
             'breakdown' => $breakdown,
             'price' => $final_price, // For backward compatibility
-            'confidence_percentage' => $confidence * 100
+            'confidence_percentage' => $confidence * 100,
+            'inoperable_fee' => 0
         );
     }
 

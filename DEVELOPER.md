@@ -243,6 +243,9 @@ $('#sdpi-pricing-form').on('submit', function(e) {
     // Mostrar loading
     // Procesar respuesta
 });
+
+// Nota 2025-10-11:
+// El desglose detallado ya no se muestra en el front-end; solo permanece disponible en el historial administrativo.
 ```
 
 ### 3. Procesamiento Backend
@@ -579,4 +582,5 @@ public function test_maritime_quote_flow() {
 ---
 
 **Nota**: Esta documentación está diseñada para desarrolladores que necesiten entender, modificar o extender el plugin. Para usuarios finales, consultar el README.md principal.
+
 

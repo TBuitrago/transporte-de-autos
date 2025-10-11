@@ -14,6 +14,7 @@ Plugin de WordPress que permite a los clientes cotizar en tiempo real el precio 
 - ✅ Historial con estado Zapier y acciones en lote (enviar/eliminar)
 - ✅ Interfaz responsive y moderna
 - ✅ Validación en tiempo real
+- 🚫 Desglose detallado del precio disponible solo vía historial administrativo (no se muestra al usuario final)
 
 ## Instalación
 1. Subir el plugin a `/wp-content/plugins/super-dispatch-pricing-insights/`
@@ -58,6 +59,9 @@ El plugin aplica la siguiente lógica de precios:
    - 60-100%: Suma el porcentaje restante para llegar a 100%
    - 30-59%: Suma $150 USD fijos
    - 0-29%: Suma $200 USD fijos
+4. **Recargos marítimos**:
+   - Vehículo eléctrico: +$600 USD
+   - Vehículo inoperable (solo transporte marítimo): +$500 USD (visible en historial interno)
 
 ## Base de Datos
 - `wp_sdpi_cities`: datos de ciudades/ZIP.

@@ -5,15 +5,22 @@ Modificar el flujo de cotización para que el cliente primero llene los datos de
 
 ## Cambios Implementados
 
+## Actualización 2025-10-11: Desglose visible de recargos
+
+- Se eliminaron los contenedores del breakdown del panel p�blico; el detalle qued� reservado para vistas internas.
+- Nueva función JavaScript `updateBreakdownHtml()` que centraliza la actualización y limpieza del desglose, reutilizada en:
+  - `displayQuoteResults()` para mostrar la cotización definitiva.
+  - El handler de los botones de pago (`.sdpi-pay-btn`) cuando se muestra la pantalla adicional previo al checkout.
+  - Flujos de limpieza/reset (submit inicial, formulario de contacto, botón "Limpiar").
+- El recargo marítimo por vehículo inoperable (USD $500) ahora se ve reflejado explícitamente en la interfaz del cliente y en el panel previo al checkout, alineado con el precio final almacenado en el histórico.
+- Se añadieron estilos mínimos en `assets/form-styles.css` para encuadrar el desglose sin duplicar márgenes.
+
 ### 1. Modificaciones en PHP (includes/class-sdpi-form.php)
 
 #### render_form()
 - **Cambio**: Eliminada la verificación de datos de contacto al inicio del formulario
 - **Razón**: El usuario ya no necesita ingresar sus datos de contacto antes de llenar el formulario de cotización
-
-#### has_client_info()
-- **Cambio**: Modificada para siempre retornar `true` (bypass temporal)
-- **Razón**: Evitar que el sistema bloquee el proceso de cotización por falta de datos de contacto
+- **Actualización 2025-10-11**: Se añadió un bloque de desglose (`sdpi-summary-breakdown` y `sdpi-review-summary-breakdown`) que recibe el HTML del breakdown generado en PHP.
 
 #### ajax_get_quote()
 - **Cambio**: Modificada para calcular el precio pero NO mostrarlo inmediatamente
@@ -47,6 +54,11 @@ Modificar el flujo de cotización para que el cliente primero llene los datos de
 #### displayQuoteResults()
 - **Función**: Extraída para mostrar los resultados con el precio
 - **Uso**: Se llama después de capturar los datos de contacto
+- **Actualización 2025-10-11**: Invoca `updateBreakdownHtml()` para que el desglose visual acompañe al precio mostrado.
+
+#### updateBreakdownHtml() [NUEVA 2025-10-11]
+- **Función**: Encargada de renderizar o limpiar el HTML de desglose tanto en el panel lateral como en la pantalla de revisión.
+- **Uso**: Se reutiliza en los flujos de cálculo, en el botón de continuar al pago y en todas las rutas de reset/errores para evitar que el desglose quede desfasado respecto al monto final.
 
 ## Flujo de Usuario Final
 
@@ -87,11 +99,21 @@ Modificar el flujo de cotización para que el cliente primero llene los datos de
 
 ## Archivos Modificados
 
-- `includes/class-sdpi-form.php` - Lógica del backend
-- `assets/form-script.js` - Lógica del frontend
-- `assets/form-script-new.js` - Archivo temporal (puede eliminarse después de confirmar funcionamiento)
+- includes/class-sdpi-form.php - L�gica del backend (flujo y contenedores del desglose)
+- assets/form-script.js - L�gica del frontend (captura de contacto, actualizaci�n de precios y breakdown visible)
+- assets/form-styles.css - Ajustes visuales que mantienen alineado el bloque de desglose
+- Documentaci�n (README, CHANGELOG, IMPLEMENTATION-SUMMARY)
 
 ## Estado Actual
 
-✅ Implementación completada
-⏳ Pendiente de pruebas en ambiente de desarrollo
+- Implementaci�n completada y en revisi�n continua
+- Desglose de precios validado en flujos mar�timos y terrestres
+
+
+## Nota 2025-10-11 (revisi�n) 
+- El desglose visual fue retirado del front-end; solo permanece en el historial administrativo.
+- Se eliminaron scripts y estilos relacionados con sdpi-summary-breakdown para evitar su renderizado p�blico.
+
+
+
+

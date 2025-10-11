@@ -1,5 +1,13 @@
 # Changelog - Super Dispatch Pricing Insights
 
+## [1.3.1] - 2025-10-11
+
+### Cambios
+- Se retiró el bloque de desglose detallado del panel frontal de la cotización por políticas de confidencialidad; el detalle completo queda restringido al historial administrativo.
+
+### Documentación
+- README y guías internas actualizadas para reflejar que el desglose sólo está disponible en backend.
+
 ## [1.3.0] - 2025-09-29
 
 ### ✨ Nuevas Características

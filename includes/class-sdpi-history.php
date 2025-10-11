@@ -1904,7 +1904,7 @@ class SDPI_History {
 
         wp_send_json_success(array('sent' => $sent, 'failed' => $failed));
     }
-}
+
     /**
      * Ensure history table has latest columns
      */
@@ -1938,3 +1938,5 @@ class SDPI_History {
             $wpdb->query($ddl);
         }
     }
+}
+

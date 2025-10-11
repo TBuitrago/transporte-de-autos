@@ -531,37 +531,37 @@
         // Crear y mostrar el formulario de contacto
         var contactFormHtml = `
             <div id="sdpi-contact-form-container" class="sdpi-form-section">
-                <h3>InformaciÃƒÆ’Ã‚Â³n de Contacto</h3>
-                <p>Para mostrarle su cotizaciÃƒÆ’Ã‚Â³n personalizada, por favor proporcione sus datos de contacto:</p>
+                <h3>Información de Contacto</h3>
+                <p>Para mostrarle su cotización personalizada, por favor proporcione sus datos de contacto:</p>
 
                 <form id="sdpi-contact-form" class="sdpi-form">
                     <div class="sdpi-form-group">
                         <label for="sdpi_contact_name">Nombre Completo *</label>
                         <input type="text" id="sdpi_contact_name" name="contact_name" required
-                               placeholder="Ej: Juan PÃƒÆ’Ã‚Â©rez">
+                               placeholder="Ej: Juan Pérez">
                     </div>
 
                     <div class="sdpi-form-group">
-                        <label for="sdpi_contact_phone">NÃƒÆ’Ã‚Âºmero de TelÃƒÆ’Ã‚Â©fono *</label>
+                        <label for="sdpi_contact_phone">Número de Teléfono *</label>
                         <input type="tel" id="sdpi_contact_phone" name="contact_phone" required
                                placeholder="Ej: (787) 123-4567" pattern="[0-9\\(\\)\\-\\+\\s]+">
                     </div>
 
                     <div class="sdpi-form-group">
-                        <label for="sdpi_contact_email">Correo ElectrÃƒÆ’Ã‚Â³nico *</label>
+                        <label for="sdpi_contact_email">Correo Electrónico *</label>
                         <input type="email" id="sdpi_contact_email" name="contact_email" required
                                placeholder="Ej: juan@email.com">
                     </div>
 
                     <div class="sdpi-form-submit">
-                        <button type="submit" class="sdpi-submit-btn" id="sdpi-contact-submit-btn">Ver Mi CotizaciÃƒÆ’Ã‚Â³n</button>
+                        <button type="submit" class="sdpi-submit-btn" id="sdpi-contact-submit-btn">Ver Mi Cotización</button>
                         <button type="button" class="sdpi-clear-btn" id="sdpi-contact-back-btn">Volver</button>
                     </div>
                 </form>
             </div>
         `;
         
-        // Insertar el formulario de contacto despuÃƒÆ’Ã‚Â©s del formulario principal
+        // Insertar el formulario de contacto despues del formulario principal
         $('#sdpi-pricing-form').after(contactFormHtml);
         
         // Manejar el envÃƒÆ’Ã‚Â­o del formulario de contacto
@@ -570,7 +570,7 @@
             submitContactInfo();
         });
         
-        // Manejar el botÃƒÆ’Ã‚Â³n de volver
+        // Manejar el boton de volver
         $('#sdpi-contact-back-btn').on('click', function() {
             $('#sdpi-contact-form-container').remove();
             setProgressStep($("#sdpi_vehicle_type").val() ? 2 : 1);
@@ -581,7 +581,7 @@
         });
     }
     
-    // NUEVA FUNCIÃƒÆ’Ã¢â‚¬Å“N: Enviar informaciÃƒÆ’Ã‚Â³n de contacto y obtener precio final
+    // NUEVA FUNCION: Enviar informacion de contacto y obtener precio final
     function submitContactInfo() {
         var contactData = {
             action: 'sdpi_finalize_quote_with_contact',
@@ -592,16 +592,16 @@
             quote_data: JSON.stringify(window.currentQuoteData)
         };
         
-        // ValidaciÃƒÆ’Ã‚Â³n bÃƒÆ’Ã‚Â¡sica
+        // ValidaciON BASICA
         if (!contactData.client_name || !contactData.client_phone || !contactData.client_email) {
             alert('Todos los campos de contacto son requeridos.');
             return;
         }
         
-        // ValidaciÃƒÆ’Ã‚Â³n de email
+        // vALIDACION de email
         var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(contactData.client_email)) {
-            alert('Por favor ingrese un correo electrÃƒÆ’Ã‚Â³nico vÃƒÆ’Ã‚Â¡lido.');
+            alert('Por favor ingrese un correo eletrónico válido.');
             return;
         }
         
@@ -633,21 +633,21 @@
                     // Mostrar el formulario principal nuevamente (por si quieren hacer otra cotizaciÃƒÆ’Ã‚Â³n)
                     $('#sdpi-pricing-form').show();
                 } else {
-                    $('#sdpi-contact-submit-btn').prop('disabled', false).text('Ver Mi CotizaciÃƒÆ’Ã‚Â³n');
-                    alert(response.data || 'Error al procesar la informaciÃƒÆ’Ã‚Â³n de contacto.');
+                    $('#sdpi-contact-submit-btn').prop('disabled', false).text('Ver Mi Cotización');
+                    alert(response.data || 'Error al procesar la información de contacto.');
                     updateSummaryFooter('error', response.data || 'Error al procesar la informacion de contacto.');
                 }
             },
             error: function(xhr, status, error) {
                 $('#sdpi-loading').hide();
-                $('#sdpi-contact-submit-btn').prop('disabled', false).text('Ver Mi CotizaciÃƒÆ’Ã‚Â³n');
-                alert('Error de conexiÃƒÆ’Ã‚Â³n. Por favor intente nuevamente.');
+                $('#sdpi-contact-submit-btn').prop('disabled', false).text('Ver Mi Cotización');
+                alert('Error de conexión. Por favor intente nuevamente.');
                 updateSummaryFooter('error', 'Error de conexion. Por favor intente nuevamente.');
             }
         });
     }
     
-    // FUNCIÃƒÆ’Ã¢â‚¬Å“N MODIFICADA: Mostrar resultados de cotizaciÃƒÆ’Ã‚Â³n
+    // FUNCIÓN MODIFICADA: Mostrar resultados de cotización
     function displayQuoteResults(data) {
         data.transport_type = data.transport_type || (data.maritime_involved ? 'maritime' : 'terrestrial');
 
@@ -871,7 +871,7 @@
         if (!payload.p_name || !payload.p_street || !payload.p_city || !/^\d{5}$/.test(payload.p_zip) ||
             !payload.d_name || !payload.d_street || !payload.d_city || !/^\d{5}$/.test(payload.d_zip) ||
             !payload.pickup_type) {
-            alert('Por favor complete todos los campos obligatorios con Informacion vAÃƒÂ¯Ã‚Â¿Ã‚Â½lida.');
+            alert('Por favor complete todos los campos obligatorios con Informacion válida.');
             return;
         }
 

@@ -1825,7 +1825,8 @@ class SDPI_Form {
                 'maritime_involved' => true,
                 'us_port' => $maritime_result['us_port'],
                 'terrestrial_cost' => $maritime_result['terrestrial_cost'],
-                'maritime_cost' => $maritime_result['maritime_cost']
+                'maritime_cost' => $maritime_result['maritime_cost'],
+                'inoperable_fee' => $maritime_result['inoperable_fee'] ?? 0
             );
         }
         

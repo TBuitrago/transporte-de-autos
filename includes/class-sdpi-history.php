@@ -1072,6 +1072,10 @@ class SDPI_History {
                 $maritime_details = wp_json_encode($form_data['maritime_details']);
             }
         }
+
+        $inoperable_fee = floatval($form_data['inoperable_fee'] ?? 0);
+
+        $inoperable_fee = floatval($form_data['inoperable_fee'] ?? 0);
         
         // Calculate adjustments
         $company_profit = 200.00;
@@ -1118,6 +1122,7 @@ class SDPI_History {
             'us_port_zip' => $us_port_zip,
             'total_terrestrial_cost' => $total_terrestrial_cost,
             'total_maritime_cost' => $total_maritime_cost,
+            'inoperable_fee' => $inoperable_fee,
             'maritime_details' => $maritime_details,
             'additional_shipping' => $additional_shipping_json,
             'pickup_contact_name' => $pickup_contact_name,
@@ -1131,9 +1136,26 @@ class SDPI_History {
         );
 
         $formats = array(
-            '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%d', '%s', '%s', '%s',
-            '%s', '%s', '%f', '%f', '%f', '%f', '%f', '%f', '%d', '%s', '%f', '%s', '%s', '%f', '%f',
-            '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s'
+            '%s', '%s', '%s', '%s', '%s', '%s', '%s',
+            '%d',
+            '%s', '%s', '%s',
+            '%d',
+            '%s', '%s', '%s', '%s',
+            '%s',
+            '%f', '%f', '%f',
+            '%f', '%f', '%f',
+            '%d',
+            '%s',
+            '%f',
+            '%s', '%s',
+            '%f', '%f', '%f',
+            '%s',
+            '%s',
+            '%s', '%s', '%s',
+            '%s', '%s',
+            '%s',
+            '%s',
+            '%s'
         );
 
         $result = $wpdb->update(

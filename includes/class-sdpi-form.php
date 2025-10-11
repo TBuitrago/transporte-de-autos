@@ -222,7 +222,7 @@ class SDPI_Form {
                             <input type="text" id="sdpi_vehicle_model" name="vehicle_model" placeholder="Ej: Corolla, F-150, Silverado">
                         </div>
                         <div class="sdpi-form-group">
-                            <label for="sdpi_vehicle_year">Ano del vehiculo</label>
+                            <label for="sdpi_vehicle_year">Año del vehiculo</label>
                             <input type="number" id="sdpi_vehicle_year" name="vehicle_year" min="1900" max="<?php echo date('Y'); ?>" placeholder="Ej: 2020">
                         </div>
                     </div>

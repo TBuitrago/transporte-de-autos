@@ -1569,10 +1569,10 @@ class SDPI_History {
         $html .= '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">';
         $html .= '<div><strong>Origen:</strong> ' . esc_html($quote->pickup_city) . ' (' . esc_html($quote->pickup_zip) . ')</div>';
         $html .= '<div><strong>Destino:</strong> ' . esc_html($quote->delivery_city) . ' (' . esc_html($quote->delivery_zip) . ')</div>';
-        $html .= '<div><strong>Tipo de Tr�iler:</strong> ' . esc_html(ucfirst($quote->trailer_type)) . '</div>';
+        $html .= '<div><strong>Tipo de Trailer:</strong> ' . esc_html(ucfirst($quote->trailer_type)) . '</div>';
         $html .= '<div><strong>Tipo de Transporte:</strong> ';
         if ($quote->maritime_involved) {
-            $html .= '<span style="background: #0073aa; color: white; padding: 2px 8px; border-radius: 3px; font-size: 12px;">&#128674; Mar�timo</span>';
+            $html .= '<span style="background: #0073aa; color: white; padding: 2px 8px; border-radius: 3px; font-size: 12px;">&#128674; Maritimo</span>';
         } else {
             $html .= '<span style="background: #00a32a; color: white; padding: 2px 8px; border-radius: 3px; font-size: 12px;">&#128667; Terrestre</span>';
         }
@@ -1584,7 +1584,7 @@ class SDPI_History {
                 $html .= '<div><strong>Contacto Origen:</strong> ' . esc_html($quote->pickup_contact_name) . '</div>';
             }
             if ($quote->pickup_contact_street) {
-                $html .= '<div><strong>Direcci�n Origen:</strong> ' . esc_html($quote->pickup_contact_street) . '</div>';
+                $html .= '<div><strong>Direccion Origen:</strong> ' . esc_html($quote->pickup_contact_street) . '</div>';
             }
             if ($quote->pickup_contact_type) {
                 $html .= '<div><strong>Tipo de Recogida:</strong> ' . esc_html($quote->pickup_contact_type) . '</div>';
@@ -1593,7 +1593,7 @@ class SDPI_History {
                 $html .= '<div><strong>Contacto Destino:</strong> ' . esc_html($quote->delivery_contact_name) . '</div>';
             }
             if ($quote->delivery_contact_street) {
-                $html .= '<div><strong>Direcci�n Destino:</strong> ' . esc_html($quote->delivery_contact_street) . '</div>';
+                $html .= '<div><strong>Direccion Destino:</strong> ' . esc_html($quote->delivery_contact_street) . '</div>';
             }
             $html .= '</div>';
         }
@@ -1615,7 +1615,7 @@ class SDPI_History {
         $html .= '<div><strong>Modelo:</strong> ' . esc_html($quote->vehicle_model) . '</div>';
         $html .= '<div><strong>Año:</strong> ' . esc_html($quote->vehicle_year) . '</div>';
         $html .= '<div><strong>Estado:</strong> ' . ($quote->vehicle_inoperable ? '❌ No Operativo' : '✅ Operativo') . '</div>';
-        $html .= '<div><strong>El�ctrico:</strong> ' . ($quote->vehicle_electric ? 'S�' : 'No') . '</div>';
+        $html .= '<div><strong>Elictrico:</strong> ' . ($quote->vehicle_electric ? 'Si' : 'No') . '</div>';
         $html .= '</div>';
         $html .= '</div>';
         $html .= '</div>';
@@ -1726,13 +1726,13 @@ class SDPI_History {
         
         // Headers
         fputcsv($output, array(
-            'ID', 'Session ID', 'Estado del Flujo', 'Fecha', 'IP Usuario', 'Cliente Nombre', 'Cliente Tel�fono', 'Cliente Email', 'Info Capturada',
+            'ID', 'Session ID', 'Estado del Flujo', 'Fecha', 'IP Usuario', 'Cliente Nombre', 'Cliente Telefono', 'Cliente Email', 'Info Capturada',
             'Origen Ciudad', 'Origen ZIP', 'Destino Ciudad', 'Destino ZIP',
-            'Tipo Tr�iler', 'Tipo Veh�culo', 'Marca', 'Modelo', 'A�o', 'No Operativo', 'Veh�culo El�ctrico',
-            'Contacto Origen', 'Direcci�n Origen', 'Tipo de Recogida', 'Contacto Destino', 'Direcci�n Destino', 'Detalle Adicional de Env�o',
+            'Tipo Trailer', 'Tipo Vehiculo', 'Marca', 'Modelo', 'Año', 'No Operativo', 'Vehiculo Electrico',
+            'Contacto Origen', 'Direccion Origen', 'Tipo de Recogida', 'Contacto Destino', 'Direccion Destino', 'Detalle Adicional de Envio',
             'Precio API', 'Confianza API', 'Precio por Milla', 'Precio Final', 'Ganancia Empresa',
-            'Ajuste Confianza', 'Mar�timo', 'Costo Mar�timo', 'Puerto USA', 'ZIP Puerto',
-            'Costo Terrestre Total', 'Costo Mar�timo Total', 'Mensaje Error', 'Fecha Actualizaci�n Estado'
+            'Ajuste Confianza', 'Maritimo', 'Costo Maritimo', 'Puerto USA', 'ZIP Puerto',
+            'Costo Terrestre Total', 'Costo Maritimo Total', 'Mensaje Error', 'Fecha Actualizacion Estado'
         ));
         
         // Data rows
@@ -1756,8 +1756,8 @@ class SDPI_History {
                 $row['vehicle_make'],
                 $row['vehicle_model'],
                 $row['vehicle_year'],
-                $row['vehicle_inoperable'] ? 'S�' : 'No',
-                $row['vehicle_electric'] ? 'S�' : 'No',
+                $row['vehicle_inoperable'] ? 'Si' : 'No',
+                $row['vehicle_electric'] ? 'Si' : 'No',
                 $row['pickup_contact_name'],
                 $row['pickup_contact_street'],
                 $row['pickup_contact_type'],
@@ -1770,7 +1770,7 @@ class SDPI_History {
                 $row['final_price'],
                 $row['company_profit'],
                 $row['confidence_adjustment'],
-                $row['maritime_involved'] ? 'S�' : 'No',
+                $row['maritime_involved'] ? 'Si' : 'No',
                 $row['maritime_cost'],
                 $row['us_port_name'],
                 $row['us_port_zip'],

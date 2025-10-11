@@ -228,21 +228,6 @@ class SDPI_Form {
                     </div>
                 </div>
 
-                <div class="sdpi-form-card sdpi-form-section">
-                    <h3>Preferencias adicionales</h3>
-                    <p class="sdpi-section-subtitle">Agrega informacion opcional para preparar mejor tu servicio.</p>
-                    
-                    <div class="sdpi-form-grid">
-                        <div class="sdpi-form-group">
-                            <label for="sdpi_pickup_date">Fecha estimada de recogida</label>
-                            <input type="date" id="sdpi_pickup_date" name="pickup_date">
-                        </div>
-                        <div class="sdpi-form-group">
-                            <label for="sdpi_notes">Notas adicionales</label>
-                            <textarea id="sdpi_notes" name="notes" rows="4" placeholder="Comparte detalles importantes (opcional)"></textarea>
-                        </div>
-                    </div>
-                </div>
                 <div class="sdpi-form-submit">
                     <button type="submit" class="sdpi-submit-btn" id="sdpi-submit-btn">Obtener cotizacion</button>
                     <button type="button" class="sdpi-pay-btn" id="sdpi-inline-continue-btn" style="display:none;">Continuar</button>

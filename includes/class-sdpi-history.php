@@ -316,7 +316,7 @@ class SDPI_History {
         function sdpiViewDetails(id) {
             // Show loading
             jQuery('#sdpi-details-modal').remove();
-            jQuery('body').append('<div id="sdpi-details-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;"><div style="background: white; padding: 20px; border-radius: 8px; max-width: 90%; max-height: 90%; overflow-y: auto; position: relative;"><div style="text-align: center; padding: 20px;">Cargando detalles...</div></div></div>');
+            jQuery('body').append('<div id="sdpi-details-modal" class="sdpi-modal-wrapper"><div class="sdpi-modal-backdrop" onclick="sdpiCloseModal()"></div><div class="sdpi-modal-dialog"><div class="sdpi-modal-loading">Cargando detalles...</div></div></div>');
             
             // Fetch details via AJAX
             jQuery.post(ajaxurl, {
@@ -325,9 +325,9 @@ class SDPI_History {
                 nonce: '<?php echo wp_create_nonce('sdpi_get_details'); ?>'
             }, function(response) {
                 if (response.success) {
-                    jQuery('#sdpi-details-modal').html(response.data);
+                    jQuery('#sdpi-details-modal .sdpi-modal-dialog').html(response.data);
                 } else {
-                    jQuery('#sdpi-details-modal').html('<div style="background: white; padding: 20px; border-radius: 8px; max-width: 90%; max-height: 90%; overflow-y: auto; position: relative;"><h3>Error</h3><p>' + response.data + '</p><button onclick="jQuery(\'#sdpi-details-modal\').remove();" style="margin-top: 10px; padding: 8px 16px; background: #0073aa; color: white; border: none; border-radius: 4px; cursor: pointer;">Cerrar</button></div>');
+                    jQuery('#sdpi-details-modal .sdpi-modal-dialog').html('<div class="sdpi-modal-content"><h3 class="sdpi-modal-title">Error</h3><p class="sdpi-modal-message">' + response.data + '</p><div class="sdpi-modal-actions"><button type="button" class="sdpi-modal-close" onclick="sdpiCloseModal()">Cerrar</button></div></div>');
                 }
             });
         }
@@ -1538,46 +1538,6 @@ class SDPI_History {
      * Generate detailed HTML for quote
      */
     private function generate_quote_details_html($quote, $api_response) {
-        $html = '<div style="background: white; padding: 30px; border-radius: 8px; max-width: 800px; max-height: 90vh; overflow-y: auto; position: relative;">';
-        
-        // Header
-        $html .= '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #e1e5e9;">';
-        $html .= '<h2 style="margin: 0; color: #23282d;">Detalles de Cotización #' . $quote->id . '</h2>';
-        $html .= '<button onclick="sdpiCloseModal();" style="background: #d63638; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px;">✕ Cerrar</button>';
-        $html .= '</div>';
-        
-        // Basic Info
-        $html .= '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px;">';
-
-        // Left Column
-        $html .= '<div>';
-        $html .= '<h3 style="color: #0073aa; margin-bottom: 15px; font-size: 16px;">👤 Información del Cliente</h3>';
-        $html .= '<div style="background: #f8f9fa; padding: 15px; border-radius: 6px;">';
-        if ($quote->client_name) {
-            $html .= '<p><strong>Nombre:</strong> ' . esc_html($quote->client_name) . '</p>';
-            $html .= '<p><strong>Email:</strong> ' . esc_html($quote->client_email) . '</p>';
-            $html .= '<p><strong>Teléfono:</strong> ' . esc_html($quote->client_phone) . '</p>';
-            $html .= '<p><strong>Info Capturada:</strong> ' . date('d/m/Y H:i', strtotime($quote->client_info_captured_at)) . '</p>';
-        } else {
-            $html .= '<p><em style="color: #999;">Cliente no registrado</em></p>';
-        }
-        $html .= '</div>';
-        $html .= '</div>';
-
-        // Right Column
-        $html .= '<div>';
-        $html .= '<h3 style="color: #0073aa; margin-bottom: 15px; font-size: 16px;">📅 Información General</h3>';
-        $html .= '<div style="background: #f8f9fa; padding: 15px; border-radius: 6px;">';
-        $html .= '<p><strong>Fecha y Hora:</strong> ' . date('d/m/Y H:i:s', strtotime($quote->created_at)) . '</p>';
-        $html .= '<p><strong>ID de Cotización:</strong> #' . $quote->id . '</p>';
-        $html .= '<p><strong>IP del Usuario:</strong> ' . esc_html($quote->user_ip) . '</p>';
-        $html .= '<p><strong>Navegador:</strong> ' . esc_html(substr($quote->user_agent, 0, 50)) . '...</p>';
-        $html .= '</div>';
-        $html .= '</div>';
-
-        $html .= '</div>';
-
-        // Shipping Info
         $additional_shipping = array();
         if (!empty($quote->additional_shipping)) {
             $decoded_shipping = json_decode($quote->additional_shipping, true);
@@ -1586,143 +1546,303 @@ class SDPI_History {
             }
         }
 
-        $html .= '<div style="margin-bottom: 25px;">';
-        $html .= '<h3 style="color: #0073aa; margin-bottom: 15px; font-size: 16px;">🚛 Información del Envío</h3>';
-        $html .= '<div style="background: #f8f9fa; padding: 15px; border-radius: 6px;">';
-        $html .= '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">';
-        $html .= '<div><strong>Origen:</strong> ' . esc_html($quote->pickup_city) . ' (' . esc_html($quote->pickup_zip) . ')</div>';
-        $html .= '<div><strong>Destino:</strong> ' . esc_html($quote->delivery_city) . ' (' . esc_html($quote->delivery_zip) . ')</div>';
-        $html .= '<div><strong>Tipo de Trailer:</strong> ' . esc_html(ucfirst($quote->trailer_type)) . '</div>';
-        $html .= '<div><strong>Tipo de Transporte:</strong> ';
-        if ($quote->maritime_involved) {
-            $html .= '<span style="background: #0073aa; color: white; padding: 2px 8px; border-radius: 3px; font-size: 12px;">&#128674; Maritimo</span>';
-        } else {
-            $html .= '<span style="background: #00a32a; color: white; padding: 2px 8px; border-radius: 3px; font-size: 12px;">&#128667; Terrestre</span>';
-        }
-        $html .= '</div>';
-        $html .= '</div>';
-        if ($quote->pickup_contact_name || $quote->pickup_contact_street || $quote->pickup_contact_type || $quote->delivery_contact_name || $quote->delivery_contact_street) {
-            $html .= '<div style="margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">';
-            if ($quote->pickup_contact_name) {
-                $html .= '<div><strong>Contacto Origen:</strong> ' . esc_html($quote->pickup_contact_name) . '</div>';
-            }
-            if ($quote->pickup_contact_street) {
-                $html .= '<div><strong>Direccion Origen:</strong> ' . esc_html($quote->pickup_contact_street) . '</div>';
-            }
-            if ($quote->pickup_contact_type) {
-                $html .= '<div><strong>Tipo de Recogida:</strong> ' . esc_html($quote->pickup_contact_type) . '</div>';
-            }
-            if ($quote->delivery_contact_name) {
-                $html .= '<div><strong>Contacto Destino:</strong> ' . esc_html($quote->delivery_contact_name) . '</div>';
-            }
-            if ($quote->delivery_contact_street) {
-                $html .= '<div><strong>Direccion Destino:</strong> ' . esc_html($quote->delivery_contact_street) . '</div>';
-            }
-            $html .= '</div>';
-        }
-        if (!empty($additional_shipping['saved_at'])) {
-            $html .= '<p style="margin-top: 10px; font-size: 12px; color: #6c757d;"><em>Actualizado: ' . date('d/m/Y H:i', strtotime($additional_shipping['saved_at'])) . '</em></p>';
-        }
-        $html .= '</div>';
-        $html .= '</div>';
-        $html .= '</div>';
-        $html .= '</div>';
-        
-        // Vehicle Info
-        $html .= '<div style="margin-bottom: 25px;">';
-        $html .= '<h3 style="color: #0073aa; margin-bottom: 15px; font-size: 16px;">🚗 Información del Vehículo</h3>';
-        $html .= '<div style="background: #f8f9fa; padding: 15px; border-radius: 6px;">';
-        $html .= '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">';
-        $html .= '<div><strong>Tipo:</strong> ' . esc_html(ucfirst($quote->vehicle_type)) . '</div>';
-        $html .= '<div><strong>Marca:</strong> ' . esc_html($quote->vehicle_make) . '</div>';
-        $html .= '<div><strong>Modelo:</strong> ' . esc_html($quote->vehicle_model) . '</div>';
-        $html .= '<div><strong>Año:</strong> ' . esc_html($quote->vehicle_year) . '</div>';
-        $html .= '<div><strong>Estado:</strong> ' . ($quote->vehicle_inoperable ? '❌ No Operativo' : '✅ Operativo') . '</div>';
-        $html .= '<div><strong>Elictrico:</strong> ' . ($quote->vehicle_electric ? 'Si' : 'No') . '</div>';
-        $html .= '</div>';
-        $html .= '</div>';
-        $html .= '</div>';
-        
-        // Pricing Info
-        $html .= '<div style="margin-bottom: 25px;">';
-        $html .= '<h3 style="color: #0073aa; margin-bottom: 15px; font-size: 16px;">💰 Información de Precios</h3>';
-        $html .= '<div style="background: #f8f9fa; padding: 15px; border-radius: 6px;">';
-        
-        if ($quote->api_price > 0) {
-            $html .= '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">';
-            $html .= '<div><strong>Precio Base API:</strong> $' . number_format($quote->api_price, 2) . '</div>';
-            $html .= '<div><strong>Confianza API:</strong> ' . number_format($quote->api_confidence, 1) . '%</div>';
-            $html .= '<div><strong>Precio por Milla:</strong> $' . number_format($quote->api_price_per_mile, 4) . '</div>';
-            $html .= '<div><strong>Precio Final:</strong> <span style="color: #0073aa; font-weight: bold; font-size: 18px;">$' . number_format($quote->final_price, 2) . '</span></div>';
-            $html .= '</div>';
-            
-            // Breakdown
-            $html .= '<div style="background: white; padding: 15px; border-radius: 4px; border-left: 4px solid #0073aa;">';
-            $html .= '<h4 style="margin: 0 0 10px 0; color: #23282d;">Desglose de Costos</h4>';
-            $html .= '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">';
-            $html .= '<div>Precio Base API: <strong>$' . number_format($quote->api_price, 2) . '</strong></div>';
-            
-            if ($quote->confidence_adjustment > 0) {
-                $html .= '<div>Ajuste por Confianza: <strong>+$' . number_format($quote->confidence_adjustment, 2) . '</strong></div>';
-            }
-            
-            $html .= '<div>Ganancia Empresa: <strong>+$' . number_format($quote->company_profit, 2) . '</strong></div>';
-            
-            if ($quote->maritime_involved && $quote->maritime_cost > 0) {
-                $html .= '<div>Costo Marítimo: <strong>+$' . number_format($quote->maritime_cost, 2) . '</strong></div>';
-            }
-            
-            $html .= '<div style="grid-column: 1 / -1; padding-top: 10px; border-top: 1px solid #ddd; font-weight: bold; font-size: 16px; color: #0073aa;">Total Final: $' . number_format($quote->final_price, 2) . '</div>';
-            $html .= '</div>';
-            $html .= '</div>';
-        } else {
-            $html .= '<div style="color: #d63638; font-weight: bold;">❌ Error en la cotización</div>';
-            if ($quote->error_message) {
-                $html .= '<div style="margin-top: 10px; padding: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; color: #721c24;">' . esc_html($quote->error_message) . '</div>';
-            }
-        }
-        
-        $html .= '</div>';
-        $html .= '</div>';
-        
-        // Maritime Info (if applicable)
-        if ($quote->maritime_involved) {
-            $html .= '<div style="margin-bottom: 25px;">';
-            $html .= '<h3 style="color: #0073aa; margin-bottom: 15px; font-size: 16px;">🚢 Información Marítima</h3>';
-            $html .= '<div style="background: #e7f3ff; padding: 15px; border-radius: 6px; border-left: 4px solid #0073aa;">';
-            $html .= '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">';
-            $html .= '<div><strong>Puerto USA:</strong> ' . esc_html($quote->us_port_name) . '</div>';
-            $html .= '<div><strong>ZIP Puerto:</strong> ' . esc_html($quote->us_port_zip) . '</div>';
-            $html .= '<div><strong>Costo Marítimo:</strong> $' . number_format($quote->maritime_cost, 2) . '</div>';
-            $html .= '<div><strong>Costo Terrestre:</strong> $' . number_format($quote->total_terrestrial_cost, 2) . '</div>';
-            $html .= '</div>';
-            $html .= '</div>';
-            $html .= '</div>';
-        }
-        
-        // API Response (if available)
-        if ($api_response && is_array($api_response)) {
-            $html .= '<div style="margin-bottom: 25px;">';
-            $html .= '<h3 style="color: #0073aa; margin-bottom: 15px; font-size: 16px;">🔌 Respuesta de la API</h3>';
-            $html .= '<div style="background: #f8f9fa; padding: 15px; border-radius: 6px;">';
-            $html .= '<pre style="background: white; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; margin: 0;">' . esc_html(json_encode($api_response, JSON_PRETTY_PRINT)) . '</pre>';
-            $html .= '</div>';
-            $html .= '</div>';
-        }
-        
-        // Price Breakdown HTML (if available)
-        if ($quote->price_breakdown) {
-            $html .= '<div style="margin-bottom: 25px;">';
-            $html .= '<h3 style="color: #0073aa; margin-bottom: 15px; font-size: 16px;">📋 Desglose Visual</h3>';
-            $html .= '<div style="background: #f8f9fa; padding: 15px; border-radius: 6px;">';
-            $html .= $quote->price_breakdown;
-            $html .= '</div>';
-            $html .= '</div>';
-        }
-        
-        $html .= '</div>';
-        
-        return $html;
+        $created_at = $quote->created_at ? date('d/m/Y H:i:s', strtotime($quote->created_at)) : '';
+        $client_captured = $quote->client_info_captured_at ? date('d/m/Y H:i', strtotime($quote->client_info_captured_at)) : '';
+        $shipping_updated = !empty($additional_shipping['saved_at']) ? date('d/m/Y H:i', strtotime($additional_shipping['saved_at'])) : '';
+
+        ob_start();
+        ?>
+        <div class="sdpi-modal-content">
+            <header class="sdpi-modal-header">
+                <div class="sdpi-modal-heading">
+                    <h2 class="sdpi-modal-title">Detalles de Cotizaci&oacute;n #<?php echo esc_html($quote->id); ?></h2>
+                    <?php if ($created_at) : ?>
+                        <p class="sdpi-modal-subtitle">Creada el <?php echo esc_html($created_at); ?></p>
+                    <?php endif; ?>
+                </div>
+                <button type="button" class="sdpi-modal-close" onclick="sdpiCloseModal()">Cerrar</button>
+            </header>
+
+            <section class="sdpi-modal-section">
+                <div class="sdpi-modal-grid sdpi-modal-grid--two">
+                    <article class="sdpi-modal-card">
+                        <h3 class="sdpi-modal-card-title">Informaci&oacute;n del Cliente</h3>
+                        <?php if ($quote->client_name) : ?>
+                            <div class="sdpi-modal-field">
+                                <span class="sdpi-modal-label">Nombre</span>
+                                <span class="sdpi-modal-value"><?php echo esc_html($quote->client_name); ?></span>
+                            </div>
+                            <div class="sdpi-modal-field">
+                                <span class="sdpi-modal-label">Correo</span>
+                                <span class="sdpi-modal-value"><?php echo esc_html($quote->client_email); ?></span>
+                            </div>
+                            <div class="sdpi-modal-field">
+                                <span class="sdpi-modal-label">Tel&eacute;fono</span>
+                                <span class="sdpi-modal-value"><?php echo esc_html($quote->client_phone); ?></span>
+                            </div>
+                            <?php if ($client_captured) : ?>
+                                <div class="sdpi-modal-note">Datos capturados el <?php echo esc_html($client_captured); ?></div>
+                            <?php endif; ?>
+                        <?php else : ?>
+                            <p class="sdpi-modal-empty">Cliente no registrado.</p>
+                        <?php endif; ?>
+                    </article>
+
+                    <article class="sdpi-modal-card">
+                        <h3 class="sdpi-modal-card-title">Informaci&oacute;n General</h3>
+                        <div class="sdpi-modal-field">
+                            <span class="sdpi-modal-label">ID</span>
+                            <span class="sdpi-modal-value">#<?php echo esc_html($quote->id); ?></span>
+                        </div>
+                        <div class="sdpi-modal-field">
+                            <span class="sdpi-modal-label">IP Usuario</span>
+                            <span class="sdpi-modal-value"><?php echo esc_html($quote->user_ip); ?></span>
+                        </div>
+                        <div class="sdpi-modal-field">
+                            <span class="sdpi-modal-label">Navegador</span>
+                            <span class="sdpi-modal-value"><?php echo esc_html(substr($quote->user_agent, 0, 80)); ?><?php echo strlen($quote->user_agent) > 80 ? '&hellip;' : ''; ?></span>
+                        </div>
+                        <?php if (!empty($quote->flow_status)) : ?>
+                            <div class="sdpi-modal-field">
+                                <span class="sdpi-modal-label">Estado del Flujo</span>
+                                <span class="sdpi-modal-value"><?php echo esc_html($quote->flow_status); ?></span>
+                            </div>
+                        <?php endif; ?>
+                    </article>
+                </div>
+            </section>
+
+            <section class="sdpi-modal-section">
+                <h3 class="sdpi-modal-section-title">Informaci&oacute;n del Env&iacute;o</h3>
+                <article class="sdpi-modal-card">
+                    <div class="sdpi-modal-grid sdpi-modal-grid--two">
+                        <div class="sdpi-modal-field">
+                            <span class="sdpi-modal-label">Origen</span>
+                            <span class="sdpi-modal-value"><?php echo esc_html($quote->pickup_city); ?> (<?php echo esc_html($quote->pickup_zip); ?>)</span>
+                        </div>
+                        <div class="sdpi-modal-field">
+                            <span class="sdpi-modal-label">Destino</span>
+                            <span class="sdpi-modal-value"><?php echo esc_html($quote->delivery_city); ?> (<?php echo esc_html($quote->delivery_zip); ?>)</span>
+                        </div>
+                        <div class="sdpi-modal-field">
+                            <span class="sdpi-modal-label">Trailer</span>
+                            <span class="sdpi-modal-value"><?php echo esc_html(ucfirst($quote->trailer_type)); ?></span>
+                        </div>
+                        <div class="sdpi-modal-field">
+                            <span class="sdpi-modal-label">Transporte</span>
+                            <span class="sdpi-modal-value">
+                                <span class="sdpi-modal-tag <?php echo $quote->maritime_involved ? 'is-maritime' : 'is-ground'; ?>"><?php echo $quote->maritime_involved ? 'Mar&iacute;timo' : 'Terrestre'; ?></span>
+                            </span>
+                        </div>
+                        <?php if (!empty($additional_shipping['distance'])) : ?>
+                            <div class="sdpi-modal-field">
+                                <span class="sdpi-modal-label">Distancia</span>
+                                <span class="sdpi-modal-value"><?php echo esc_html($additional_shipping['distance']); ?></span>
+                            </div>
+                        <?php endif; ?>
+                        <?php if (!empty($additional_shipping['duration'])) : ?>
+                            <div class="sdpi-modal-field">
+                                <span class="sdpi-modal-label">Duraci&oacute;n</span>
+                                <span class="sdpi-modal-value"><?php echo esc_html($additional_shipping['duration']); ?></span>
+                            </div>
+                        <?php endif; ?>
+                        <?php if (!empty($additional_shipping['avg_miles_per_day'])) : ?>
+                            <div class="sdpi-modal-field">
+                                <span class="sdpi-modal-label">Millas por d&iacute;a</span>
+                                <span class="sdpi-modal-value"><?php echo esc_html($additional_shipping['avg_miles_per_day']); ?></span>
+                            </div>
+                        <?php endif; ?>
+                        <?php if (!empty($additional_shipping['estimated_days'])) : ?>
+                            <div class="sdpi-modal-field">
+                                <span class="sdpi-modal-label">D&iacute;as estimados</span>
+                                <span class="sdpi-modal-value"><?php echo esc_html($additional_shipping['estimated_days']); ?></span>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <?php if (!empty($additional_shipping['route_summary'])) : ?>
+                        <div class="sdpi-modal-note">Ruta: <?php echo esc_html($additional_shipping['route_summary']); ?></div>
+                    <?php endif; ?>
+
+                    <?php if ($quote->pickup_contact_name || $quote->pickup_contact_street || $quote->pickup_contact_type || $quote->delivery_contact_name || $quote->delivery_contact_street) : ?>
+                        <div class="sdpi-modal-grid sdpi-modal-grid--two sdpi-modal-grid--compact">
+                            <?php if ($quote->pickup_contact_name) : ?>
+                                <div class="sdpi-modal-field">
+                                    <span class="sdpi-modal-label">Contacto origen</span>
+                                    <span class="sdpi-modal-value"><?php echo esc_html($quote->pickup_contact_name); ?></span>
+                                </div>
+                            <?php endif; ?>
+                            <?php if ($quote->pickup_contact_type) : ?>
+                                <div class="sdpi-modal-field">
+                                    <span class="sdpi-modal-label">Tipo de recogida</span>
+                                    <span class="sdpi-modal-value"><?php echo esc_html($quote->pickup_contact_type); ?></span>
+                                </div>
+                            <?php endif; ?>
+                            <?php if ($quote->pickup_contact_street) : ?>
+                                <div class="sdpi-modal-field">
+                                    <span class="sdpi-modal-label">Direcci&oacute;n origen</span>
+                                    <span class="sdpi-modal-value"><?php echo esc_html($quote->pickup_contact_street); ?></span>
+                                </div>
+                            <?php endif; ?>
+                            <?php if ($quote->delivery_contact_name) : ?>
+                                <div class="sdpi-modal-field">
+                                    <span class="sdpi-modal-label">Contacto destino</span>
+                                    <span class="sdpi-modal-value"><?php echo esc_html($quote->delivery_contact_name); ?></span>
+                                </div>
+                            <?php endif; ?>
+                            <?php if ($quote->delivery_contact_street) : ?>
+                                <div class="sdpi-modal-field">
+                                    <span class="sdpi-modal-label">Direcci&oacute;n destino</span>
+                                    <span class="sdpi-modal-value"><?php echo esc_html($quote->delivery_contact_street); ?></span>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if ($shipping_updated) : ?>
+                        <div class="sdpi-modal-note">Datos de env&iacute;o actualizados el <?php echo esc_html($shipping_updated); ?></div>
+                    <?php endif; ?>
+                </article>
+            </section>
+
+            <section class="sdpi-modal-section">
+                <h3 class="sdpi-modal-section-title">Informaci&oacute;n del Veh&iacute;culo</h3>
+                <article class="sdpi-modal-card">
+                    <div class="sdpi-modal-grid sdpi-modal-grid--two">
+                        <div class="sdpi-modal-field">
+                            <span class="sdpi-modal-label">Tipo</span>
+                            <span class="sdpi-modal-value"><?php echo esc_html(ucfirst($quote->vehicle_type)); ?></span>
+                        </div>
+                        <div class="sdpi-modal-field">
+                            <span class="sdpi-modal-label">Marca</span>
+                            <span class="sdpi-modal-value"><?php echo esc_html($quote->vehicle_make); ?></span>
+                        </div>
+                        <div class="sdpi-modal-field">
+                            <span class="sdpi-modal-label">Modelo</span>
+                            <span class="sdpi-modal-value"><?php echo esc_html($quote->vehicle_model); ?></span>
+                        </div>
+                        <div class="sdpi-modal-field">
+                            <span class="sdpi-modal-label">A&ntilde;o</span>
+                            <span class="sdpi-modal-value"><?php echo esc_html($quote->vehicle_year); ?></span>
+                        </div>
+                        <div class="sdpi-modal-field">
+                            <span class="sdpi-modal-label">Estado</span>
+                            <span class="sdpi-modal-value"><?php echo $quote->vehicle_inoperable ? 'No operativo' : 'Operativo'; ?></span>
+                        </div>
+                        <div class="sdpi-modal-field">
+                            <span class="sdpi-modal-label">El&eacute;ctrico</span>
+                            <span class="sdpi-modal-value"><?php echo $quote->vehicle_electric ? 'S&iacute;' : 'No'; ?></span>
+                        </div>
+                    </div>
+                </article>
+            </section>
+
+            <section class="sdpi-modal-section">
+                <h3 class="sdpi-modal-section-title">Informaci&oacute;n de Precios</h3>
+                <article class="sdpi-modal-card">
+                    <?php if ($quote->api_price > 0) : ?>
+                        <div class="sdpi-modal-grid sdpi-modal-grid--two sdpi-modal-grid--balanced">
+                            <div class="sdpi-modal-field">
+                                <span class="sdpi-modal-label">Precio base API</span>
+                                <span class="sdpi-modal-value">$<?php echo number_format((float) $quote->api_price, 2); ?></span>
+                            </div>
+                            <div class="sdpi-modal-field">
+                                <span class="sdpi-modal-label">Confianza API</span>
+                                <span class="sdpi-modal-value"><?php echo number_format((float) $quote->api_confidence, 1); ?>%</span>
+                            </div>
+                            <div class="sdpi-modal-field">
+                                <span class="sdpi-modal-label">Precio por milla</span>
+                                <span class="sdpi-modal-value">$<?php echo number_format((float) $quote->api_price_per_mile, 4); ?></span>
+                            </div>
+                            <div class="sdpi-modal-field">
+                                <span class="sdpi-modal-label">Precio final</span>
+                                <span class="sdpi-modal-value sdpi-modal-highlight">$<?php echo number_format((float) $quote->final_price, 2); ?></span>
+                            </div>
+                        </div>
+
+                        <div class="sdpi-modal-subcard">
+                            <h4 class="sdpi-modal-subcard-title">Desglose de costos</h4>
+                            <div class="sdpi-modal-grid sdpi-modal-grid--two sdpi-modal-grid--compact">
+                                <div class="sdpi-modal-field">
+                                    <span class="sdpi-modal-label">Precio base API</span>
+                                    <span class="sdpi-modal-value">$<?php echo number_format((float) $quote->api_price, 2); ?></span>
+                                </div>
+                                <?php if ($quote->confidence_adjustment > 0) : ?>
+                                    <div class="sdpi-modal-field">
+                                        <span class="sdpi-modal-label">Ajuste por confianza</span>
+                                        <span class="sdpi-modal-value">+$<?php echo number_format((float) $quote->confidence_adjustment, 2); ?></span>
+                                    </div>
+                                <?php endif; ?>
+                                <div class="sdpi-modal-field">
+                                    <span class="sdpi-modal-label">Ganancia empresa</span>
+                                    <span class="sdpi-modal-value">+$<?php echo number_format((float) $quote->company_profit, 2); ?></span>
+                                </div>
+                                <?php if ($quote->maritime_involved && $quote->maritime_cost > 0) : ?>
+                                    <div class="sdpi-modal-field">
+                                        <span class="sdpi-modal-label">Costo mar&iacute;timo</span>
+                                        <span class="sdpi-modal-value">+$<?php echo number_format((float) $quote->maritime_cost, 2); ?></span>
+                                    </div>
+                                <?php endif; ?>
+                                <div class="sdpi-modal-total">
+                                    Total final: $<?php echo number_format((float) $quote->final_price, 2); ?>
+                                </div>
+                            </div>
+                        </div>
+                    <?php else : ?>
+                        <p class="sdpi-modal-error">Error en la cotizaci&oacute;n.</p>
+                        <?php if ($quote->error_message) : ?>
+                            <div class="sdpi-modal-alert"><?php echo esc_html($quote->error_message); ?></div>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </article>
+            </section>
+
+            <?php if ($quote->maritime_involved) : ?>
+                <section class="sdpi-modal-section">
+                    <h3 class="sdpi-modal-section-title">Informaci&oacute;n Mar&iacute;tima</h3>
+                    <article class="sdpi-modal-card is-accent">
+                        <div class="sdpi-modal-grid sdpi-modal-grid--two">
+                            <div class="sdpi-modal-field">
+                                <span class="sdpi-modal-label">Puerto USA</span>
+                                <span class="sdpi-modal-value"><?php echo esc_html($quote->us_port_name); ?></span>
+                            </div>
+                            <div class="sdpi-modal-field">
+                                <span class="sdpi-modal-label">ZIP del puerto</span>
+                                <span class="sdpi-modal-value"><?php echo esc_html($quote->us_port_zip); ?></span>
+                            </div>
+                            <div class="sdpi-modal-field">
+                                <span class="sdpi-modal-label">Costo mar&iacute;timo</span>
+                                <span class="sdpi-modal-value">$<?php echo number_format((float) $quote->maritime_cost, 2); ?></span>
+                            </div>
+                            <div class="sdpi-modal-field">
+                                <span class="sdpi-modal-label">Costo terrestre</span>
+                                <span class="sdpi-modal-value">$<?php echo number_format((float) $quote->total_terrestrial_cost, 2); ?></span>
+                            </div>
+                        </div>
+                    </article>
+                </section>
+            <?php endif; ?>
+
+            <?php if ($api_response && is_array($api_response)) : ?>
+                <section class="sdpi-modal-section">
+                    <h3 class="sdpi-modal-section-title">Respuesta de la API</h3>
+                    <article class="sdpi-modal-card">
+                        <pre class="sdpi-modal-pre"><?php echo esc_html(json_encode($api_response, JSON_PRETTY_PRINT)); ?></pre>
+                    </article>
+                </section>
+            <?php endif; ?>
+
+            <?php if ($quote->price_breakdown) : ?>
+                <section class="sdpi-modal-section">
+                    <h3 class="sdpi-modal-section-title">Desglose Visual</h3>
+                    <article class="sdpi-modal-card">
+                        <div class="sdpi-modal-html"><?php echo wp_kses_post($quote->price_breakdown); ?></div>
+                    </article>
+                </section>
+            <?php endif; ?>
+        </div>
+        <?php
+        return ob_get_clean();
     }
 
     /**

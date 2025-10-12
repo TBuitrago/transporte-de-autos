@@ -316,7 +316,14 @@ class SDPI_History {
         function sdpiViewDetails(id) {
             // Show loading
             jQuery('#sdpi-details-modal').remove();
-            jQuery('body').append('<div id="sdpi-details-modal" class="sdpi-modal-wrapper"><div class="sdpi-modal-backdrop" onclick="sdpiCloseModal()"></div><div class="sdpi-modal-dialog"><div class="sdpi-modal-loading">Cargando detalles...</div></div></div>');
+            jQuery('body').append(
+                '<div id="sdpi-details-modal" class="sdpi-modal-wrapper" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;">' +
+                    '<div class="sdpi-modal-backdrop" onclick="sdpiCloseModal()" style="position:absolute;inset:0;background:rgba(23,32,95,0.55);backdrop-filter:blur(2px);"></div>' +
+                    '<div class="sdpi-modal-dialog" style="position:relative;width:min(900px,100%);max-height:90vh;overflow-y:auto;background:#fff;border-radius:18px;padding:24px;box-shadow:0 30px 70px rgba(23,32,95,0.35);display:flex;flex-direction:column;gap:24px;">' +
+                        '<div class="sdpi-modal-loading" style="min-height:160px;display:flex;align-items:center;justify-content:center;font-weight:600;color:#17205F;font-size:16px;">Cargando detalles...</div>' +
+                    '</div>' +
+                '</div>'
+            );
             
             // Fetch details via AJAX
             jQuery.post(ajaxurl, {
@@ -327,7 +334,15 @@ class SDPI_History {
                 if (response.success) {
                     jQuery('#sdpi-details-modal .sdpi-modal-dialog').html(response.data);
                 } else {
-                    jQuery('#sdpi-details-modal .sdpi-modal-dialog').html('<div class="sdpi-modal-content"><h3 class="sdpi-modal-title">Error</h3><p class="sdpi-modal-message">' + response.data + '</p><div class="sdpi-modal-actions"><button type="button" class="sdpi-modal-close" onclick="sdpiCloseModal()">Cerrar</button></div></div>');
+                    jQuery('#sdpi-details-modal .sdpi-modal-dialog').html(
+                        '<div class="sdpi-modal-content" style="display:flex;flex-direction:column;gap:18px;">' +
+                            '<h3 class="sdpi-modal-title" style="margin:0;font-size:20px;color:#17205F;">Error</h3>' +
+                            '<p class="sdpi-modal-message" style="margin:0;color:#5c628f;">' + response.data + '</p>' +
+                            '<div class="sdpi-modal-actions" style="display:flex;justify-content:flex-end;">' +
+                                '<button type="button" class="sdpi-modal-close" onclick="sdpiCloseModal()" style="background:#d63638;color:#fff;border:none;border-radius:12px;padding:10px 18px;font-weight:600;cursor:pointer;">Cerrar</button>' +
+                            '</div>' +
+                        '</div>'
+                    );
                 }
             });
         }

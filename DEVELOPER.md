@@ -1,297 +1,112 @@
 # Super Dispatch Pricing Insights - Documentación Técnica
 
-## Desarrollador
+## Perfil del Desarrollador
 **Tomas Buitrago**  
-Empresa: TBA Digitals  
-Contacto: [sdpi@tbadigitals.com](mailto:sdpi@tbadigitals.com)
+TBA Digitals  
+Contacto: [sdpi@tbadigitals.com](mailto:sdpi@tbadigitals.com)  
+Website: [https://tbadigitals.com](https://tbadigitals.com)
 
 ---
 
-## 🏗️ Arquitectura del Sistema
+## Arquitectura General
 
-### Flujo de Datos
-```
-Usuario → Formulario → AJAX → SDPI_Form → SDPI_API → Super Dispatch API
-                ↓
-        SDPI_Maritime (si aplica) → Cálculo Final → Respuesta
-```
-
-### Diagrama de Clases
-```
-SDPI_Settings
-    ├── Configuración del plugin
-    ├── Interfaz de administración
-    └── Validación de API key
-
-SDPI_API
-    ├── Comunicación con Super Dispatch
-    ├── Manejo de errores
-    └── Caché de respuestas
-
-SDPI_Form
-    ├── Renderizado del formulario
-    ├── Procesamiento AJAX
-    ├── Cálculo de precios
-    └── Gestión de sesión consolidada (SDPI_Session)
-
-SDPI_Cities
-    ├── Gestión de base de datos
-    ├── Búsqueda de ciudades
-    └── Autocompletado
-
-SDPI_Maritime
-SDPI_Session
-    ├── Tabla wp_sdpi_quote_sessions
-    ├── start_session()/update_data()/set_status()
-    └── get(session_id)
-
-Relaciones clave
-- SDPI_Form → SDPI_Session: persiste datos parciales por `session_id`
-- SDPI_History: muestra estado Zapier, envíos en lote y borrado en lote
-- Hook WC `order_status_completed`: dispara envío consolidado a Zapier
-    ├── Detección de transporte marítimo
-    ├── Selección de puertos
-    └── Cálculo de tarifas
+```text
+Cliente → Formulario SDPI → AJAX → SDPI_Form →
+    ├── SDPI_Session (persistencia)
+    ├── SDPI_API (Super Dispatch)
+    ├── SDPI_Maritime (lógica PR)
+    └── SDPI_History (tracking + Zapier)
+                            ↓
+                     Authorize.net (Accept.js)
 ```
 
-## 🔧 Clases Detalladas
+- **Front-end**: `assets/form-script.js` controla autocompletado, resumen lateral, formularios intermedios, pagos y envío a Zapier.
+- **Back-end**: las clases en `includes/` encapsulan API, sesiones, tarifas marítimas, historial administrativo y ajustes.
+- **Persistencia**: todas las transacciones se vinculan a un `session_id` y se guardan tanto en `wp_sdpi_quote_sessions` como en `wp_sdpi_history`.
 
-### SDPI_Settings
+### Flujo de Estados
+Cada cotización avanza por los estados `inicial → cotizador → checkout → completado`. El estado vive en `wp_sdpi_history.flow_status` y se actualiza desde `SDPI_Form` a través de métodos de `SDPI_History`.
 
-#### Propósito
-Gestiona la configuración del plugin y proporciona la interfaz de administración.
+---
 
-#### Métodos Principales
-```php
-public function __construct()
-    // Inicializa hooks de administración
+## Clases Principales
 
-public function add_admin_menu()
-    // Agrega menú de administración
+### `SDPI_Settings`
+- Renderiza la pantalla de ajustes (`Settings → Super Dispatch Pricing`).
+- Registra opciones de API key, caché, credenciales de Authorize.net, URLs de éxito/error y webhook de Zapier.
+- Expone botones de prueba para la API de Super Dispatch.
 
-public function settings_page()
-    // Renderiza página de configuración
+### `SDPI_API`
+- Encapsula las peticiones a `https://api.superdispatch.com/v1/recommended-price`.
+- Maneja autenticación por API key, timeouts y reintentos.
+- Normaliza respuestas con `recommended_price`, `confidence` y `price_per_mile`.
 
-public function handle_settings_save()
-    // Procesa guardado de configuración
+### `SDPI_Form`
+Responsable del flujo completo del formulario, AJAX y pagos:
+- `render_form()` imprime el HTML y el panel de resumen.
+- `ajax_save_client_info()` inicia la sesión y registra estado `inicial`.
+- `ajax_get_quote()` sanitiza, detecta tramos marítimos, llama a la API y devuelve `needs_contact_info`.
+- `ajax_finalize_quote_with_contact()` asocia contacto, guarda histórico y expone el precio final.
+- `ajax_save_additional_info()` y `ajax_save_maritime_info()` guardan datos complementarios.
+- `ajax_initiate_payment()` prepara el payload para Accept.js y cambia el estado a `checkout`.
+- `ajax_process_payment()` valida el nonce de Accept.js, envía el cargo a Authorize.net y marca el estado `completado`.
+- `send_to_zapier()` arma el payload del webhook (opcional) con datos de contacto, vehículo, tarifas y estado del flujo.
 
-public function test_api_connection()
-    // Prueba conexión con API (AJAX)
-```
+### `SDPI_Maritime`
+- Utilidades para identificar si un ZIP pertenece a San Juan (`009`).
+- Selecciona puerto continental según el estado (`northeast`/`southeast`).
+- Expone tarifas fijas (`MARITIME_RATES`) y cálculos híbridos (terrestre + marítimo).
 
-#### Hooks Utilizados
-- `admin_menu` - Agregar menú de administración
-- `admin_init` - Inicializar configuración
-- `wp_ajax_sdpi_test_api` - AJAX para probar API
+### `SDPI_Cities`
+- Crea y mantiene `wp_sdpi_cities`.
+- Implementa búsqueda AJAX (`sdpi_search_cities`) con detección de ciudad o ZIP.
 
-### SDPI_API
+### `SDPI_Session`
+- Almacena un registro JSON por `session_id` con la evolución completa de la cotización.
+- Métodos clave: `start_session()`, `update_data()`, `set_status()`, `get_by_session_id()`.
 
-#### Propósito
-Maneja toda la comunicación con la API de Super Dispatch.
+### `SDPI_History`
+- Gestiona `wp_sdpi_history`, acciones masivas y la pantalla de historial.
+- Métodos utilitarios: `create_initial_record()`, `update_to_cotizador()`, `update_to_checkout()`, `update_to_completado()` y `mark_zapier_status()`.
+- Ofrece endpoints AJAX para filtros, reenvío a Zapier (`sdpi_bulk_send_zapier`) y eliminación de registros.
 
-#### Métodos Principales
-```php
-public function get_pricing_quote($form_data)
-    // Obtiene cotización de la API
-    // Parámetros: array con datos del formulario
-    // Retorna: array con respuesta o WP_Error
+---
 
-private function make_api_request($endpoint, $data)
-    // Realiza petición HTTP a la API
-    // Maneja autenticación y headers
+## AJAX y Endpoints Públicos
 
-private function parse_api_response($response)
-    // Parsea respuesta de la API
-    // Busca precio y confianza en diferentes campos
-```
+| Acción | Método | Descripción |
+|-------|--------|-------------|
+| `sdpi_save_client_info` | Privado/Público | Guarda datos de contacto iniciales y crea sesión. |
+| `sdpi_get_quote` | Privado/Público | Procesa la cotización y retorna si requiere contacto adicional. |
+| `sdpi_finalize_quote_with_contact` | Privado/Público | Confirma contacto, actualiza historial y entrega el precio final. |
+| `sdpi_save_additional_info` | Privado/Público | Persiste datos de recogida/entrega adicionales. |
+| `sdpi_save_maritime_info` | Privado/Público | Guarda información específica de envíos marítimos. |
+| `sdpi_initiate_payment` | Privado/Público | Construye contexto de pago para Accept.js. |
+| `sdpi_process_payment` | Privado/Público | Procesa token de Accept.js y captura el pago. |
+| `sdpi_search_cities` | Privado/Público | Autocompletado de ciudades y ZIPs. |
+| `sdpi_test_api` | Solo admins | Prueba conexión a la API de Super Dispatch desde el panel. |
+| `sdpi_bulk_send_zapier` | Solo admins | Envío masivo de cotizaciones al webhook configurado. |
 
-#### Estructura de Respuesta
-```php
-[
-    'recommended_price' => float,
-    'confidence' => float,
-    'price_per_mile' => float
-]
-```
+Todas las peticiones usan `check_ajax_referer('sdpi_nonce', 'nonce')` y sanitización estricta antes de interactuar con la API o la base de datos.
 
-### SDPI_Form
+---
 
-#### Propósito
-Renderiza el formulario de cotización y procesa los envíos AJAX.
+## Flujo de Pago con Authorize.net (Accept.js)
+1. **Inicialización**: `ajax_initiate_payment()` valida que el sitio esté bajo HTTPS, verifica credenciales y arma la descripción legible del pago.
+2. **Tokenización**: el front-end usa Accept.js para generar `dataValue` y `dataDescriptor` sin exponer datos sensibles al servidor.
+3. **Cargo**: `ajax_process_payment()` crea la transacción con `AnetAPI\CreateTransactionRequest`, define monto y descripción y maneja respuestas/errores.
+4. **Post-proceso**: al cobrar, se actualiza `wp_sdpi_history` y se dispara `send_to_zapier()` si hay webhook activo.
 
-#### Métodos Principales
-```php
-public function render_form()
-    // Renderiza el formulario HTML
-    // Incluye JavaScript inline
+Errores de pago se reportan al usuario y se registran en el historial con `zapier_status = error` cuando aplica.
 
-public function ajax_get_quote()
-    // Procesa envío AJAX del formulario
-    // Valida datos y llama a la API
+---
 
-private function calculate_final_price($api_response, $pickup_zip, $delivery_zip)
-    // Calcula precio final con ganancia y ajustes
-    // Integra lógica marítima si aplica
+## Base de Datos
 
-private function calculate_maritime_only_quote($pickup_zip, $delivery_zip, ...)
-    // Calcula cotización solo marítima (San Juan → San Juan)
-```
+### `wp_sdpi_cities`
+Catálogo de ciudades y códigos ZIP con índices en `city` y `state_id`.
 
-#### Estructura del Formulario
-```html
-<form id="sdpi-pricing-form">
-    <!-- Información de Envío -->
-    <input name="pickup_zip" type="hidden">
-    <input name="delivery_zip" type="hidden">
-    <select name="trailer_type">
-    
-    <!-- Información del Vehículo -->
-    <select name="vehicle_type">
-    <input name="vehicle_inoperable" type="checkbox">
-    <input name="vehicle_make">
-    <input name="vehicle_model">
-    <input name="vehicle_year">
-</form>
-```
-
-### SDPI_Cities
-
-#### Propósito
-Gestiona la base de datos de ciudades y proporciona funcionalidad de búsqueda.
-
-#### Métodos Principales
-```php
-public static function create_table()
-    // Crea tabla wp_sdpi_cities
-    // Se ejecuta en activación del plugin
-
-public function ajax_search_cities()
-    // Maneja búsqueda AJAX de ciudades
-    // Valida nonce y parámetros
-
-public static function search_cities($query, $limit = 10)
-    // Busca ciudades en la base de datos
-    // Detecta si es búsqueda por ciudad o ZIP
-```
-
-#### Estructura de la Tabla
-```sql
-CREATE TABLE wp_sdpi_cities (
-    id int(11) NOT NULL AUTO_INCREMENT,
-    city varchar(100) NOT NULL,
-    state_id varchar(2) NOT NULL,
-    zips text NOT NULL,
-    PRIMARY KEY (id),
-    KEY city (city),
-    KEY state_id (state_id)
-);
-```
-
-### SDPI_Maritime
-
-#### Propósito
-Maneja toda la lógica relacionada con transporte marítimo a Puerto Rico.
-
-#### Métodos Principales
-```php
-public static function is_san_juan_zip($zip)
-    // Detecta si un ZIP es de San Juan, PR
-    // Cualquier ZIP que empiece con "009"
-
-public static function involves_maritime($pickup_zip, $delivery_zip)
-    // Determina si la ruta involucra transporte marítimo
-
-public static function get_us_port($continental_zip)
-    // Selecciona puerto USA basado en ZIP continental
-    // Noreste: Eddystone, PA
-    // Sureste: Jacksonville, FL
-
-public static function get_maritime_rate($from_zip, $to_zip)
-    // Calcula tarifa marítima basada en ruta
-
-public static function calculate_maritime_cost($pickup_zip, $delivery_zip, $terrestrial_cost, $confidence)
-    // Calcula costo total con transporte marítimo
-```
-
-#### Constantes de Tarifas
-```php
-const MARITIME_RATES = [
-    'san_juan_to_jacksonville' => 895.00,
-    'san_juan_to_penn_terminals' => 1350.00,
-    'jacksonville_to_san_juan' => 1150.00,
-    'penn_terminals_to_san_juan' => 1675.00
-];
-```
-
-## 🔄 Flujo de Procesamiento
-
-### 1. Captura de Contacto (inicia sesión)
-```php
-// SDPI_Form::ajax_save_client_info()
-// 1) Guarda datos en $_SESSION
-// 2) Inicia SDPI_Session y devuelve session_id
-```
-
-### 2. Envío del Cotizador
-```javascript
-// Frontend (form-script.js)
-$('#sdpi-pricing-form').on('submit', function(e) {
-    e.preventDefault();
-    
-    // Validar campos requeridos
-    // Enviar AJAX a wp-admin/admin-ajax.php
-    // Mostrar loading
-    // Procesar respuesta
-});
-
-// Nota 2025-10-11:
-// El desglose detallado ya no se muestra en el front-end; solo permanece disponible en el historial administrativo.
-```
-
-### 3. Procesamiento Backend
-```php
-// SDPI_Form::ajax_get_quote()
-1. Verificar nonce
-2. Sanitizar datos del formulario
-3. Detectar si involucra transporte marítimo
-4. Si es marítimo:
-   - Determinar puerto USA
-   - Llamar API con ZIPs continentales
-   - Calcular tarifa marítima
-   - Aplicar lógica de precios
-5. Si es terrestre:
-   - Llamar API directamente
-   - Aplicar lógica de precios
-6. Persistir en SDPI_Session → `quote.{pickup,delivery,vehicle,api,final}`
-7. Retornar respuesta JSON
-```
-
-### 4. Cálculo de Precios
-```php
-// Lógica de precios
-$base_price = $api_response['recommended_price'];
-$confidence = $api_response['confidence'];
-
-// Ganancia fija
-$company_profit = 200.00;
-
-// Ajuste por confianza
-if ($confidence >= 60 && $confidence <= 100) {
-    $remaining = 100 - $confidence;
-    $confidence_adjustment = $base_price * ($remaining / 100);
-} elseif ($confidence >= 30 && $confidence <= 59) {
-    $confidence_adjustment = 150.00;
-} elseif ($confidence >= 0 && $confidence <= 29) {
-    $confidence_adjustment = 200.00;
-}
-
-$final_price = $base_price + $company_profit + $confidence_adjustment;
-```
-
-## 🗄️ Base de Datos
-
-### Tabla wp_sdpi_cities
-### Tabla wp_sdpi_quote_sessions
+### `wp_sdpi_quote_sessions`
 ```sql
 CREATE TABLE wp_sdpi_quote_sessions (
     id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -308,279 +123,72 @@ CREATE TABLE wp_sdpi_quote_sessions (
 );
 ```
 
-### Tabla wp_sdpi_history (extensiones)
-Campos añadidos:
-- `zapier_status` (pending|sent|error)
-- `zapier_last_sent_at` (datetime)
-```sql
--- Estructura
-CREATE TABLE wp_sdpi_cities (
-    id int(11) NOT NULL AUTO_INCREMENT,
-    city varchar(100) NOT NULL,
-    state_id varchar(2) NOT NULL,
-    zips text NOT NULL,
-    PRIMARY KEY (id),
-    KEY city (city),
-    KEY state_id (state_id)
-);
-
--- Datos de ejemplo
-INSERT INTO wp_sdpi_cities VALUES
-(1, 'Miami', 'FL', '33101 33102 33103'),
-(2, 'San Juan', 'PR', '00901 00902 00903'),
-(3, 'New York', 'NY', '10001 10002 10003');
-```
-
-### Consultas Optimizadas
-```sql
--- Búsqueda por ciudad
-SELECT * FROM wp_sdpi_cities 
-WHERE city LIKE '%miami%' 
-LIMIT 10;
-
--- Búsqueda por ZIP
-SELECT * FROM wp_sdpi_cities 
-WHERE zips LIKE '%33101%' 
-LIMIT 10;
-```
-
-## 🔌 Hooks y Filtros
-
-### Acciones Disponibles
-// Envío consolidado al completar pedido
-add_action('woocommerce_order_status_completed', ...);
-```php
-// Antes de renderizar formulario
-do_action('sdpi_before_form_render');
-
-// Después de renderizar formulario
-do_action('sdpi_after_form_render');
-
-// Antes de llamar a la API
-do_action('sdpi_before_api_call', $form_data);
-
-// Después de llamar a la API
-do_action('sdpi_after_api_call', $api_response);
-```
-
-### Filtros Disponibles
-```php
-// Modificar datos del formulario
-$form_data = apply_filters('sdpi_form_data', $form_data);
-
-// Modificar respuesta de la API
-$api_response = apply_filters('sdpi_api_response', $api_response);
-
-// Modificar precio final
-$final_price = apply_filters('sdpi_final_price', $final_price, $form_data);
-
-// Modificar tarifas marítimas
-$maritime_rates = apply_filters('sdpi_maritime_rates', $maritime_rates);
-```
-
-### Ejemplos de Uso
-```php
-// Cambiar tarifas marítimas
-add_filter('sdpi_maritime_rates', function($rates) {
-    $rates['san_juan_to_jacksonville'] = 950.00;
-    return $rates;
-});
-
-// Agregar logging personalizado
-add_action('sdpi_after_api_call', function($response) {
-    error_log('API Response: ' . json_encode($response));
-});
-
-// Modificar precio final
-add_filter('sdpi_final_price', function($price, $form_data) {
-    // Aplicar descuento del 10% para clientes VIP
-    if (is_vip_customer()) {
-        return $price * 0.9;
-    }
-    return $price;
-}, 10, 2);
-```
-
-## 🎨 Personalización
-
-### CSS Personalizado
-```css
-/* Personalizar formulario */
-.sdpi-pricing-form {
-    background: #f9f9f9;
-    padding: 20px;
-    border-radius: 8px;
-}
-
-/* Personalizar desglose marítimo */
-.sdpi-maritime-breakdown {
-    border: 2px solid #007cba;
-    background: #f8f9fa;
-}
-
-/* Personalizar elementos de precio */
-.sdpi-price-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 10px 0;
-}
-```
-
-### JavaScript Personalizado
-```javascript
-// Interceptar envío del formulario
-jQuery(document).on('submit', '#sdpi-pricing-form', function(e) {
-    // Validación personalizada
-    if (!validateCustomFields()) {
-        e.preventDefault();
-        return false;
-    }
-});
-
-// Modificar respuesta antes de mostrar
-jQuery(document).on('sdpi:quote:success', function(event, response) {
-    // Agregar información adicional
-    response.data.custom_message = 'Gracias por usar nuestro servicio';
-});
-```
-
-## 🐛 Debugging
-
-### Habilitar Logs
-```php
-// En wp-config.php
-define('WP_DEBUG', true);
-define('WP_DEBUG_LOG', true);
-define('WP_DEBUG_DISPLAY', false);
-```
-
-### Logs del Plugin
-```php
-// Buscar en /wp-content/debug.log
-error_log("SDPI DEBUG - Mensaje de debug");
-error_log("SDPI MARITIME DEBUG - Debug marítimo");
-```
-
-### Información de Debug
-- Detección de transporte marítimo
-- Selección de puertos USA
-- Datos enviados a la API
-- Respuesta de la API
-- Cálculos de precios
-- Errores de validación
-
-## 🚀 Optimización
-
-### Caché
-```php
-// Caché de respuestas de API
-$cache_key = 'sdpi_quote_' . md5(serialize($form_data));
-$cached_response = get_transient($cache_key);
-
-if ($cached_response === false) {
-    $api_response = $this->api->get_pricing_quote($form_data);
-    set_transient($cache_key, $api_response, 300); // 5 minutos
-}
-```
-
-### Consultas SQL Optimizadas
-```php
-// Usar índices
-$results = $wpdb->get_results($wpdb->prepare(
-    "SELECT * FROM {$wpdb->prefix}sdpi_cities 
-     WHERE city LIKE %s 
-     ORDER BY city 
-     LIMIT %d",
-    '%' . $wpdb->esc_like($query) . '%',
-    $limit
-));
-```
-
-### Carga Condicional
-```php
-// Solo cargar scripts en páginas que los necesiten
-if (is_page('cotizacion') || has_shortcode(get_post()->post_content, 'sdpi_pricing_form')) {
-    wp_enqueue_script('sdpi-form-script');
-}
-```
-
-## 🔒 Seguridad
-
-### Validación de Datos
-```php
-// Sanitizar inputs
-$pickup_zip = sanitize_text_field($_POST['pickup_zip']);
-$delivery_zip = sanitize_text_field($_POST['delivery_zip']);
-
-// Validar nonce
-check_ajax_referer('sdpi_nonce', 'nonce');
-
-// Validar permisos
-if (!current_user_can('manage_options')) {
-    wp_die('No tienes permisos para esta acción');
-}
-```
-
-### Escape de Outputs
-```php
-// Escapar HTML
-echo esc_html($user_input);
-
-// Escapar atributos
-echo esc_attr($attribute_value);
-
-// Escapar URLs
-echo esc_url($url);
-```
-
-## 📊 Monitoreo
-
-### Métricas Importantes
-- Tiempo de respuesta de la API
-- Tasa de éxito de cotizaciones
-- Uso de transporte marítimo
-- Errores de validación
-
-### Logs de Monitoreo
-```php
-// Log de métricas
-error_log("SDPI METRICS - API Response Time: " . $response_time . "ms");
-error_log("SDPI METRICS - Quote Success Rate: " . $success_rate . "%");
-```
-
-## 🧪 Testing
-
-### Tests Unitarios
-```php
-// Ejemplo de test
-class Test_SDPI_Maritime extends WP_UnitTestCase {
-    public function test_is_san_juan_zip() {
-        $this->assertTrue(SDPI_Maritime::is_san_juan_zip('00901'));
-        $this->assertTrue(SDPI_Maritime::is_san_juan_zip('00918'));
-        $this->assertFalse(SDPI_Maritime::is_san_juan_zip('78701'));
-    }
-}
-```
-
-### Tests de Integración
-```php
-// Test de flujo completo
-public function test_maritime_quote_flow() {
-    $form_data = [
-        'pickup_zip' => '00901',
-        'delivery_zip' => '78701',
-        'trailer_type' => 'open',
-        'vehicles' => [/* ... */]
-    ];
-    
-    $response = $this->form->ajax_get_quote();
-    $this->assertTrue($response['success']);
-    $this->assertArrayHasKey('maritime_involved', $response['data']);
-}
-```
+### `wp_sdpi_history`
+Contiene información consolidada (contacto, cotización, estado del flujo, tarifas, `zapier_status`, `zapier_last_sent_at`). El script `migration-add-flow-status.php` agrega columnas de estado y marcas de tiempo si se requiere en instalaciones previas.
 
 ---
 
-**Nota**: Esta documentación está diseñada para desarrolladores que necesiten entender, modificar o extender el plugin. Para usuarios finales, consultar el README.md principal.
+## Hooks Disponibles
 
+### Acciones
+```php
+do_action('sdpi_before_form_render');
+do_action('sdpi_after_form_render');
+do_action('sdpi_before_api_call', $form_data);
+do_action('sdpi_after_api_call', $api_response);
+do_action('sdpi_before_payment_request', $payload, $session_id);
+do_action('sdpi_after_payment_request', $result, $session_id);
+```
 
+### Filtros
+```php
+$form_data = apply_filters('sdpi_form_data', $form_data);
+$api_response = apply_filters('sdpi_api_response', $api_response);
+$final_price = apply_filters('sdpi_final_price', $final_price, $form_data);
+$maritime_rates = apply_filters('sdpi_maritime_rates', $maritime_rates);
+$zapier_payload = apply_filters('sdpi_zapier_payload', $payload, $session_id);
+```
+
+Usa estos hooks para personalizar tarifas, alterar la lógica de precios o integrar sistemas de logging adicionales.
+
+---
+
+## Personalización de Front-end
+- **CSS**: agrega reglas sobre `.sdpi-summary-panel`, `.sdpi-pricing-form` y `.sdpi-maritime-breakdown` para personalizar estilos.
+- **JS**: escucha eventos personalizados (`sdpi:quote:success`, `sdpi:payment:ready`, `sdpi:payment:complete`) definidos en `assets/form-script.js`.
+- **Plantillas**: el HTML del formulario se construye en `render_form()`; puedes usar `ob_start()` y hooks para inyectar secciones adicionales.
+
+---
+
+## Debugging y Observabilidad
+- Habilita `WP_DEBUG_LOG` y busca prefijos `SDPI`, `SDPI MARITIME` o `SDPI PAYMENT`.
+- Ajusta `SDPI_Form::$debug` (si se habilita) para volcar información detallada.
+- El panel de historial muestra errores de Zapier y pagos directamente en la interfaz.
+
+### Métricas recomendadas
+- Tiempo de respuesta de la API de Super Dispatch.
+- Tasa de conversión por estado del flujo.
+- Porcentaje de cotizaciones marítimas vs. terrestres.
+- Errores de tokenización o cargos rechazados.
+
+---
+
+## Optimización y Buenas Prácticas
+- Usa caché (`set_transient`) para respuestas de API repetidas (ya implementado en `SDPI_API`).
+- Carga condicional de assets: los scripts se registran sólo en páginas con el shortcode.
+- Mantén la tabla de ciudades indexada y realiza mantenimiento periódico (`OPTIMIZE TABLE`).
+- Configura HTTPS obligatorio para habilitar pagos.
+
+---
+
+## Testing
+- **Unit Tests**: valida utilidades (ej. `SDPI_Maritime::is_san_juan_zip`) con WP-CLI y PHPUnit.
+- **Integración**: prueba flujos completos con `wp server` o entornos locales. Escenarios clave:
+  - Cotización terrestre con pago exitoso.
+  - Cotización marítima con selección automática de puerto.
+  - Reintentos de Zapier y acciones masivas.
+- **Smoke Tests**: utiliza el botón "Probar Conexión" y transacciones de `sandbox` para confirmar integraciones.
+
+---
+
+Esta documentación está pensada para desarrolladores que requieran extender, depurar o integrar el plugin en soluciones personalizadas. Para instrucciones de instalación o uso final, consulta `README.md` e `INSTALLATION.md`.

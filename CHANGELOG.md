@@ -2,12 +2,21 @@
 
 ## [Unreleased]
 
+_Sin cambios aún._
+
+## [1.4.0] - 2025-10-20
+
 ### Cambios
 - Se eliminó la dependencia de WooCommerce; los pagos ahora se procesan directamente con Authorize.net mediante Accept.js.
-- Nuevos campos de configuración para credenciales Authorize.net y URLs de redirección después del pago.
+- Nuevos campos de configuración para credenciales Authorize.net, URLs de redirección después del pago y webhook de Zapier.
+- Sistema de estados del flujo (`inicial`, `cotizador`, `checkout`, `completado`) para auditar conversiones.
 
 ### Frontend
 - Formulario de pago embebido con tokenización Accept.js y validaciones en tiempo real.
+- Panel de resumen en vivo con precio, tipo de transporte y disponibilidad de pago.
+
+### Documentación
+- README, INSTALLATION, DEVELOPER e IMPLEMENTATION-SUMMARY actualizados para reflejar el flujo multipaso y los pagos directos.
 
 ## [1.3.1] - 2025-10-11
 

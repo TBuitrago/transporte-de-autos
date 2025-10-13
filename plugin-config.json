@@ -2,11 +2,11 @@
   "plugin": {
     "name": "Super Dispatch Pricing Insights",
     "slug": "super-dispatch-pricing-insights",
-    "version": "1.2.0",
+    "version": "1.4.0",
     "description": "Plugin de WordPress que integra la API de Super Dispatch para proporcionar cotizaciones de transporte de vehículos en tiempo real, incluyendo soporte para transporte marítimo a Puerto Rico.",
-    "author": "Tu Nombre",
-    "author_uri": "https://tu-sitio.com",
-    "plugin_uri": "https://tu-sitio.com/super-dispatch-pricing-insights",
+    "author": "Tomas Buitrago",
+    "author_uri": "https://tbadigitals.com",
+    "plugin_uri": "https://tbadigitals.com/super-dispatch-pricing-insights",
     "license": "GPL v2 or later",
     "license_uri": "https://www.gnu.org/licenses/gpl-2.0.html",
     "text_domain": "super-dispatch-pricing-insights",
@@ -208,9 +208,9 @@
     "changelog": "CHANGELOG.md"
   },
   "support": {
-    "email": "support@tu-sitio.com",
-    "documentation_url": "https://tu-sitio.com/docs/super-dispatch-pricing-insights",
-    "github_issues": "https://github.com/tu-usuario/super-dispatch-pricing-insights/issues",
+    "email": "sdpi@tbadigitals.com",
+    "documentation_url": "https://tbadigitals.com/docs/super-dispatch-pricing-insights",
+    "github_issues": "https://github.com/tbadigitals/super-dispatch-pricing-insights/issues",
     "wordpress_support": "https://wordpress.org/support/plugin/super-dispatch-pricing-insights"
   }
 }

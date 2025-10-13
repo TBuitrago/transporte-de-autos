@@ -1,121 +1,75 @@
-# Resumen de Implementación: Inversión del Flujo de Cotización SDPI
+# Resumen de Implementación – Flujo de Cotización SDPI
 
 ## Objetivo
-Modificar el flujo de cotización para que el cliente primero llene los datos de la cotización (Información de Envío e Información del Vehículo) y luego, antes de recibir el precio, deba ingresar sus datos de contacto (nombre, correo y teléfono).
+Entregar un flujo de cotización multipaso que capture la información del vehículo y rutas antes de solicitar los datos de contacto, conserve todo dentro de una sesión consolidada y habilite pagos directos con Authorize.net.
 
-## Cambios Implementados
+## Panorama General del Flujo
+1. **Ingreso de datos del envío**: el cliente completa origen, destino, vehículo, tipo de tráiler y opciones marítimas.
+2. **Cotización interna**: se consulta la API de Super Dispatch o se calcula el tramo terrestre cuando hay transporte marítimo.
+3. **Captura de contacto**: se solicita nombre, correo y teléfono antes de revelar la tarifa.
+4. **Resumen y revisión**: se muestra el panel lateral con la tarifa final, tipo de transporte y acciones disponibles.
+5. **Pago (opcional)**: Accept.js tokeniza la tarjeta; el backend procesa el cargo y actualiza el historial.
+6. **Integraciones**: la sesión se actualiza en `wp_sdpi_quote_sessions`, el historial registra `flow_status` y se dispara el webhook de Zapier si está configurado.
 
-## Actualización 2025-10-11: Desglose visible de recargos
+## Cambios Clave en Backend (`includes/`)
+- **`class-sdpi-form.php`**
+  - Nueva organización del formulario con panel `sdpi-summary-panel` y secciones condicionales (contacto, revisión, pago).
+  - Métodos AJAX ampliados: `ajax_save_client_info`, `ajax_get_quote`, `ajax_finalize_quote_with_contact`, `ajax_save_additional_info`, `ajax_save_maritime_info`, `ajax_initiate_payment`, `ajax_process_payment`.
+  - Consolidación de sesiones con `SDPI_Session` para almacenar `quote`, `contact`, `shipping`, `maritime` y `payment`.
+  - Integración con `SDPI_History` para controlar estados `inicial`, `cotizador`, `checkout` y `completado`.
+  - Envío a Zapier con payload enriquecido (contacto, vehículo, recargos marítimos y desglose de tarifas).
 
-- Se eliminaron los contenedores del breakdown del panel p�blico; el detalle qued� reservado para vistas internas.
-- Nueva función JavaScript `updateBreakdownHtml()` que centraliza la actualización y limpieza del desglose, reutilizada en:
-  - `displayQuoteResults()` para mostrar la cotización definitiva.
-  - El handler de los botones de pago (`.sdpi-pay-btn`) cuando se muestra la pantalla adicional previo al checkout.
-  - Flujos de limpieza/reset (submit inicial, formulario de contacto, botón "Limpiar").
-- El recargo marítimo por vehículo inoperable (USD $500) ahora se ve reflejado explícitamente en la interfaz del cliente y en el panel previo al checkout, alineado con el precio final almacenado en el histórico.
-- Se añadieron estilos mínimos en `assets/form-styles.css` para encuadrar el desglose sin duplicar márgenes.
+- **`class-sdpi-history.php`**
+  - Tabla administrativa con columnas de `flow_status`, `zapier_status` y acciones masivas.
+  - Métodos `create_initial_record`, `update_to_cotizador`, `update_to_checkout`, `update_to_completado`, `mark_zapier_status`.
+  - Vista "Enviar a Zapier" con reenvío manual y bulk (`sdpi_bulk_send_zapier`).
 
-### 1. Modificaciones en PHP (includes/class-sdpi-form.php)
+- **`class-sdpi-maritime.php`**
+  - Utilidades para detectar ZIPs de San Juan (`009`), seleccionar puertos continentales y calcular tarifas híbridas.
+  - Tarifas fijas (`MARITIME_RATES`) y helpers para recargos de vehículos eléctricos o inoperables.
 
-#### render_form()
-- **Cambio**: Eliminada la verificación de datos de contacto al inicio del formulario
-- **Razón**: El usuario ya no necesita ingresar sus datos de contacto antes de llenar el formulario de cotización
-- **Actualización 2025-10-11**: Se añadió un bloque de desglose (`sdpi-summary-breakdown` y `sdpi-review-summary-breakdown`) que recibe el HTML del breakdown generado en PHP.
+- **`class-sdpi-session.php`**
+  - Tabla `wp_sdpi_quote_sessions` con almacenamiento JSON incremental por `session_id`.
+  - Métodos `start_session`, `update_data`, `set_status`, `get_by_session_id`.
 
-#### ajax_get_quote()
-- **Cambio**: Modificada para calcular el precio pero NO mostrarlo inmediatamente
-- **Nuevo comportamiento**: Retorna `needs_contact_info: true` junto con los datos de cotización calculados
-- **Razón**: Permite calcular el precio pero retrasar su visualización hasta después de capturar los datos de contacto
+- **`class-sdpi-settings.php`**
+  - Campos de configuración para Super Dispatch, Authorize.net, URLs de redirección, webhook de Zapier y opciones de caché.
+  - Botones de prueba de API y ayudas visuales en el panel de ajustes.
 
-#### ajax_finalize_quote_with_contact() [NUEVO]
-- **Función**: Nuevo método AJAX que procesa los datos de contacto junto con la cotización
-- **Responsabilidades**:
-  - Valida los datos de contacto
-  - Crea la sesión y el registro en el histórico
-  - Actualiza el estado a 'cotizador'
-  - Retorna el precio final para mostrar al usuario
+## Cambios Clave en Frontend (`assets/`)
+- **`form-script.js`**
+  - Controla el flujo paso a paso y la navegación entre secciones (cotizador, contacto, revisión y pago).
+  - Renderiza el resumen lateral, mostrando precio, tipo de transporte, puertos seleccionados y disponibilidad de pago.
+  - Eventos personalizados (`sdpi:quote:success`, `sdpi:payment:ready`, `sdpi:payment:complete`) para integraciones externas.
+  - Gestión del formulario Accept.js: preparación del contexto, tokenización, envío del pago y manejo de errores.
+  - Manejo de estados marítimos: bloquea campos irrelevantes, muestra puertos asignados y aplica recargos específicos.
 
-### 2. Modificaciones en JavaScript (assets/form-script.js)
+- **`form-styles.css`**
+  - Estilos para el layout en columnas, panel `sdpi-summary-panel`, estados de progreso y formularios de pago.
+  - Indicadores visuales para los estados `pending`, `success`, `error` y mensajes de ayuda.
 
-#### Manejo del formulario principal
-- **Cambio**: Detecta cuando la respuesta indica `needs_contact_info: true`
-- **Acción**: Guarda los datos de cotización y muestra el formulario de contacto
+## Tablas y Migraciones
+- `wp_sdpi_cities`: catálogo para autocompletado.
+- `wp_sdpi_quote_sessions`: sesión consolidada con datos en JSON.
+- `wp_sdpi_history`: historial con `flow_status`, `zapier_status`, `zapier_last_sent_at` y tracking de pagos.
+- Script `migration-add-flow-status.php`: añade columnas de estado y marcas de tiempo para instalaciones previas.
 
-#### showContactForm() [NUEVA]
-- **Función**: Muestra dinámicamente un formulario de contacto
-- **Campos**: Nombre completo, teléfono, correo electrónico
-- **Incluye**: Botón para volver al formulario anterior
+## Integraciones y Seguridad
+- **Super Dispatch API**: consultas autenticadas con caché y manejo de reintentos.
+- **Authorize.net Accept.js**: tokenización client-side y creación de transacciones `authorizeCapture`.
+- **Zapier**: webhook configurable desde ajustes; payload filtrable vía `sdpi_zapier_payload`.
+- **Seguridad**: nonces en todos los endpoints, sanitización/escape de datos, verificación de capacidades en acciones administrativas.
 
-#### submitContactInfo() [NUEVA]
-- **Función**: Envía los datos de contacto junto con los datos de cotización
-- **Validaciones**: Verifica campos requeridos y formato de email
-- **Acción**: Llama a `ajax_finalize_quote_with_contact`
+## Observaciones Operativas
+- Requiere HTTPS para habilitar Accept.js en producción.
+- El botón "Probar Conexión" valida la API de Super Dispatch; se recomienda hacer smoke tests con sandbox Authorize.net.
+- `flow_status` permite analizar conversiones y detectar abandonos (consultar `FLOW-STATES-SYSTEM.md`).
+- El historial expone badges de Zapier (Pendiente/Enviado/Error) y permite reenvíos manuales.
 
-#### displayQuoteResults()
-- **Función**: Extraída para mostrar los resultados con el precio
-- **Uso**: Se llama después de capturar los datos de contacto
-- **Actualización 2025-10-11**: Invoca `updateBreakdownHtml()` para que el desglose visual acompañe al precio mostrado.
+## Documentación Relacionada
+- `README.md`: descripción funcional y casos de uso.
+- `INSTALLATION.md`: requisitos, pasos de instalación y troubleshooting.
+- `DEVELOPER.md`: arquitectura detallada, hooks y pautas de extensión.
+- `FLOW-STATES-SYSTEM.md`: detalles del sistema de estados y migraciones.
 
-#### updateBreakdownHtml() [NUEVA 2025-10-11]
-- **Función**: Encargada de renderizar o limpiar el HTML de desglose tanto en el panel lateral como en la pantalla de revisión.
-- **Uso**: Se reutiliza en los flujos de cálculo, en el botón de continuar al pago y en todas las rutas de reset/errores para evitar que el desglose quede desfasado respecto al monto final.
-
-## Flujo de Usuario Final
-
-1. **Entrada inicial**: Usuario accede al formulario de cotización (sin necesidad de datos de contacto)
-
-2. **Datos de cotización**: Usuario llena:
-   - Información de Envío (ZIP/Ciudad de origen y destino)
-   - Información del Vehículo (tipo, marca, modelo, año, etc.)
-
-3. **Cálculo interno**: Al hacer clic en "Obtener Cotización":
-   - Sistema calcula el precio internamente
-   - NO muestra el precio aún
-   - Muestra formulario de contacto
-
-4. **Captura de contacto**: Usuario ingresa:
-   - Nombre completo
-   - Número de teléfono
-   - Correo electrónico
-
-5. **Procesamiento final**:
-   - Sistema crea registro en el histórico
-   - Asocia datos de cotización con datos de contacto
-   - Muestra el precio final calculado
-
-6. **Opciones posteriores**:
-   - Usuario puede continuar con el pago
-   - Usuario puede hacer una nueva cotización
-
-## Beneficios del Nuevo Flujo
-
-1. **Reducción de abandono inicial**: Los usuarios no se desaniman por tener que dar sus datos personales antes de ver qué ofrece el servicio
-
-2. **Mayor engagement**: El usuario ya invirtió tiempo llenando los datos de cotización, por lo que es más probable que complete el proceso
-
-3. **Datos más completos**: Se capturan los datos de contacto solo cuando el usuario está genuinamente interesado (después de calcular su cotización)
-
-4. **Mejor tracking**: El registro en el histórico se crea con información completa y en el momento correcto
-
-## Archivos Modificados
-
-- includes/class-sdpi-form.php - L�gica del backend (flujo y contenedores del desglose)
-- assets/form-script.js - L�gica del frontend (captura de contacto, actualizaci�n de precios y breakdown visible)
-- assets/form-styles.css - Ajustes visuales que mantienen alineado el bloque de desglose
-- Documentaci�n (README, CHANGELOG, IMPLEMENTATION-SUMMARY)
-
-## Estado Actual
-
-- Implementaci�n completada y en revisi�n continua
-- Desglose de precios validado en flujos mar�timos y terrestres
-
-
-## Nota 2025-10-11 (revisi�n) 
-- El desglose visual fue retirado del front-end; solo permanece en el historial administrativo.
-- Se eliminaron scripts y estilos relacionados con sdpi-summary-breakdown para evitar su renderizado p�blico.
-
-
-
-
-- El flujo oversea oculta el formulario terrestre y reutiliza solo los campos de shipper/consignee/pick-up/drop-off.
-- El historial y las cargas a Zapier incluyen ahora los detalles completos capturados en el formulario mar�timo.
+Este resumen sirve como referencia rápida para entender las piezas clave del flujo actual y cómo interactúan los componentes del plugin.

@@ -86,7 +86,14 @@ INSERT INTO wp_sdpi_cities (city, state_id, zips) VALUES
 ('San Juan', 'PR', '00901 00902 00903 00904 00905 00906 00907 00908 00909 00910 00911 00912 00913 00914 00915 00916 00917 00918 00919 00920 00921 00922 00923 00924 00925 00926 00927 00928 00929 00930 00931 00932 00933 00934 00935 00936 00937 00938 00939 00940 00941 00942 00943 00944 00945 00946 00947 00948 00949 00950 00951 00952 00953 00954 00955 00956 00957 00958 00959 00960 00961 00962 00963 00964 00965 00966 00967 00968 00969 00970 00971 00972 00973 00974 00975 00976 00977 00978 00979 00980 00981 00982 00983 00984 00985 00986 00987 00988 00989 00990 00991 00992 00993 00994 00995 00996 00997 00998 00999');
 ```
 
-### Paso 3: Configurar Permisos
+### Paso 3: Configurar Pagos (opcional)
+1. Verifica que el sitio use **HTTPS** (Accept.js sólo funciona en conexiones seguras).
+2. Obtén en Authorize.net los valores de **API Login ID**, **Transaction Key** y **Public Client Key**.
+3. En `Configuración > Super Dispatch Pricing` selecciona el entorno (Sandbox/Producción) y pega las credenciales.
+4. Define las URLs de redirección de **Éxito** y **Error**.
+5. Utiliza el botón "Probar conexión" y realiza una transacción de prueba en sandbox antes de pasar a producción.
+
+### Paso 4: Configurar Permisos
 1. Verificar que el plugin tenga permisos de escritura
 2. Configurar permisos de archivos si es necesario:
 ```bash
@@ -188,6 +195,13 @@ SELECT * FROM wp_sdpi_cities WHERE city = 'San Juan' AND state_id = 'PR';
 2. Verificar consola del navegador para errores
 3. Desactivar plugins de optimización temporalmente
 
+### Error: "Accept.js requiere HTTPS"
+**Causa**: El formulario de pago sólo puede tokenizar datos cuando se carga bajo HTTPS
+**Solución**:
+1. Asegurar un certificado SSL válido en el dominio
+2. Forzar HTTPS en WordPress (`Settings > General` y `wp-config.php`)
+3. Repetir la prueba del pago después de limpiar cachés del sitio/CDN
+
 ### Error: "Error 400 de API"
 **Causa**: Datos inválidos enviados a la API
 **Solución**:
@@ -277,8 +291,9 @@ Al contactar soporte, incluir:
 - Descripción detallada del problema
 
 ### Contacto de Soporte
-**Tomas Buitrago**  
-Empresa: TBA Digitals  
+**Tomas Buitrago**
+Empresa: TBA Digitals
+Website: [https://tbadigitals.com](https://tbadigitals.com)
 Email: [sdpi@tbadigitals.com](mailto:sdpi@tbadigitals.com)
 
 ### Recursos de Ayuda

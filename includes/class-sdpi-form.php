@@ -62,16 +62,22 @@ class SDPI_Form {
     }
 
     public function enqueue_scripts() {
+        $authorize_ready = $this->is_authorize_ready();
+        $is_secure = $this->is_request_secure();
+
+        $dependencies = array('jquery');
+        if ($authorize_ready && $is_secure) {
+            $this->enqueue_authorize_script($dependencies);
+        }
+
         // Enqueue form script
         wp_enqueue_script(
             'sdpi-form-script',
             plugin_dir_url(__FILE__) . '../assets/form-script.js',
-            array('jquery'),
+            $dependencies,
             SDPI_VERSION,
             true
         );
-
-        $authorize_ready = $this->is_authorize_ready();
 
         wp_localize_script('sdpi-form-script', 'sdpi_ajax', array(
             'ajax_url' => admin_url('admin-ajax.php'),
@@ -81,20 +87,14 @@ class SDPI_Form {
         ));
 
         wp_localize_script('sdpi-form-script', 'sdpi_payment', array(
-            'enabled' => $authorize_ready,
+            'enabled' => $authorize_ready && $is_secure,
             'success_url' => esc_url(get_option('sdpi_payment_success_url')),
-            'error_url' => esc_url(get_option('sdpi_payment_error_url'))
+            'error_url' => esc_url(get_option('sdpi_payment_error_url')),
+            'message' => ($authorize_ready && !$is_secure)
+                ? __('Los pagos con tarjeta requieren que el sitio esté publicado con HTTPS.', 'super-dispatch-pricing')
+                : ''
         ));
 
-        if ($authorize_ready) {
-            wp_enqueue_script(
-                'sdpi-authorize-accept',
-                'https://js.authorize.net/v3/Accept.js',
-                array(),
-                null,
-                true
-            );
-        }
     }
 
     /**
@@ -168,6 +168,58 @@ class SDPI_Form {
         }
 
         return $description;
+    }
+
+    /**
+     * Determine if the current request is served over HTTPS
+     */
+    private function is_request_secure() {
+        if (function_exists('is_ssl') && is_ssl()) {
+            return true;
+        }
+
+        if (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off') {
+            return true;
+        }
+
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https') {
+            return true;
+        }
+
+        if (!empty($_SERVER['HTTP_X_FORWARDED_SSL']) && strtolower($_SERVER['HTTP_X_FORWARDED_SSL']) === 'on') {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Ensure Accept.js is available either inline or via CDN and update dependencies array
+     */
+    private function enqueue_authorize_script(&$dependencies) {
+        $handle = 'sdpi-authorize-accept';
+        wp_enqueue_script(
+            $handle,
+            'https://js.authorize.net/v1/Accept.js',
+            array(),
+            false,
+            false
+        );
+        add_filter('script_loader_tag', array($this, 'filter_accept_script_tag'), 10, 3);
+        $dependencies[] = $handle;
+    }
+
+    public function filter_accept_script_tag($tag, $handle, $src) {
+        if ('sdpi-authorize-accept' !== $handle) {
+            return $tag;
+        }
+
+        // Ensure charset attribute per Authorize.net recommendation
+        if (strpos($tag, 'charset=') === false) {
+            $tag = str_replace('src=', 'charset="utf-8" src=', $tag);
+        }
+
+        return $tag;
     }
 
     /**
@@ -2160,6 +2212,11 @@ class SDPI_Form {
             exit;
         }
 
+        if (!$this->is_request_secure()) {
+            wp_send_json_error('La pasarela de pago requiere que el sitio utilice HTTPS.');
+            exit;
+        }
+
         $posted_quote = isset($_POST['quote_data']) ? json_decode(stripslashes($_POST['quote_data']), true) : array();
         if (!is_array($posted_quote)) {
             $posted_quote = array();
@@ -2241,6 +2298,11 @@ class SDPI_Form {
 
         if (!$this->is_authorize_ready()) {
             wp_send_json_error('La pasarela de pago no está configurada.');
+            exit;
+        }
+
+        if (!$this->is_request_secure()) {
+            wp_send_json_error('La pasarela de pago requiere una conexión HTTPS.');
             exit;
         }
 

@@ -298,6 +298,12 @@ class SDPI_Settings {
             echo '<p><strong>Super Dispatch Pricing Insights:</strong> Configura tus credenciales de Authorize.net en <a href="' . admin_url('options-general.php?page=super-dispatch-pricing') . '">Settings → Super Dispatch Pricing</a> para habilitar el cobro con tarjeta.</p>';
             echo '</div>';
         }
+
+        if ($this->is_authorize_configured() && !$this->is_site_https()) {
+            echo '<div class="notice notice-error is-dismissible">';
+            echo '<p><strong>Super Dispatch Pricing Insights:</strong> Authorize.net requiere que tu sitio cargue sobre <code>https://</code>. Configura un certificado SSL y actualiza la URL del sitio antes de intentar procesar pagos.</p>';
+            echo '</div>';
+        }
     }
 
     public function settings_page() {
@@ -423,5 +429,22 @@ class SDPI_Settings {
         $client_key = get_option('sdpi_authorize_public_client_key');
 
         return !empty($login_id) && !empty($transaction_key) && !empty($client_key);
+    }
+
+    private function is_site_https() {
+        $home = home_url();
+        if (strpos($home, 'https://') === 0) {
+            return true;
+        }
+
+        if (function_exists('is_ssl') && is_ssl()) {
+            return true;
+        }
+
+        if (defined('FORCE_SSL_ADMIN') && FORCE_SSL_ADMIN) {
+            return true;
+        }
+
+        return false;
     }
 }

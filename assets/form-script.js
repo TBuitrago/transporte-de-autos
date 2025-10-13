@@ -29,6 +29,68 @@
     };
     var paymentContext = null;
     var paymentEnabled = typeof sdpi_payment !== 'undefined' && !!sdpi_payment.enabled;
+    var paymentBlockedMessage = (typeof sdpi_payment !== 'undefined' && sdpi_payment.message) ? sdpi_payment.message : '';
+    var acceptSources = [
+        'https://js.authorize.net/v1/Accept.js',
+        'https://js2.authorize.net/v1/Accept.js'
+    ];
+    var acceptLoadPromise = null;
+
+    function loadAcceptFrom(index) {
+        return new Promise(function(resolve, reject) {
+            if (window.Accept && typeof window.Accept.dispatchData === 'function') {
+                resolve();
+                return;
+            }
+
+            var src = acceptSources[index];
+            if (!src) {
+                reject('No se pudo descargar Accept.js desde los dominios permitidos.');
+                return;
+            }
+
+            var existingTag = document.querySelector('script[src="' + src + '"]');
+            if (existingTag) {
+                existingTag.parentElement.removeChild(existingTag);
+            }
+
+            var script = document.createElement('script');
+            script.src = src;
+            script.async = false;
+            script.onload = function() {
+                if (window.Accept && typeof window.Accept.dispatchData === 'function') {
+                    resolve();
+                } else {
+                    reject('Accept.js cargó pero no expuso la función necesaria.');
+                }
+            };
+            script.onerror = function() {
+                reject('No se pudo cargar el script: ' + src);
+            };
+            document.head.appendChild(script);
+        }).catch(function(error) {
+            if (index + 1 < acceptSources.length) {
+                return loadAcceptFrom(index + 1);
+            }
+            return Promise.reject(error);
+        });
+    }
+
+    function ensureAcceptReady() {
+        if (!paymentEnabled) {
+            return Promise.reject(paymentBlockedMessage || 'Los pagos no están habilitados.');
+        }
+
+        if (window.Accept && typeof window.Accept.dispatchData === 'function') {
+            return Promise.resolve();
+        }
+
+        if (!acceptLoadPromise) {
+            acceptLoadPromise = loadAcceptFrom(0);
+        }
+
+        return acceptLoadPromise;
+    }
 
     function setProgressStep(step) {
         currentProgressStep = step;
@@ -97,6 +159,9 @@
             $btn.hide().prop('disabled', false).removeData('quote');
             $btn.removeAttr('data-quote');
             resetPaymentPanel();
+            if (data && data.payment_available && paymentBlockedMessage) {
+                updateSummaryFooter('error', paymentBlockedMessage);
+            }
 
             if ($inlineBtn.length) {
                 $inlineBtn.hide().prop('disabled', false).removeData('quote').removeAttr('data-quote');
@@ -933,15 +998,22 @@
         updateSummaryFooter('info', 'Validando los datos de la tarjeta...');
         $('#sdpi-payment-feedback').hide();
 
-        if (typeof Accept === 'undefined' || typeof Accept.dispatchData !== 'function') {
-            showPaymentError('No se pudo cargar la librería de pagos. Actualiza la página e inténtalo nuevamente.');
-            $button.prop('disabled', false).text('Pagar ahora');
-            return;
-        }
-
-        Accept.dispatchData(secureData, function(response) {
-            handleAuthorizeResponse(response, $button);
-        });
+        ensureAcceptReady()
+            .then(function() {
+                Accept.dispatchData(secureData, function(response) {
+                    handleAuthorizeResponse(response, $button);
+                });
+            })
+            .catch(function(errorMsg) {
+                var message = 'No se pudo cargar la librería de pagos.';
+                if (errorMsg) {
+                    message += ' ' + errorMsg;
+                } else {
+                    message += ' Intenta refrescar la página.';
+                }
+                showPaymentError(message);
+                $button.prop('disabled', false).text('Pagar ahora');
+            });
     });
 
     // Clear form button
@@ -1329,6 +1401,9 @@
     resetReviewSummary();
     updateSummaryFooter('info', defaultSummaryFooter);
     updateLiveSummary();
+    if (!paymentEnabled && paymentBlockedMessage) {
+        updateSummaryFooter('error', paymentBlockedMessage);
+    }
 });
 
 

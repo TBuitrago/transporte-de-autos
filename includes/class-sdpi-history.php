@@ -1302,6 +1302,39 @@ class SDPI_History {
         
         return $result !== false;
     }
+
+    /**
+     * Mark Zapier status for a given session
+     */
+    public function mark_zapier_status($session_id, $status) {
+        global $wpdb;
+
+        if (empty($session_id) || empty($status)) {
+            return false;
+        }
+
+        $status = sanitize_text_field($status);
+        $data = array(
+            'zapier_status' => $status,
+            'status_updated_at' => current_time('mysql')
+        );
+        $formats = array('%s', '%s');
+
+        if ($status === 'sent') {
+            $data['zapier_last_sent_at'] = current_time('mysql');
+            $formats[] = '%s';
+        }
+
+        $result = $wpdb->update(
+            $this->table_name,
+            $data,
+            array('session_id' => sanitize_text_field($session_id)),
+            $formats,
+            array('%s')
+        );
+
+        return $result !== false;
+    }
     
     /**
      * Get history record by session ID

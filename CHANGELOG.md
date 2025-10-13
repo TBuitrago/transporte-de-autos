@@ -1,5 +1,14 @@
 # Changelog - Super Dispatch Pricing Insights
 
+## [Unreleased]
+
+### Cambios
+- Se eliminó la dependencia de WooCommerce; los pagos ahora se procesan directamente con Authorize.net mediante Accept.js.
+- Nuevos campos de configuración para credenciales Authorize.net y URLs de redirección después del pago.
+
+### Frontend
+- Formulario de pago embebido con tokenización Accept.js y validaciones en tiempo real.
+
 ## [1.3.1] - 2025-10-11
 
 ### Cambios

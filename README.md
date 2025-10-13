@@ -10,6 +10,7 @@ Plugin de WordPress que permite a los clientes cotizar en tiempo real el precio 
 - ✅ Sistema de precios con ganancia de empresa y ajustes por confianza
 - ✅ Soporte marítimo PR con puertos USA automáticos
 - ✅ Sesiones de cotización consolidadas (registro único por proceso)
+- ✅ Pagos directos con Authorize.net (Accept.js)
 - ✅ Envío a Zapier/CRM solo al finalizar (o manual desde admin)
 - ✅ Historial con estado Zapier y acciones en lote (enviar/eliminar)
 - ✅ Interfaz responsive y moderna
@@ -20,8 +21,9 @@ Plugin de WordPress que permite a los clientes cotizar en tiempo real el precio 
 ## Instalación
 1. Subir el plugin a `/wp-content/plugins/super-dispatch-pricing-insights/`
 2. Activar el plugin desde el panel de administración
-3. Configurar la API key en **Settings → Super Dispatch Pricing**
-4. Importar datos de ciudades desde **Settings → Super Dispatch Pricing → Cities**
+3. Configurar la API de Super Dispatch y las credenciales de Authorize.net (API Login ID, Transaction Key, Public Client Key) en **Settings → Super Dispatch Pricing**
+4. Definir las URLs de redirección tras pago (éxito/error) en la misma pantalla de ajustes
+5. Importar datos de ciudades desde **Settings → Super Dispatch Pricing → Cities**
 
 ## Uso
 ### Shortcode
@@ -44,11 +46,14 @@ Plugin de WordPress que permite a los clientes cotizar en tiempo real el precio 
 - **Cotizador**: Origen, destino, vehículo, obtiene precio
 - **Información adicional**: Nombre de quien entrega/recibe, direcciones, ciudades/ZIP (ciudades/ZIP en solo lectura), tipo de recogida
 
-### Integración con WooCommerce
-- Botón “Continuar” abre pantalla adicional y, tras guardar, lleva al checkout nativo de WooCommerce.
+### Pagos con Authorize.net
+- Credenciales requeridas: API Login ID, Transaction Key y Public Client Key (Accept.js).
+- Selecciona el entorno (Sandbox/Producción) y define las URLs de “Gracias” y “Error”.
+- El botón “Continuar” muestra una pantalla de revisión y, tras guardar los datos adicionales, habilita el formulario de tarjeta (Accept.js) para capturar el pago sin salir del sitio.
+- El token generado por Accept.js se envía al servidor, que realiza el cargo directo contra Authorize.net.
 
 ### Envío a Zapier / CRM
-- Automático: al completar el pedido (hook `woocommerce_order_status_completed`).
+- Automático: inmediatamente después de que Authorize.net confirma la transacción.
 - Manual: desde WP Admin → SDPI → “Enviar a Zapier”, ingresando `Session ID`.
 - Lote: WP Admin → SDPI → Historial, seleccionar varias filas y “Enviar seleccionados a Zapier”.
 
@@ -84,6 +89,7 @@ El plugin aplica la siguiente lógica de precios:
 - WordPress 5.0+
 - PHP 7.4+
 - API key de Super Dispatch
+- Credenciales de Authorize.net (API Login ID, Transaction Key, Public Client Key)
 
 ## Soporte y Contacto
 Para soporte técnico, contactar a:

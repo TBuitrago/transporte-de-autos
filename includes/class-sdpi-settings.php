@@ -22,10 +22,16 @@ class SDPI_Settings {
     }
 
     public function settings_init() {
-        register_setting('sdpi_settings', 'sdpi_api_key');
-        register_setting('sdpi_settings', 'sdpi_api_endpoint');
-        register_setting('sdpi_settings', 'sdpi_cache_time');
-        register_setting('sdpi_settings', 'sdpi_zapier_webhook_url');
+        register_setting('sdpi_settings', 'sdpi_api_key', array('sanitize_callback' => array($this, 'sanitize_trimmed_text')));
+        register_setting('sdpi_settings', 'sdpi_api_endpoint', array('sanitize_callback' => array($this, 'sanitize_url_field')));
+        register_setting('sdpi_settings', 'sdpi_cache_time', array('sanitize_callback' => array($this, 'sanitize_integer_field')));
+        register_setting('sdpi_settings', 'sdpi_zapier_webhook_url', array('sanitize_callback' => array($this, 'sanitize_url_field')));
+        register_setting('sdpi_settings', 'sdpi_authorize_environment', array('sanitize_callback' => array($this, 'sanitize_authorize_environment')));
+        register_setting('sdpi_settings', 'sdpi_authorize_api_login_id', array('sanitize_callback' => array($this, 'sanitize_trimmed_text')));
+        register_setting('sdpi_settings', 'sdpi_authorize_transaction_key', array('sanitize_callback' => array($this, 'sanitize_trimmed_text')));
+        register_setting('sdpi_settings', 'sdpi_authorize_public_client_key', array('sanitize_callback' => array($this, 'sanitize_trimmed_text')));
+        register_setting('sdpi_settings', 'sdpi_payment_success_url', array('sanitize_callback' => array($this, 'sanitize_url_field')));
+        register_setting('sdpi_settings', 'sdpi_payment_error_url', array('sanitize_callback' => array($this, 'sanitize_url_field')));
 
         add_settings_section(
             'sdpi_api_section',
@@ -79,6 +85,68 @@ class SDPI_Settings {
             array($this, 'zapier_webhook_field_callback'),
             'sdpi_settings',
             'sdpi_integrations_section'
+        );
+
+        add_settings_section(
+            'sdpi_authorize_section',
+            'Pagos con Authorize.net',
+            array($this, 'authorize_section_callback'),
+            'sdpi_settings'
+        );
+
+        add_settings_field(
+            'sdpi_authorize_environment',
+            'Entorno',
+            array($this, 'authorize_environment_field_callback'),
+            'sdpi_settings',
+            'sdpi_authorize_section'
+        );
+
+        add_settings_field(
+            'sdpi_authorize_api_login_id',
+            'API Login ID',
+            array($this, 'authorize_api_login_field_callback'),
+            'sdpi_settings',
+            'sdpi_authorize_section'
+        );
+
+        add_settings_field(
+            'sdpi_authorize_transaction_key',
+            'Transaction Key',
+            array($this, 'authorize_transaction_key_field_callback'),
+            'sdpi_settings',
+            'sdpi_authorize_section'
+        );
+
+        add_settings_field(
+            'sdpi_authorize_public_client_key',
+            'Public Client Key',
+            array($this, 'authorize_public_client_key_field_callback'),
+            'sdpi_settings',
+            'sdpi_authorize_section'
+        );
+
+        add_settings_section(
+            'sdpi_payment_redirects_section',
+            'Redirecciones de Pago',
+            array($this, 'payment_redirects_section_callback'),
+            'sdpi_settings'
+        );
+
+        add_settings_field(
+            'sdpi_payment_success_url',
+            'URL de "Gracias"',
+            array($this, 'payment_success_url_field_callback'),
+            'sdpi_settings',
+            'sdpi_payment_redirects_section'
+        );
+
+        add_settings_field(
+            'sdpi_payment_error_url',
+            'URL de "Error"',
+            array($this, 'payment_error_url_field_callback'),
+            'sdpi_settings',
+            'sdpi_payment_redirects_section'
         );
     }
 
@@ -168,11 +236,66 @@ class SDPI_Settings {
         }
     }
 
+    public function authorize_section_callback() {
+        echo '<p>Configura las credenciales de Authorize.net para procesar pagos directamente desde el formulario. Proporciona las claves correspondientes al entorno seleccionado.</p>';
+    }
+
+    public function authorize_environment_field_callback() {
+        $environment = get_option('sdpi_authorize_environment', 'sandbox');
+        ?>
+        <select name="sdpi_authorize_environment">
+            <option value="sandbox" <?php selected($environment, 'sandbox'); ?>>Sandbox</option>
+            <option value="production" <?php selected($environment, 'production'); ?>>Producción</option>
+        </select>
+        <p class="description">Selecciona el entorno de Authorize.net que utilizará el formulario.</p>
+        <?php
+    }
+
+    public function authorize_api_login_field_callback() {
+        $login_id = get_option('sdpi_authorize_api_login_id');
+        echo '<input type="text" name="sdpi_authorize_api_login_id" value="' . esc_attr($login_id) . '" class="regular-text" autocomplete="off" />';
+        echo '<p class="description">API Login ID proporcionado por Authorize.net.</p>';
+    }
+
+    public function authorize_transaction_key_field_callback() {
+        $transaction_key = get_option('sdpi_authorize_transaction_key');
+        echo '<input type="password" name="sdpi_authorize_transaction_key" value="' . esc_attr($transaction_key) . '" class="regular-text" autocomplete="off" />';
+        echo '<p class="description">Transaction Key generado en Authorize.net. Mantén este valor en secreto.</p>';
+    }
+
+    public function authorize_public_client_key_field_callback() {
+        $client_key = get_option('sdpi_authorize_public_client_key');
+        echo '<input type="text" name="sdpi_authorize_public_client_key" value="' . esc_attr($client_key) . '" class="regular-text" autocomplete="off" />';
+        echo '<p class="description">Public Client Key necesario para generar tokens con Accept.js.</p>';
+    }
+
+    public function payment_redirects_section_callback() {
+        echo '<p>Define las URLs de redirección después de procesar el pago.</p>';
+    }
+
+    public function payment_success_url_field_callback() {
+        $url = get_option('sdpi_payment_success_url');
+        echo '<input type="url" name="sdpi_payment_success_url" value="' . esc_url($url) . '" class="regular-text" placeholder="https://tu-sitio.com/gracias" />';
+        echo '<p class="description">URL a la que se redirige al usuario cuando la transacción es aprobada.</p>';
+    }
+
+    public function payment_error_url_field_callback() {
+        $url = get_option('sdpi_payment_error_url');
+        echo '<input type="url" name="sdpi_payment_error_url" value="' . esc_url($url) . '" class="regular-text" placeholder="https://tu-sitio.com/error" />';
+        echo '<p class="description">URL a la que se redirige al usuario cuando la transacción falla.</p>';
+    }
+
     public function admin_notices() {
         $api_key = get_option('sdpi_api_key');
         if (empty($api_key)) {
             echo '<div class="notice notice-warning is-dismissible">';
             echo '<p><strong>Super Dispatch Pricing Insights:</strong> Please configure your API key in <a href="' . admin_url('options-general.php?page=super-dispatch-pricing') . '">Settings → Super Dispatch Pricing</a> to enable the plugin.</p>';
+            echo '</div>';
+        }
+
+        if (!$this->is_authorize_configured()) {
+            echo '<div class="notice notice-warning is-dismissible">';
+            echo '<p><strong>Super Dispatch Pricing Insights:</strong> Configura tus credenciales de Authorize.net en <a href="' . admin_url('options-general.php?page=super-dispatch-pricing') . '">Settings → Super Dispatch Pricing</a> para habilitar el cobro con tarjeta.</p>';
             echo '</div>';
         }
     }
@@ -191,6 +314,10 @@ class SDPI_Settings {
                 $api_key = get_option('sdpi_api_key');
                 $endpoint = get_option('sdpi_api_endpoint');
                 $zapier_webhook = get_option('sdpi_zapier_webhook_url');
+                $authorize_ready = $this->is_authorize_configured();
+                $authorize_environment = get_option('sdpi_authorize_environment', 'sandbox');
+                $success_url = get_option('sdpi_payment_success_url');
+                $error_url = get_option('sdpi_payment_error_url');
 
                 if (!empty($api_key)) {
                     echo '<p style="color: #00a32a;">✅ <strong>Plugin Active:</strong> API key is configured.</p>';
@@ -208,6 +335,25 @@ class SDPI_Settings {
                     echo '<p style="color: #00a32a;">✅ <strong>Zapier Integration:</strong> Active - Quote data will be sent to Zapier</p>';
                 } else {
                     echo '<p style="color: #f0b849;">ℹ️ <strong>Zapier Integration:</strong> Not configured (optional)</p>';
+                }
+
+                if ($authorize_ready) {
+                    $environment_label = $authorize_environment === 'production' ? 'Producción' : 'Sandbox';
+                    echo '<p style="color: #00a32a;">✅ <strong>Pagos Authorize.net:</strong> Credenciales configuradas (' . esc_html($environment_label) . ').</p>';
+                } else {
+                    echo '<p style="color: #d63638;">❌ <strong>Pagos Authorize.net:</strong> Ingresar API Login ID, Transaction Key y Public Client Key.</p>';
+                }
+
+                if (!empty($success_url)) {
+                    echo '<p style="color: #00a32a;">✅ <strong>URL de “Gracias”:</strong> ' . esc_html($success_url) . '</p>';
+                } else {
+                    echo '<p style="color: #f0b849;">ℹ️ <strong>URL de “Gracias”:</strong> No configurada.</p>';
+                }
+
+                if (!empty($error_url)) {
+                    echo '<p style="color: #00a32a;">✅ <strong>URL de “Error”:</strong> ' . esc_html($error_url) . '</p>';
+                } else {
+                    echo '<p style="color: #f0b849;">ℹ️ <strong>URL de “Error”:</strong> No configurada.</p>';
                 }
                 ?>
             </div>
@@ -239,5 +385,43 @@ class SDPI_Settings {
             </div>
         </div>
         <?php
+    }
+
+    public function sanitize_trimmed_text($value) {
+        if (is_string($value)) {
+            $value = trim($value);
+        } else {
+            $value = '';
+        }
+        return sanitize_text_field($value);
+    }
+
+    public function sanitize_integer_field($value) {
+        $value = intval($value);
+        return $value > 0 ? $value : 300;
+    }
+
+    public function sanitize_url_field($value) {
+        if (!is_string($value)) {
+            return '';
+        }
+        $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+        return esc_url_raw($value);
+    }
+
+    public function sanitize_authorize_environment($value) {
+        $value = is_string($value) ? strtolower(trim($value)) : 'sandbox';
+        return in_array($value, array('sandbox', 'production'), true) ? $value : 'sandbox';
+    }
+
+    private function is_authorize_configured() {
+        $login_id = get_option('sdpi_authorize_api_login_id');
+        $transaction_key = get_option('sdpi_authorize_transaction_key');
+        $client_key = get_option('sdpi_authorize_public_client_key');
+
+        return !empty($login_id) && !empty($transaction_key) && !empty($client_key);
     }
 }

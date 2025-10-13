@@ -29,6 +29,8 @@ class SDPI_Form {
         // Add AJAX handler for payment
         add_action('wp_ajax_sdpi_initiate_payment', array($this, 'ajax_initiate_payment'));
         add_action('wp_ajax_nopriv_sdpi_initiate_payment', array($this, 'ajax_initiate_payment'));
+        add_action('wp_ajax_sdpi_process_payment', array($this, 'ajax_process_payment'));
+        add_action('wp_ajax_nopriv_sdpi_process_payment', array($this, 'ajax_process_payment'));
 
         // Add AJAX handler for additional shipping info
         add_action('wp_ajax_sdpi_save_additional_info', array($this, 'ajax_save_additional_info'));
@@ -37,9 +39,6 @@ class SDPI_Form {
         // Add AJAX handler for maritime additional info
         add_action('wp_ajax_sdpi_save_maritime_info', array($this, 'ajax_save_maritime_info'));
         add_action('wp_ajax_nopriv_sdpi_save_maritime_info', array($this, 'ajax_save_maritime_info'));
-
-        // WooCommerce payment completion hook
-        add_action('woocommerce_payment_complete', array($this, 'handle_payment_complete'));
 
         // Add AJAX handler for client info capture
         add_action('wp_ajax_sdpi_save_client_info', array($this, 'ajax_save_client_info'));
@@ -71,13 +70,104 @@ class SDPI_Form {
             SDPI_VERSION,
             true
         );
-        
+
+        $authorize_ready = $this->is_authorize_ready();
+
         wp_localize_script('sdpi-form-script', 'sdpi_ajax', array(
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('sdpi_nonce'),
             'loading_text' => 'Obteniendo cotizacion...',
             'error_text' => 'Error al obtener cotizacion'
         ));
+
+        wp_localize_script('sdpi-form-script', 'sdpi_payment', array(
+            'enabled' => $authorize_ready,
+            'success_url' => esc_url(get_option('sdpi_payment_success_url')),
+            'error_url' => esc_url(get_option('sdpi_payment_error_url'))
+        ));
+
+        if ($authorize_ready) {
+            wp_enqueue_script(
+                'sdpi-authorize-accept',
+                'https://js.authorize.net/v3/Accept.js',
+                array(),
+                null,
+                true
+            );
+        }
+    }
+
+    /**
+     * Check if Authorize.net credentials are configured
+     */
+    private function is_authorize_ready() {
+        $login_id = get_option('sdpi_authorize_api_login_id');
+        $transaction_key = get_option('sdpi_authorize_transaction_key');
+        $client_key = get_option('sdpi_authorize_public_client_key');
+
+        return !empty($login_id) && !empty($transaction_key) && !empty($client_key);
+    }
+
+    /**
+     * Get Authorize.net environment endpoint
+     */
+    private function get_authorize_endpoint() {
+        $environment = get_option('sdpi_authorize_environment', 'sandbox');
+        return $environment === 'production'
+            ? 'https://api2.authorize.net/xml/v1/request.api'
+            : 'https://apitest.authorize.net/xml/v1/request.api';
+    }
+
+    /**
+     * Split full name into first and last names
+     */
+    private function split_full_name($full_name) {
+        $full_name = trim((string)$full_name);
+        if ($full_name === '') {
+            return array('Cliente', 'SDPI');
+        }
+
+        $parts = preg_split('/\s+/', $full_name);
+        $first = array_shift($parts);
+        $last = !empty($parts) ? implode(' ', $parts) : $first;
+        if ($last === $first) {
+            $last = 'Cliente';
+        }
+
+        return array(
+            sanitize_text_field($first),
+            sanitize_text_field($last)
+        );
+    }
+
+    /**
+     * Build a human-readable payment description
+     */
+    private function build_payment_description($quote_data) {
+        $parts = array('Vehicle Shipping Quote');
+
+        $pickup_zip = isset($quote_data['pickup_zip']) ? sanitize_text_field($quote_data['pickup_zip']) : '';
+        $delivery_zip = isset($quote_data['delivery_zip']) ? sanitize_text_field($quote_data['delivery_zip']) : '';
+        if ($pickup_zip && $delivery_zip) {
+            $parts[] = $pickup_zip . ' → ' . $delivery_zip;
+        }
+
+        $transport = !empty($quote_data['maritime_involved']) ? 'Maritime' : 'Terrestrial';
+        $parts[] = $transport;
+
+        if (isset($quote_data['final_price'])) {
+            $amount = number_format((float)$quote_data['final_price'], 2, '.', '');
+            $parts[] = '$' . $amount . ' USD';
+        }
+
+        $description = implode(' | ', array_filter($parts));
+
+        // Authorize.net limits description length to 255 characters
+        if (strlen($description) > 255) {
+            $description = substr($description, 0, 252) . '...';
+        }
+
+        return $description;
     }
 
     /**
@@ -874,6 +964,37 @@ class SDPI_Form {
                             <button type="button" class="sdpi-pay-btn" id="sdpi-maritime-continue">Guardar y continuar</button>
                         </div>
                     </form>
+
+                    <div class="sdpi-form-card sdpi-review-card sdpi-payment-card" id="sdpi-payment-panel" style="display:none;">
+                        <h3>Pago con tarjeta</h3>
+                        <p class="sdpi-payment-amount">Total a pagar: <span id="sdpi-payment-amount-display">--</span></p>
+                        <form id="sdpi-payment-form" autocomplete="off">
+                            <div class="sdpi-form-group">
+                                <label for="sdpi-card-number">Número de tarjeta</label>
+                                <input type="tel" id="sdpi-card-number" inputmode="numeric" maxlength="25" placeholder="1234 5678 9012 3456" required>
+                            </div>
+                            <div class="sdpi-form-row">
+                                <div class="sdpi-form-group sdpi-col-3">
+                                    <label for="sdpi-card-exp-month">Mes (MM)</label>
+                                    <input type="tel" id="sdpi-card-exp-month" inputmode="numeric" maxlength="2" placeholder="MM" required>
+                                </div>
+                                <div class="sdpi-form-group sdpi-col-3">
+                                    <label for="sdpi-card-exp-year">Año (YYYY)</label>
+                                    <input type="tel" id="sdpi-card-exp-year" inputmode="numeric" maxlength="4" placeholder="YYYY" required>
+                                </div>
+                                <div class="sdpi-form-group sdpi-col-3">
+                                    <label for="sdpi-card-cvv">CVV</label>
+                                    <input type="tel" id="sdpi-card-cvv" inputmode="numeric" maxlength="4" placeholder="123" required>
+                                </div>
+                            </div>
+                            <div class="sdpi-form-group">
+                                <label for="sdpi-card-zip">Código postal (opcional)</label>
+                                <input type="tel" id="sdpi-card-zip" inputmode="numeric" maxlength="10" placeholder="Zip del titular">
+                            </div>
+                            <div class="sdpi-payment-feedback" id="sdpi-payment-feedback" style="display:none;"></div>
+                            <button type="button" class="sdpi-pay-btn" id="sdpi-payment-submit">Pagar ahora</button>
+                        </form>
+                    </div>
                 </div>
 
                 <aside class="sdpi-summary-panel sdpi-review-summary-panel" id="sdpi-review-summary-panel" style="display:none;">
@@ -1651,7 +1772,7 @@ class SDPI_Form {
             'confidence_adjustment' => $final_price_data['confidence_adjustment'] ?? 0,
             'breakdown' => $final_price_data['breakdown'] ?? '',
             'message' => $final_price_data['message'] ?? '',
-            'payment_available' => class_exists('WooCommerce'),
+            'payment_available' => $this->is_authorize_ready(),
             'transport_type' => $involves_maritime ? 'maritime' : 'terrestrial'
         );
 
@@ -2034,82 +2155,324 @@ class SDPI_Form {
     public function ajax_initiate_payment() {
         check_ajax_referer('sdpi_nonce', 'nonce');
 
-        // Check if WooCommerce is active
-        if (!class_exists('WooCommerce')) {
-            wp_send_json_error('WooCommerce is required for payment processing.');
+        if (!$this->is_authorize_ready()) {
+            wp_send_json_error('La pasarela de pago no está configurada.');
             exit;
         }
 
-        $quote_data = json_decode(stripslashes($_POST['quote_data']), true);
-
-        // Update history to 'checkout' status
-        $session = new SDPI_Session();
-        $session_id = $session->get_session_id();
-        if ($session_id) {
-            $history = new SDPI_History();
-            $history->update_to_checkout($session_id);
-        }
-        
-        if (!$quote_data || !isset($quote_data['final_price'])) {
-            wp_send_json_error('Invalid quote data.');
-            exit;
+        $posted_quote = isset($_POST['quote_data']) ? json_decode(stripslashes($_POST['quote_data']), true) : array();
+        if (!is_array($posted_quote)) {
+            $posted_quote = array();
         }
 
-        // Remove previous SDPI quote products from cart
-        if (WC()->cart) {
-            foreach (WC()->cart->get_cart() as $cart_item_key => $cart_item) {
-                $product_id = $cart_item['product_id'];
-                $quote_meta = get_post_meta($product_id, '_sdpi_quote_data', true);
-                if ($quote_meta) {
-                    WC()->cart->remove_cart_item($cart_item_key);
-                }
-            }
-        }
-
-        $final_price = floatval($quote_data['final_price']);
-        $description = 'Vehicle Shipping Quote - $' . number_format($final_price, 2) . ' USD';
-
-        // Create WooCommerce product
-        $product = new WC_Product_Simple();
-        $product->set_name($description);
-        $product->set_regular_price($final_price);
-        $product->set_price($final_price);
-        $product->set_virtual(true);
-        $product->set_downloadable(false);
-        $product->set_catalog_visibility('hidden');
-        $product->set_status('publish');
-        
-        // Add custom meta with quote details
-        $product->update_meta_data('_sdpi_quote_data', $quote_data);
-        
-        $product_id = $product->save();
-
-        if (!$product_id) {
-            wp_send_json_error('Failed to create product.');
-            exit;
-        }
-
-        // Persist status: moving to checkout
         $session = new SDPI_Session();
         $session_id = $this->ensure_quote_session();
+        if (!$session_id) {
+            wp_send_json_error('No se pudo iniciar la sesión de pago. Actualiza la página e inténtalo nuevamente.');
+            exit;
+        }
+
+        $session_row = $session->get($session_id);
+        $stored_quote = array();
+        if ($session_row && isset($session_row['data']['quote']) && is_array($session_row['data']['quote'])) {
+            $stored_quote = $session_row['data']['quote'];
+        }
+
+        if (!empty($posted_quote)) {
+            $stored_quote = array_merge($stored_quote, $posted_quote);
+        }
+
+        if (empty($stored_quote) || !isset($stored_quote['final_price'])) {
+            wp_send_json_error('No se encontró información válida de la cotización.');
+            exit;
+        }
+
+        $amount = floatval($stored_quote['final_price']);
+        if ($amount <= 0) {
+            wp_send_json_error('El monto de la transacción es inválido.');
+            exit;
+        }
+
+        $stored_quote['final_price'] = number_format($amount, 2, '.', '');
+
+        $session->update_data($session_id, array('quote' => $stored_quote));
         $session->set_status($session_id, 'checkout');
 
-        // Store session ID in product meta for later reference
-        $product->add_meta_data('_sdpi_session_id', $session_id, true);
+        // Update history to 'checkout' status
+        $history = new SDPI_History();
+        $history->update_to_checkout($session_id);
 
-        // Add to cart
-        WC()->cart->add_to_cart($product_id, 1);
+        $client_info = array();
+        if ($session_row && isset($session_row['data']['client_info']) && is_array($session_row['data']['client_info'])) {
+            $client_info = $session_row['data']['client_info'];
+        } elseif (!session_id()) {
+            session_start();
+        }
 
-        // Get checkout URL
-        $checkout_url = wc_get_checkout_url();
+        if (empty($client_info) && isset($_SESSION['sdpi_client_info'])) {
+            $client_info = $_SESSION['sdpi_client_info'];
+        }
 
-        wp_send_json_success(array(
-            'checkout_url' => $checkout_url,
-            'product_id' => $product_id
-        ));
+        $response = array(
+            'session_id' => $session_id,
+            'amount' => number_format($amount, 2, '.', ''),
+            'amount_numeric' => round($amount, 2),
+            'currency' => 'USD',
+            'client_key' => get_option('sdpi_authorize_public_client_key'),
+            'api_login_id' => get_option('sdpi_authorize_api_login_id'),
+            'description' => $this->build_payment_description($stored_quote),
+            'customer' => array(
+                'name' => $client_info['name'] ?? '',
+                'email' => $client_info['email'] ?? '',
+                'phone' => $client_info['phone'] ?? ''
+            ),
+            'payment_available' => true
+        );
+
+        wp_send_json_success($response);
         exit;
     }
 
+    /**
+     * AJAX handler for processing Authorize.net payments
+     */
+    public function ajax_process_payment() {
+        check_ajax_referer('sdpi_nonce', 'nonce');
+
+        if (!$this->is_authorize_ready()) {
+            wp_send_json_error('La pasarela de pago no está configurada.');
+            exit;
+        }
+
+        $data_descriptor = isset($_POST['data_descriptor']) ? sanitize_text_field($_POST['data_descriptor']) : '';
+        $data_value = isset($_POST['data_value']) ? sanitize_text_field($_POST['data_value']) : '';
+
+        if (empty($data_descriptor) || empty($data_value)) {
+            wp_send_json_error('Token de pago inválido. Intente nuevamente.');
+            exit;
+        }
+
+        $session = new SDPI_Session();
+        $session_id = $this->ensure_quote_session();
+        if (!$session_id) {
+            wp_send_json_error('Sesión de pago no encontrada. Actualiza la página e inténtalo nuevamente.');
+            exit;
+        }
+
+        $session_row = $session->get($session_id);
+        $session_data = is_array($session_row) ? ($session_row['data'] ?? array()) : array();
+        $quote_data = isset($session_data['quote']) && is_array($session_data['quote']) ? $session_data['quote'] : array();
+
+        if (empty($quote_data) || !isset($quote_data['final_price'])) {
+            wp_send_json_error('No se encontró la cotización asociada al pago.');
+            exit;
+        }
+
+        $amount = floatval($quote_data['final_price']);
+        if ($amount <= 0) {
+            wp_send_json_error('El monto de la transacción es inválido.');
+            exit;
+        }
+
+        $credentials = array(
+            'name' => get_option('sdpi_authorize_api_login_id'),
+            'transactionKey' => get_option('sdpi_authorize_transaction_key')
+        );
+
+        $client_info = isset($session_data['client_info']) && is_array($session_data['client_info'])
+            ? $session_data['client_info']
+            : array();
+        if (empty($client_info) && isset($_SESSION['sdpi_client_info'])) {
+            $client_info = $_SESSION['sdpi_client_info'];
+        }
+
+        $shipping_details = isset($session_data['shipping']) && is_array($session_data['shipping'])
+            ? $session_data['shipping']
+            : array();
+
+        list($first_name, $last_name) = $this->split_full_name($client_info['name'] ?? '');
+
+        $billing = array(
+            'firstName' => $first_name,
+            'lastName' => $last_name
+        );
+
+        if (!empty($client_info['phone'])) {
+            $billing['phoneNumber'] = sanitize_text_field($client_info['phone']);
+        }
+
+        if (isset($shipping_details['pickup'])) {
+            $pickup = $shipping_details['pickup'];
+            if (!empty($pickup['street'])) {
+                $billing['address'] = sanitize_text_field($pickup['street']);
+            }
+            if (!empty($pickup['city'])) {
+                $billing['city'] = sanitize_text_field($pickup['city']);
+            }
+            if (!empty($pickup['zip'])) {
+                $billing['zip'] = sanitize_text_field($pickup['zip']);
+            }
+            if (!empty($pickup['country'])) {
+                $billing['country'] = sanitize_text_field($pickup['country']);
+            }
+        }
+
+        if (empty($billing['country'])) {
+            $billing['country'] = 'US';
+        }
+
+        $invoice = substr(preg_replace('/[^A-Za-z0-9]/', '', $session_id), 0, 20);
+        $description = $this->build_payment_description($quote_data);
+
+        $transaction_request = array(
+            'transactionType' => 'authCaptureTransaction',
+            'amount' => number_format($amount, 2, '.', ''),
+            'payment' => array(
+                'opaqueData' => array(
+                    'dataDescriptor' => $data_descriptor,
+                    'dataValue' => $data_value
+                )
+            ),
+            'order' => array(
+                'invoiceNumber' => $invoice,
+                'description' => $description
+            ),
+            'customer' => array(
+                'id' => $invoice,
+                'email' => isset($client_info['email']) ? sanitize_email($client_info['email']) : ''
+            )
+        );
+
+        if (!empty($billing['address']) || !empty($billing['city']) || !empty($billing['zip'])) {
+            $transaction_request['billTo'] = $billing;
+        } else {
+            // Ensure we at least send names if address is missing
+            $transaction_request['billTo'] = array(
+                'firstName' => $first_name,
+                'lastName' => $last_name,
+                'country' => $billing['country']
+            );
+        }
+
+        $customer_ip = isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field($_SERVER['REMOTE_ADDR']) : '';
+        if (!empty($customer_ip)) {
+            $transaction_request['customerIP'] = $customer_ip;
+        }
+
+        $request_payload = array(
+            'createTransactionRequest' => array(
+                'merchantAuthentication' => $credentials,
+                'transactionRequest' => $transaction_request
+            )
+        );
+
+        $response = wp_remote_post($this->get_authorize_endpoint(), array(
+            'headers' => array('Content-Type' => 'application/json'),
+            'body' => wp_json_encode($request_payload),
+            'timeout' => 45
+        ));
+
+        if (is_wp_error($response)) {
+            if (WP_DEBUG) {
+                error_log('SDPI Authorize.net Error: ' . $response->get_error_message());
+            }
+            wp_send_json_error('Error de conexión con Authorize.net. Intente nuevamente.');
+            exit;
+        }
+
+        $response_body = json_decode(wp_remote_retrieve_body($response), true);
+        if (!is_array($response_body)) {
+            if (WP_DEBUG) {
+                error_log('SDPI Authorize.net Error: Invalid response body');
+            }
+            wp_send_json_error('Respuesta inválida de Authorize.net.');
+            exit;
+        }
+
+        $messages = $response_body['messages'] ?? array();
+        $result_code = isset($messages['resultCode']) ? $messages['resultCode'] : '';
+        $transaction_response = $response_body['transactionResponse'] ?? array();
+        $response_code = isset($transaction_response['responseCode']) ? (string)$transaction_response['responseCode'] : '';
+
+        if (strtoupper($result_code) !== 'OK' || $response_code !== '1') {
+            $error_message = 'Transacción rechazada.';
+
+            if (!empty($transaction_response['errors'][0]['errorText'])) {
+                $error_message = sanitize_text_field($transaction_response['errors'][0]['errorText']);
+            } elseif (!empty($messages['message'][0]['text'])) {
+                $error_message = sanitize_text_field($messages['message'][0]['text']);
+            }
+
+            if (WP_DEBUG) {
+                error_log('SDPI Authorize.net Decline: ' . $error_message);
+            }
+
+            $error_url = get_option('sdpi_payment_error_url');
+            wp_send_json_error(array(
+                'message' => $error_message,
+                'redirect_url' => !empty($error_url) ? esc_url($error_url) : ''
+            ));
+            exit;
+        }
+
+        $transaction_id = isset($transaction_response['transId']) ? sanitize_text_field($transaction_response['transId']) : '';
+        $auth_code = isset($transaction_response['authCode']) ? sanitize_text_field($transaction_response['authCode']) : '';
+
+        $session->set_status($session_id, 'completado');
+        $session->update_data($session_id, array(
+            'payment' => array(
+                'transaction_id' => $transaction_id,
+                'auth_code' => $auth_code,
+                'status' => 'approved',
+                'processed_at' => current_time('mysql')
+            )
+        ));
+
+        $history = new SDPI_History();
+        $history->update_to_completado($session_id);
+
+        $extra_data = array(
+            'client' => $client_info,
+            'shipping' => $shipping_details,
+            'maritime_details' => isset($session_data['maritime_details']) ? $session_data['maritime_details'] : ($quote_data['maritime_details'] ?? array()),
+            'transport_type' => isset($session_data['transport_type']) ? $session_data['transport_type'] : (!empty($quote_data['maritime_involved']) ? 'maritime' : 'terrestrial'),
+            'session_id' => $session_id,
+            'payment' => array(
+                'transaction_id' => $transaction_id,
+                'auth_code' => $auth_code
+            )
+        );
+
+        $this->send_to_zapier(
+            $quote_data['pickup_zip'] ?? '',
+            $quote_data['delivery_zip'] ?? '',
+            $quote_data['trailer_type'] ?? '',
+            $quote_data['vehicle_type'] ?? '',
+            !empty($quote_data['vehicle_inoperable']),
+            !empty($quote_data['vehicle_electric']),
+            $quote_data['vehicle_make'] ?? '',
+            $quote_data['vehicle_model'] ?? '',
+            $quote_data['vehicle_year'] ?? '',
+            $quote_data,
+            !empty($quote_data['maritime_involved']),
+            $extra_data
+        );
+
+        // Mark Zapier status as sent
+        if (method_exists($history, 'mark_zapier_status')) {
+            $history->mark_zapier_status($session_id, 'sent');
+        }
+
+        $success_url = get_option('sdpi_payment_success_url');
+
+        wp_send_json_success(array(
+            'transaction_id' => $transaction_id,
+            'auth_code' => $auth_code,
+            'redirect_url' => !empty($success_url) ? esc_url($success_url) : '',
+            'message' => 'Pago procesado exitosamente.'
+        ));
+        exit;
+    }
     /**
      * Send quote data to Zapier webhook
      */
@@ -2213,7 +2576,7 @@ class SDPI_Form {
             'session_id' => $session_identifier,
             'quote_date' => current_time('mysql'),
             'quote_timestamp' => current_time('timestamp'),
-            'payment_available' => class_exists('WooCommerce')
+            'payment_available' => $this->is_authorize_ready()
         );
 
         if (!empty($shipping_details)) {
@@ -2263,70 +2626,6 @@ class SDPI_Form {
         }
     }
 
-    /**
-     * Handle WooCommerce payment completion
-     */
-    public function handle_payment_complete($order_id) {
-        $order = wc_get_order($order_id);
-        if (!$order) {
-            return;
-        }
-
-        // Check if this is an SDPI order by looking for our meta data
-        $session_id = $order->get_meta('_sdpi_session_id');
-        if (!$session_id) {
-            return;
-        }
-
-        // Update history to 'completado' status
-        $history = new SDPI_History();
-        $history->update_to_completado($session_id);
-
-        // Send to Zapier if configured
-        $this->send_to_zapier_from_order($order);
-    }
-
-    /**
-     * Send order data to Zapier webhook
-     */
-    private function send_to_zapier_from_order($order) {
-        // Get Zapier webhook URL from settings
-        $zapier_webhook_url = get_option('sdpi_zapier_webhook_url');
-        if (empty($zapier_webhook_url)) {
-            return;
-        }
-
-        // Prepare data for Zapier
-        $zapier_data = array(
-            'order_id' => $order->get_id(),
-            'order_status' => $order->get_status(),
-            'total' => $order->get_total(),
-            'client_name' => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
-            'client_email' => $order->get_billing_email(),
-            'client_phone' => $order->get_billing_phone(),
-            'payment_date' => $order->get_date_paid() ? $order->get_date_paid()->format('Y-m-d H:i:s') : null,
-            'quote_date' => current_time('mysql'),
-            'quote_timestamp' => current_time('timestamp')
-        );
-
-        // Send data to Zapier (non-blocking)
-        $response = wp_remote_post($zapier_webhook_url, array(
-            'body' => json_encode($zapier_data),
-            'headers' => array(
-                'Content-Type' => 'application/json',
-                'User-Agent' => 'SDPI Plugin/1.0'
-            ),
-            'timeout' => 5,
-            'blocking' => false
-        ));
-
-        // Log any errors (only in debug mode)
-        if (is_wp_error($response) && WP_DEBUG) {
-            error_log('SDPI Zapier Error: ' . $response->get_error_message());
-        } elseif (WP_DEBUG) {
-            error_log('SDPI Zapier Success: Order data sent to webhook');
-        }
-    }
 }
 
 

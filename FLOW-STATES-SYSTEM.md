@@ -122,7 +122,7 @@ Este script:
 ### Alertas
 - Usuarios atascados en un estado por mucho tiempo
 - Errores en transiciones de estado
-- Fallos en la integración con WooCommerce
+- Fallos en la integración con Authorize.net
 
 ## Mantenimiento
 

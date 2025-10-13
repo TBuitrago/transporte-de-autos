@@ -27,6 +27,8 @@
         checklist: $('#sdpi-additional-info .sdpi-review-checklist').html(),
         reviewFooter: $('#sdpi-review-summary-footer-text').text()
     };
+    var paymentContext = null;
+    var paymentEnabled = typeof sdpi_payment !== 'undefined' && !!sdpi_payment.enabled;
 
     function setProgressStep(step) {
         currentProgressStep = step;
@@ -67,7 +69,9 @@
         var $inlineBtn = $('#sdpi-inline-continue-btn');
         if (!$btn.length) { return; }
 
-        if (data && data.payment_available) {
+        var canPay = paymentEnabled && data && data.payment_available;
+
+        if (canPay) {
             if ($actions.length) { $actions.show(); }
             $btn.show().prop('disabled', false).data('quote', data);
             try {
@@ -92,6 +96,7 @@
             if ($actions.length) { $actions.hide(); }
             $btn.hide().prop('disabled', false).removeData('quote');
             $btn.removeAttr('data-quote');
+            resetPaymentPanel();
 
             if ($inlineBtn.length) {
                 $inlineBtn.hide().prop('disabled', false).removeData('quote').removeAttr('data-quote');
@@ -120,6 +125,76 @@
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         }) + ' USD';
+    }
+
+    function resetPaymentPanel() {
+        paymentContext = null;
+        var $panel = $('#sdpi-payment-panel');
+        if ($panel.length) {
+            $panel.hide();
+        }
+        var $form = $('#sdpi-payment-form');
+        if ($form.length && $form[0]) {
+            $form[0].reset();
+        }
+        var $feedback = $('#sdpi-payment-feedback');
+        if ($feedback.length) {
+            $feedback.hide().removeClass('error success').css('color', '').text('');
+        }
+        $('#sdpi-payment-amount-display').text('--');
+    }
+
+    function showPaymentPanel(context) {
+        if (!paymentEnabled || !context) {
+            return;
+        }
+
+        paymentContext = context;
+        var $panel = $('#sdpi-payment-panel');
+        if (!$panel.length) {
+            return;
+        }
+
+        var formattedAmount = formatCurrency(context.amount);
+        if (!formattedAmount && context.amount_numeric) {
+            formattedAmount = formatCurrency(context.amount_numeric);
+        }
+        if (!formattedAmount && typeof context.amount === 'string') {
+            formattedAmount = '$' + context.amount;
+        }
+
+        $('#sdpi-payment-amount-display').text(formattedAmount || '');
+
+        var $form = $('#sdpi-payment-form');
+        if ($form.length && $form[0]) {
+            $form[0].reset();
+        }
+
+        var $feedback = $('#sdpi-payment-feedback');
+        if ($feedback.length) {
+            $feedback.hide().removeClass('error success').css('color', '').text('');
+        }
+
+        $panel.show();
+        updateSummaryFooter('info', 'Ingresa los datos de tu tarjeta para completar el pago.');
+    }
+
+    function showPaymentError(message) {
+        var finalMessage = message || 'No se pudo procesar el pago. Inténtalo nuevamente.';
+        var $feedback = $('#sdpi-payment-feedback');
+        if ($feedback.length) {
+            $feedback.removeClass('success').addClass('error').css('color', '#d63638').text(finalMessage).show();
+        }
+        updateSummaryFooter('error', finalMessage);
+    }
+
+    function showPaymentSuccess(message) {
+        var finalMessage = message || 'Pago procesado exitosamente.';
+        var $feedback = $('#sdpi-payment-feedback');
+        if ($feedback.length) {
+            $feedback.removeClass('error').addClass('success').css('color', '#00a32a').text(finalMessage).show();
+        }
+        updateSummaryFooter('success', finalMessage);
     }
 
     function setSummaryValue(selector, value) {
@@ -655,6 +730,7 @@
     
     // FUNCIÓN MODIFICADA: Mostrar resultados de cotización
     function displayQuoteResults(data) {
+        resetPaymentPanel();
         data.transport_type = data.transport_type || (data.maritime_involved ? 'maritime' : 'terrestrial');
 
         var formattedPrice = formatCurrency(data.final_price);
@@ -680,17 +756,35 @@
             },
             dataType: 'json',
             success: function(response) {
-                if (response.success && response.data && response.data.checkout_url) {
-                    window.location.href = response.data.checkout_url;
+                if (response && response.success && response.data) {
+                    var paymentData = response.data;
+                    if (window.currentQuoteData) {
+                        window.currentQuoteData.session_id = paymentData.session_id || window.currentQuoteData.session_id;
+                    }
+                    showPaymentPanel(paymentData);
+                    if (btn) {
+                        btn.prop('disabled', false).text('Editar información');
+                        btn.data('quote', quoteData);
+                    }
                 } else {
-                    alert('Error al iniciar el pago: ' + ((response && response.data) || 'Error desconocido'));
+                    var errorMessage = 'No fue posible preparar el pago.';
+                    if (response && response.data) {
+                        if (typeof response.data === 'string') {
+                            errorMessage = response.data;
+                        } else if (response.data.message) {
+                            errorMessage = response.data.message;
+                        }
+                    }
+                    alert(errorMessage);
+                    updateSummaryFooter('error', errorMessage);
                     if (btn) {
                         btn.prop('disabled', false).text(originalText);
                     }
                 }
             },
             error: function() {
-                alert('Error de conexion al iniciar el pago.');
+                var message = 'Error de conexión al preparar el pago.';
+                alert(message);
                 updateSummaryFooter('error', 'Error de conexion. Por favor intente nuevamente.');
                 if (btn) {
                     btn.prop('disabled', false).text(originalText);
@@ -698,7 +792,158 @@
             }
         });
     }
-    
+
+    function handleAuthorizeResponse(response, $button) {
+        if (response && response.messages && response.messages.resultCode === 'Ok' && response.opaqueData) {
+            updateSummaryFooter('info', 'Procesando tu pago...');
+            sendPaymentToServer(response.opaqueData.dataDescriptor, response.opaqueData.dataValue, $button);
+            return;
+        }
+
+        var message = 'No se pudo validar la tarjeta. Verifica los datos ingresados.';
+        if (response && response.messages && response.messages.message && response.messages.message[0]) {
+            message = response.messages.message[0].text;
+        }
+        showPaymentError(message);
+        if ($button) {
+            $button.prop('disabled', false).text('Pagar ahora');
+        }
+    }
+
+    function sendPaymentToServer(descriptor, value, $button) {
+        $.ajax({
+            url: sdpi_ajax.ajax_url,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'sdpi_process_payment',
+                nonce: sdpi_ajax.nonce,
+                data_descriptor: descriptor,
+                data_value: value,
+                session_id: paymentContext && paymentContext.session_id ? paymentContext.session_id : ''
+            },
+            success: function(response) {
+                if (response && response.success && response.data) {
+                    var successMessage = response.data.message || 'Pago procesado exitosamente.';
+                    showPaymentSuccess(successMessage);
+                    paymentContext = null;
+                    var redirectUrl = response.data.redirect_url;
+                    if (!redirectUrl && typeof sdpi_payment !== 'undefined' && sdpi_payment.success_url) {
+                        redirectUrl = sdpi_payment.success_url;
+                    }
+                    if (redirectUrl) {
+                        window.location.href = redirectUrl;
+                        return;
+                    }
+                } else {
+                    var errorData = response ? response.data : null;
+                    var errorMessage = 'El pago fue rechazado.';
+                    if (typeof errorData === 'string') {
+                        errorMessage = errorData;
+                    } else if (errorData && errorData.message) {
+                        errorMessage = errorData.message;
+                    }
+                    showPaymentError(errorMessage);
+                    var errorRedirect = errorData && errorData.redirect_url ? errorData.redirect_url : '';
+                    if (!errorRedirect && typeof sdpi_payment !== 'undefined' && sdpi_payment.error_url) {
+                        errorRedirect = sdpi_payment.error_url;
+                    }
+                    if (errorRedirect) {
+                        window.location.href = errorRedirect;
+                        return;
+                    }
+                }
+            },
+            error: function() {
+                showPaymentError('Error de conexión al procesar el pago.');
+            },
+            complete: function() {
+                if ($button) {
+                    $button.prop('disabled', false).text('Pagar ahora');
+                }
+                $('#sdpi-card-number').val('');
+                $('#sdpi-card-cvv').val('');
+            }
+        });
+    }
+
+    $(document).on('click', '#sdpi-payment-submit', function() {
+        if (!paymentEnabled) {
+            showPaymentError('Los pagos no están disponibles en este momento.');
+            return;
+        }
+        if (!paymentContext || !paymentContext.client_key || !paymentContext.api_login_id) {
+            showPaymentError('No se pudo obtener la configuración de pago. Guarda nuevamente la información anterior.');
+            return;
+        }
+
+        var $button = $(this);
+        var cardNumber = ($('#sdpi-card-number').val() || '').replace(/\s+/g, '');
+        var expMonth = ($('#sdpi-card-exp-month').val() || '').replace(/\D+/g, '');
+        var expYear = ($('#sdpi-card-exp-year').val() || '').replace(/\D+/g, '');
+        var cvv = ($('#sdpi-card-cvv').val() || '').replace(/\D+/g, '');
+        var zip = ($('#sdpi-card-zip').val() || '').replace(/\s+/g, '');
+
+        if (!/^\d{13,19}$/.test(cardNumber)) {
+            showPaymentError('Número de tarjeta inválido.');
+            return;
+        }
+        if (!/^\d{1,2}$/.test(expMonth)) {
+            showPaymentError('Mes de expiración inválido.');
+            return;
+        }
+        if (!/^\d{2,4}$/.test(expYear)) {
+            showPaymentError('Año de expiración inválido.');
+            return;
+        }
+        if (!/^\d{3,4}$/.test(cvv)) {
+            showPaymentError('Código de seguridad inválido.');
+            return;
+        }
+
+        if (expMonth.length === 1) {
+            expMonth = '0' + expMonth;
+        }
+        if (expYear.length === 2) {
+            expYear = '20' + expYear;
+        }
+
+        var authData = {
+            clientKey: paymentContext.client_key,
+            apiLoginID: paymentContext.api_login_id
+        };
+
+        var cardData = {
+            cardNumber: cardNumber,
+            month: expMonth,
+            year: expYear,
+            cardCode: cvv
+        };
+
+        if (zip) {
+            cardData.zip = zip;
+        }
+
+        var secureData = {
+            authData: authData,
+            cardData: cardData
+        };
+
+        $button.prop('disabled', true).text('Validando...');
+        updateSummaryFooter('info', 'Validando los datos de la tarjeta...');
+        $('#sdpi-payment-feedback').hide();
+
+        if (typeof Accept === 'undefined' || typeof Accept.dispatchData !== 'function') {
+            showPaymentError('No se pudo cargar la librería de pagos. Actualiza la página e inténtalo nuevamente.');
+            $button.prop('disabled', false).text('Pagar ahora');
+            return;
+        }
+
+        Accept.dispatchData(secureData, function(response) {
+            handleAuthorizeResponse(response, $button);
+        });
+    });
+
     // Clear form button
     $('<button type="button" class="sdpi-clear-btn">Limpiar Formulario</button>').insertAfter('#sdpi-submit-btn');
     
@@ -712,10 +957,14 @@
         updateLiveSummary();
         setProgressStep(1);
         unlockPricingForm();
+        resetPaymentPanel();
     });
 
     // Handle payment button click
     $(document).on('click', '.sdpi-pay-btn', function() {
+        if ($(this).attr('id') === 'sdpi-payment-submit') {
+            return;
+        }
         var quoteData = $(this).data('quote') || {};
         quoteData.transport_type = quoteData.transport_type || (quoteData.maritime_involved ? 'maritime' : 'terrestrial');
         var isMaritime = quoteData.transport_type === 'maritime';
@@ -968,6 +1217,7 @@
         $('#sdpi-summary-panel').show();
         $('#sdpi-review-summary-panel').hide();
         updateSummaryFooter('info', defaultSummaryFooter);
+        resetPaymentPanel();
     });
 
     $(document).on('click', '#sdpi-maritime-continue', function() {
@@ -1075,6 +1325,7 @@
     unlockPricingForm();
     setSummaryPrice('');
     toggleContinueButton();
+    resetPaymentPanel();
     resetReviewSummary();
     updateSummaryFooter('info', defaultSummaryFooter);
     updateLiveSummary();

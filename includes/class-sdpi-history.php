@@ -1561,6 +1561,14 @@ class SDPI_History {
             }
         }
 
+        $maritime_details = array();
+        if (!empty($quote->maritime_details)) {
+            $decoded_maritime_details = json_decode($quote->maritime_details, true);
+            if (is_array($decoded_maritime_details)) {
+                $maritime_details = $decoded_maritime_details;
+            }
+        }
+
         $created_at = $quote->created_at ? date('d/m/Y H:i:s', strtotime($quote->created_at)) : '';
         $client_captured = $quote->client_info_captured_at ? date('d/m/Y H:i', strtotime($quote->client_info_captured_at)) : '';
         $shipping_updated = !empty($additional_shipping['saved_at']) ? date('d/m/Y H:i', strtotime($additional_shipping['saved_at'])) : '';
@@ -1812,7 +1820,47 @@ class SDPI_History {
                 </article>
             </section>
 
-            <?php if ($quote->maritime_involved) : ?>
+            <?php if ($quote->maritime_involved) :
+                $direction_label = '';
+                if (!empty($maritime_details['direction'])) {
+                    switch ($maritime_details['direction']) {
+                        case 'usa_to_pr':
+                            $direction_label = 'USA → Puerto Rico';
+                            break;
+                        case 'pr_to_usa':
+                            $direction_label = 'Puerto Rico → USA';
+                            break;
+                        case 'pr_pr':
+                            $direction_label = 'Puerto Rico ↔ Puerto Rico';
+                            break;
+                        default:
+                            $direction_label = str_replace('_', ' ', strtoupper($maritime_details['direction']));
+                    }
+                }
+
+                $contact_labels = array(
+                    'name' => 'Nombre',
+                    'street' => 'Direcci&oacute;n',
+                    'city' => 'Ciudad',
+                    'state' => 'Estado',
+                    'country' => 'Pa&iacute;s',
+                    'zip' => 'ZIP',
+                    'phone1' => 'Tel&eacute;fono 1',
+                    'phone2' => 'Tel&eacute;fono 2'
+                );
+                $vehicle_labels = array(
+                    'conditions' => 'Condici&oacute;n',
+                    'fuel_type' => 'Tipo de combustible',
+                    'unit_value' => 'Valor declarado',
+                    'color' => 'Color',
+                    'dimensions' => 'Dimensiones'
+                );
+                $other_labels = array(
+                    'title' => 'T&iacute;tulo',
+                    'registration' => 'Registro',
+                    'id' => 'Identificaci&oacute;n'
+                );
+            ?>
                 <section class="sdpi-modal-section">
                     <h3 class="sdpi-modal-section-title">Informaci&oacute;n Mar&iacute;tima</h3>
                     <article class="sdpi-modal-card is-accent">
@@ -1834,7 +1882,109 @@ class SDPI_History {
                                 <span class="sdpi-modal-value">$<?php echo number_format((float) $quote->total_terrestrial_cost, 2); ?></span>
                             </div>
                         </div>
+                        <?php if ($direction_label) : ?>
+                            <div class="sdpi-modal-note">Direcci&oacute;n: <?php echo esc_html($direction_label); ?></div>
+                        <?php endif; ?>
                     </article>
+                    <?php
+                        $contact_sections = array(
+                            'shipper' => 'Shipper Information',
+                            'consignee' => 'Consignee Information',
+                            'pickup' => 'Pick Up Information',
+                            'dropoff' => 'Drop Off Information'
+                        );
+                        $has_contact_details = false;
+                        foreach ($contact_sections as $section_key => $section_title) {
+                            if (!empty($maritime_details[$section_key]) && is_array($maritime_details[$section_key])) {
+                                $filtered = array_filter($maritime_details[$section_key], function($value) {
+                                    return is_string($value) ? trim($value) !== '' : !empty($value);
+                                });
+                                if (!empty($filtered)) {
+                                    $has_contact_details = true;
+                                    break;
+                                }
+                            }
+                        }
+                        $has_vehicle_details = !empty(array_filter(
+                            isset($maritime_details['vehicle']) && is_array($maritime_details['vehicle']) ? $maritime_details['vehicle'] : array(),
+                            function($value) {
+                                return is_string($value) ? trim($value) !== '' : !empty($value);
+                            }
+                        ));
+                        $has_other_details = !empty(array_filter(
+                            isset($maritime_details['others']) && is_array($maritime_details['others']) ? $maritime_details['others'] : array(),
+                            function($value) {
+                                return is_string($value) ? trim($value) !== '' : !empty($value);
+                            }
+                        ));
+                    ?>
+                    <?php if ($has_contact_details || $has_vehicle_details || $has_other_details) : ?>
+                        <article class="sdpi-modal-card">
+                            <?php foreach ($contact_sections as $section_key => $section_title) :
+                                if (empty($maritime_details[$section_key]) || !is_array($maritime_details[$section_key])) {
+                                    continue;
+                                }
+                                $section_values = array_filter($maritime_details[$section_key], function($value) {
+                                    return is_string($value) ? trim($value) !== '' : !empty($value);
+                                });
+                                if (empty($section_values)) {
+                                    continue;
+                                }
+                            ?>
+                                <div class="sdpi-modal-subcard">
+                                    <h4 class="sdpi-modal-subcard-title"><?php echo esc_html($section_title); ?></h4>
+                                    <div class="sdpi-modal-grid sdpi-modal-grid--two sdpi-modal-grid--compact">
+                                        <?php foreach ($contact_labels as $field_key => $field_label) :
+                                            if (empty($maritime_details[$section_key][$field_key])) {
+                                                continue;
+                                            }
+                                        ?>
+                                            <div class="sdpi-modal-field">
+                                                <span class="sdpi-modal-label"><?php echo esc_html($field_label); ?></span>
+                                                <span class="sdpi-modal-value"><?php echo esc_html($maritime_details[$section_key][$field_key]); ?></span>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+
+                            <?php if ($has_vehicle_details) : ?>
+                                <div class="sdpi-modal-subcard">
+                                    <h4 class="sdpi-modal-subcard-title">Vehicle Information</h4>
+                                    <div class="sdpi-modal-grid sdpi-modal-grid--two sdpi-modal-grid--compact">
+                                        <?php foreach ($vehicle_labels as $field_key => $field_label) :
+                                            if (empty($maritime_details['vehicle'][$field_key])) {
+                                                continue;
+                                            }
+                                        ?>
+                                            <div class="sdpi-modal-field">
+                                                <span class="sdpi-modal-label"><?php echo esc_html($field_label); ?></span>
+                                                <span class="sdpi-modal-value"><?php echo esc_html($maritime_details['vehicle'][$field_key]); ?></span>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+
+                            <?php if ($has_other_details) : ?>
+                                <div class="sdpi-modal-subcard">
+                                    <h4 class="sdpi-modal-subcard-title">Otros</h4>
+                                    <div class="sdpi-modal-grid sdpi-modal-grid--two sdpi-modal-grid--compact">
+                                        <?php foreach ($other_labels as $field_key => $field_label) :
+                                            if (empty($maritime_details['others'][$field_key])) {
+                                                continue;
+                                            }
+                                        ?>
+                                            <div class="sdpi-modal-field">
+                                                <span class="sdpi-modal-label"><?php echo esc_html($field_label); ?></span>
+                                                <span class="sdpi-modal-value"><?php echo esc_html($maritime_details['others'][$field_key]); ?></span>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                        </article>
+                    <?php endif; ?>
                 </section>
             <?php endif; ?>
 

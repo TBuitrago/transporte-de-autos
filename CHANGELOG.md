@@ -189,3 +189,4 @@
 ---
 
 **Nota**: Este changelog sigue las convenciones de [Keep a Changelog](https://keepachangelog.com/).
+

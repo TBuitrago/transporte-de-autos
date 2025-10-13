@@ -117,3 +117,5 @@ Modificar el flujo de cotizaciÃ³n para que el cliente primero llene los datos de
 
 
 
+- El flujo oversea oculta el formulario terrestre y reutiliza solo los campos de shipper/consignee/pick-up/drop-off.
+- El historial y las cargas a Zapier incluyen ahora los detalles completos capturados en el formulario marítimo.

@@ -15,6 +15,7 @@ Plugin de WordPress que permite a los clientes cotizar en tiempo real el precio 
 - ✅ Interfaz responsive y moderna
 - ✅ Validación en tiempo real
 - 🚫 Desglose detallado del precio disponible solo vía historial administrativo (no se muestra al usuario final)
+- ✅ Formularios diferenciados para transporte terrestre y maritimo, con campos específicos para envíos overseas
 
 ## Instalación
 1. Subir el plugin a `/wp-content/plugins/super-dispatch-pricing-insights/`

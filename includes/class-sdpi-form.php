@@ -1513,7 +1513,8 @@ class SDPI_Form {
         wp_send_json_success(array(
             'message' => 'Informacion maritima guardada exitosamente.',
             'maritime_details' => $maritime_details,
-            'direction' => $direction
+            'direction' => $direction,
+            'shipping_summary' => $maritime_shipping_summary
         ));
         exit;
     }

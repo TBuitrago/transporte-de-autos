@@ -21,6 +21,12 @@
     var currentProgressStep = 1;
     var formLocked = false;
     var defaultSummaryFooter = 'Completa el formulario para calcular tu cotizacion y continuar.';
+    var additionalInfoDefaults = {
+        title: $('#sdpi-additional-info .sdpi-review-intro h3').text(),
+        subtitle: $('#sdpi-additional-info .sdpi-review-intro p').text(),
+        checklist: $('#sdpi-additional-info .sdpi-review-checklist').html(),
+        reviewFooter: $('#sdpi-review-summary-footer-text').text()
+    };
 
     function setProgressStep(step) {
         currentProgressStep = step;
@@ -713,6 +719,12 @@
         var quoteData = $(this).data('quote') || {};
         quoteData.transport_type = quoteData.transport_type || (quoteData.maritime_involved ? 'maritime' : 'terrestrial');
         var isMaritime = quoteData.transport_type === 'maritime';
+        var $additionalInfoContainer = $('#sdpi-additional-info');
+        var $inlandForm = $('#sdpi-additional-info-form');
+        var $maritimeForm = $('#sdpi-maritime-info-form');
+        var $introTitle = $('#sdpi-additional-info .sdpi-review-intro h3');
+        var $introSubtitle = $('#sdpi-additional-info .sdpi-review-intro p');
+        var $introChecklist = $('#sdpi-additional-info .sdpi-review-checklist');
 
         try {
             var pickupLabel = quoteData.pickup_city ? (quoteData.pickup_city + ' (' + quoteData.pickup_zip + ')') : ($('#sdpi_pickup_city').val() + ' (' + $('#sdpi_pickup_zip').val() + ')');
@@ -750,9 +762,16 @@
                 price: formattedPrice
             });
 
+            if ($additionalInfoContainer.length) {
+                $additionalInfoContainer.attr('data-transport', isMaritime ? 'maritime' : 'terrestrial');
+            }
+
             $('#sdpi-summary-panel').hide();
             $('#sdpi-review-summary-panel').show();
-            updateSummaryFooter('info', 'Completa la informacion de recogida y entrega para continuar.');
+            var summaryFooterMessage = isMaritime
+                ? 'Completa la informacion maritima para continuar.'
+                : 'Completa la informacion de recogida y entrega para continuar.';
+            updateSummaryFooter('info', summaryFooterMessage);
 
             $('#sdpi_ai_vehicle_year').val(vehicleYear);
             $('#sdpi_ai_vehicle_make').val(vehicleMake);
@@ -774,8 +793,18 @@
 
             if (isMaritime) {
                 $('#sdpi_transport_type').val('maritime');
-                $('#sdpi-additional-info-form').hide();
-                $('#sdpi-maritime-info-form').show();
+                $inlandForm.addClass('sdpi-hidden').hide();
+                $maritimeForm.removeClass('sdpi-hidden').show();
+                if ($introTitle.length) {
+                    $introTitle.text('Informacion adicional para transporte maritimo');
+                }
+                if ($introSubtitle.length) {
+                    $introSubtitle.text('Completa los datos requeridos para coordinar el envio maritimo.');
+                }
+                if ($introChecklist.length) {
+                    $introChecklist.html('<li>Verifica los datos del shipper y consignee.</li><li>Confirma los detalles de Pick Up y Drop Off seg&uacute;n corresponda.</li><li>Guarda los cambios para generar el enlace de pago.</li>');
+                }
+                $('#sdpi-review-summary-footer-text').text(summaryFooterMessage);
 
                 var direction = quoteData.maritime_direction || '';
                 if (!direction) {
@@ -819,10 +848,22 @@
                 $('#sdpi-maritime-info-form').data('quote', quoteData);
             } else {
                 $('#sdpi_transport_type').val('terrestrial');
-                $('#sdpi-maritime-info-form').hide();
+                $maritimeForm.hide();
                 toggleMaritimeSection('#sdpi-pickup-section', false, maritimePickupFields);
                 toggleMaritimeSection('#sdpi-dropoff-section', false, maritimeDropoffFields);
-                $('#sdpi-additional-info-form').show();
+                $inlandForm.removeClass('sdpi-hidden').show();
+                if ($introTitle.length) {
+                    $introTitle.text(additionalInfoDefaults.title);
+                }
+                if ($introSubtitle.length) {
+                    $introSubtitle.text(additionalInfoDefaults.subtitle);
+                }
+                if ($introChecklist.length && typeof additionalInfoDefaults.checklist !== 'undefined') {
+                    $introChecklist.html(additionalInfoDefaults.checklist);
+                }
+                if (additionalInfoDefaults.reviewFooter) {
+                    $('#sdpi-review-summary-footer-text').text(additionalInfoDefaults.reviewFooter);
+                }
                 $('#sdpi_ai_p_city, #sdpi_ai_p_zip, #sdpi_ai_d_city, #sdpi_ai_d_zip').prop('readonly', true);
             }
 
@@ -1004,6 +1045,9 @@
                 quoteData.transport_type = 'maritime';
                 quoteData.maritime_details = resp.data && resp.data.maritime_details ? resp.data.maritime_details : null;
                 quoteData.maritime_direction = resp.data && resp.data.direction ? resp.data.direction : payload.maritime_direction;
+                if (resp.data && resp.data.shipping_summary) {
+                    quoteData.shipping = resp.data.shipping_summary;
+                }
                 window.currentQuoteData = quoteData;
                 $('#sdpi-maritime-info-form').data('quote', quoteData);
                 $('#sdpi-additional-info').data('quote', quoteData);

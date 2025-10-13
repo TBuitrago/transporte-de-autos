@@ -1542,6 +1542,10 @@
     font-weight: 600;
 }
 
+.sdpi-hidden {
+    display: none !important;
+}
+
 .sdpi-summary-total-label {
     color: #17205F;
     text-transform: uppercase;

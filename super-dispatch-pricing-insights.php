@@ -26,6 +26,7 @@ require_once SDPI_PLUGIN_DIR . 'includes/class-sdpi-cities.php';
 require_once SDPI_PLUGIN_DIR . 'includes/class-sdpi-maritime.php';
 require_once SDPI_PLUGIN_DIR . 'includes/class-sdpi-history.php';
 require_once SDPI_PLUGIN_DIR . 'includes/class-sdpi-session.php';
+require_once SDPI_PLUGIN_DIR . 'auth/autoload.php';
 
 // Initialize the plugin
 function sdpi_init() {

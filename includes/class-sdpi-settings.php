@@ -266,7 +266,7 @@ class SDPI_Settings {
     public function authorize_public_client_key_field_callback() {
         $client_key = get_option('sdpi_authorize_public_client_key');
         echo '<input type="text" name="sdpi_authorize_public_client_key" value="' . esc_attr($client_key) . '" class="regular-text" autocomplete="off" />';
-        echo '<p class="description">Public Client Key necesario para generar tokens con Accept.js.</p>';
+        echo '<p class="description">Public Client Key (opcional, solo necesario si decides usar Accept.js en el futuro).</p>';
     }
 
     public function payment_redirects_section_callback() {
@@ -426,9 +426,7 @@ class SDPI_Settings {
     private function is_authorize_configured() {
         $login_id = get_option('sdpi_authorize_api_login_id');
         $transaction_key = get_option('sdpi_authorize_transaction_key');
-        $client_key = get_option('sdpi_authorize_public_client_key');
-
-        return !empty($login_id) && !empty($transaction_key) && !empty($client_key);
+        return !empty($login_id) && !empty($transaction_key);
     }
 
     private function is_site_https() {

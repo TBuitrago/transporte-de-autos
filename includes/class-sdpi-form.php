@@ -3,6 +3,10 @@
  * Custom form handler for Super Dispatch Pricing Insights - FIXED VERSION
  */
 
+use net\authorize\api\constants\ANetEnvironment;
+use net\authorize\api\contract\v1 as AnetAPI;
+use net\authorize\api\controller as AnetController;
+
 class SDPI_Form {
 
     private $api;
@@ -66,9 +70,6 @@ class SDPI_Form {
         $is_secure = $this->is_request_secure();
 
         $dependencies = array('jquery');
-        if ($authorize_ready && $is_secure) {
-            $this->enqueue_authorize_script($dependencies);
-        }
 
         // Enqueue form script
         wp_enqueue_script(
@@ -78,6 +79,13 @@ class SDPI_Form {
             SDPI_VERSION,
             true
         );
+
+        wp_localize_script('sdpi-form-script', 'sdpi_ajax', array(
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('sdpi_nonce'),
+            'loading_text' => 'Obteniendo cotizacion...',
+            'error_text' => 'Error al obtener cotizacion'
+        ));
 
         wp_localize_script('sdpi-form-script', 'sdpi_ajax', array(
             'ajax_url' => admin_url('admin-ajax.php'),
@@ -103,9 +111,7 @@ class SDPI_Form {
     private function is_authorize_ready() {
         $login_id = get_option('sdpi_authorize_api_login_id');
         $transaction_key = get_option('sdpi_authorize_transaction_key');
-        $client_key = get_option('sdpi_authorize_public_client_key');
-
-        return !empty($login_id) && !empty($transaction_key) && !empty($client_key);
+        return !empty($login_id) && !empty($transaction_key);
     }
 
     /**
@@ -191,35 +197,6 @@ class SDPI_Form {
         }
 
         return false;
-    }
-
-    /**
-     * Ensure Accept.js is available either inline or via CDN and update dependencies array
-     */
-    private function enqueue_authorize_script(&$dependencies) {
-        $handle = 'sdpi-authorize-accept';
-        wp_enqueue_script(
-            $handle,
-            'https://js.authorize.net/v1/Accept.js',
-            array(),
-            false,
-            false
-        );
-        add_filter('script_loader_tag', array($this, 'filter_accept_script_tag'), 10, 3);
-        $dependencies[] = $handle;
-    }
-
-    public function filter_accept_script_tag($tag, $handle, $src) {
-        if ('sdpi-authorize-accept' !== $handle) {
-            return $tag;
-        }
-
-        // Ensure charset attribute per Authorize.net recommendation
-        if (strpos($tag, 'charset=') === false) {
-            $tag = str_replace('src=', 'charset="utf-8" src=', $tag);
-        }
-
-        return $tag;
     }
 
     /**
@@ -2275,8 +2252,6 @@ class SDPI_Form {
             'amount' => number_format($amount, 2, '.', ''),
             'amount_numeric' => round($amount, 2),
             'currency' => 'USD',
-            'client_key' => get_option('sdpi_authorize_public_client_key'),
-            'api_login_id' => get_option('sdpi_authorize_api_login_id'),
             'description' => $this->build_payment_description($stored_quote),
             'customer' => array(
                 'name' => $client_info['name'] ?? '',
@@ -2306,11 +2281,31 @@ class SDPI_Form {
             exit;
         }
 
-        $data_descriptor = isset($_POST['data_descriptor']) ? sanitize_text_field($_POST['data_descriptor']) : '';
-        $data_value = isset($_POST['data_value']) ? sanitize_text_field($_POST['data_value']) : '';
+        $card_number = isset($_POST['card_number']) ? preg_replace('/\D/', '', $_POST['card_number']) : '';
+        $card_exp_month = isset($_POST['card_exp_month']) ? preg_replace('/\D/', '', $_POST['card_exp_month']) : '';
+        $card_exp_year = isset($_POST['card_exp_year']) ? preg_replace('/\D/', '', $_POST['card_exp_year']) : '';
+        $card_cvv = isset($_POST['card_cvv']) ? preg_replace('/\D/', '', $_POST['card_cvv']) : '';
+        $card_zip = isset($_POST['card_zip']) ? sanitize_text_field($_POST['card_zip']) : '';
 
-        if (empty($data_descriptor) || empty($data_value)) {
-            wp_send_json_error('Token de pago inválido. Intente nuevamente.');
+        if (empty($card_number) || strlen($card_number) < 13 || strlen($card_number) > 19) {
+            wp_send_json_error('Número de tarjeta inválido.');
+            exit;
+        }
+
+        if (empty($card_exp_month) || empty($card_exp_year)) {
+            wp_send_json_error('Fecha de expiración inválida.');
+            exit;
+        }
+
+        $card_exp_month = str_pad(substr($card_exp_month, -2), 2, '0', STR_PAD_LEFT);
+        $card_exp_year = strlen($card_exp_year) === 2 ? ('20' . $card_exp_year) : $card_exp_year;
+        if (!preg_match('/^20\d{2}$/', $card_exp_year)) {
+            wp_send_json_error('Año de expiración inválido.');
+            exit;
+        }
+
+        if (empty($card_cvv) || strlen($card_cvv) < 3 || strlen($card_cvv) > 4) {
+            wp_send_json_error('Código de seguridad inválido.');
             exit;
         }
 
@@ -2336,10 +2331,8 @@ class SDPI_Form {
             exit;
         }
 
-        $credentials = array(
-            'name' => get_option('sdpi_authorize_api_login_id'),
-            'transactionKey' => get_option('sdpi_authorize_transaction_key')
-        );
+        $api_login_id = get_option('sdpi_authorize_api_login_id');
+        $transaction_key = get_option('sdpi_authorize_transaction_key');
 
         $client_info = isset($session_data['client_info']) && is_array($session_data['client_info'])
             ? $session_data['client_info']
@@ -2386,87 +2379,84 @@ class SDPI_Form {
         $invoice = substr(preg_replace('/[^A-Za-z0-9]/', '', $session_id), 0, 20);
         $description = $this->build_payment_description($quote_data);
 
-        $transaction_request = array(
-            'transactionType' => 'authCaptureTransaction',
-            'amount' => number_format($amount, 2, '.', ''),
-            'payment' => array(
-                'opaqueData' => array(
-                    'dataDescriptor' => $data_descriptor,
-                    'dataValue' => $data_value
-                )
-            ),
-            'order' => array(
-                'invoiceNumber' => $invoice,
-                'description' => $description
-            ),
-            'customer' => array(
-                'id' => $invoice,
-                'email' => isset($client_info['email']) ? sanitize_email($client_info['email']) : ''
-            )
-        );
+        $merchantAuthentication = new AnetAPI\MerchantAuthenticationType();
+        $merchantAuthentication->setName($api_login_id);
+        $merchantAuthentication->setTransactionKey($transaction_key);
 
-        if (!empty($billing['address']) || !empty($billing['city']) || !empty($billing['zip'])) {
-            $transaction_request['billTo'] = $billing;
-        } else {
-            // Ensure we at least send names if address is missing
-            $transaction_request['billTo'] = array(
-                'firstName' => $first_name,
-                'lastName' => $last_name,
-                'country' => $billing['country']
-            );
+        $creditCard = new AnetAPI\CreditCardType();
+        $creditCard->setCardNumber($card_number);
+        $creditCard->setExpirationDate($card_exp_year . '-' . $card_exp_month);
+        $creditCard->setCardCode($card_cvv);
+
+        $paymentOne = new AnetAPI\PaymentType();
+        $paymentOne->setCreditCard($creditCard);
+
+        $order = new AnetAPI\OrderType();
+        $order->setInvoiceNumber($invoice);
+        $order->setDescription($description);
+
+        $transactionRequest = new AnetAPI\TransactionRequestType();
+        $transactionRequest->setTransactionType('authCaptureTransaction');
+        $transactionRequest->setAmount(number_format($amount, 2, '.', ''));
+        $transactionRequest->setPayment($paymentOne);
+        $transactionRequest->setOrder($order);
+
+        $billTo = new AnetAPI\CustomerAddressType();
+        $billTo->setFirstName($first_name);
+        $billTo->setLastName($last_name);
+        if (!empty($billing['address'])) {
+            $billTo->setAddress($billing['address']);
+        }
+        if (!empty($billing['city'])) {
+            $billTo->setCity($billing['city']);
+        }
+        if (!empty($billing['zip'])) {
+            $billTo->setZip($billing['zip']);
+        }
+        if (!empty($billing['country'])) {
+            $billTo->setCountry($billing['country']);
+        }
+        $transactionRequest->setBillTo($billTo);
+
+        if (!empty($client_info['email'])) {
+            $customerData = new AnetAPI\CustomerDataType();
+            $customerData->setEmail(sanitize_email($client_info['email']));
+            $customerData->setId($invoice);
+            $transactionRequest->setCustomer($customerData);
         }
 
-        $customer_ip = isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field($_SERVER['REMOTE_ADDR']) : '';
-        if (!empty($customer_ip)) {
-            $transaction_request['customerIP'] = $customer_ip;
+        if (!empty($card_zip)) {
+            $shipTo = new AnetAPI\NameAndAddressType();
+            $shipTo->setFirstName($first_name);
+            $shipTo->setLastName($last_name);
+            $shipTo->setZip($card_zip);
+            $transactionRequest->setShipTo($shipTo);
         }
 
-        $request_payload = array(
-            'createTransactionRequest' => array(
-                'merchantAuthentication' => $credentials,
-                'transactionRequest' => $transaction_request
-            )
-        );
+        if (!empty($_SERVER['REMOTE_ADDR'])) {
+            $transactionRequest->setCustomerIP(sanitize_text_field($_SERVER['REMOTE_ADDR']));
+        }
 
-        $response = wp_remote_post($this->get_authorize_endpoint(), array(
-            'headers' => array('Content-Type' => 'application/json'),
-            'body' => wp_json_encode($request_payload),
-            'timeout' => 45
-        ));
+        $request = new AnetAPI\CreateTransactionRequest();
+        $request->setMerchantAuthentication($merchantAuthentication);
+        $request->setRefId($invoice);
+        $request->setTransactionRequest($transactionRequest);
 
-        if (is_wp_error($response)) {
-            if (WP_DEBUG) {
-                error_log('SDPI Authorize.net Error: ' . $response->get_error_message());
-            }
-            wp_send_json_error('Error de conexión con Authorize.net. Intente nuevamente.');
+        $controller = new AnetController\CreateTransactionController($request);
+        $environment = get_option('sdpi_authorize_environment', 'sandbox') === 'production'
+            ? ANetEnvironment::PRODUCTION
+            : ANetEnvironment::SANDBOX;
+        $response = $controller->executeWithApiResponse($environment);
+
+        if ($response === null) {
+            wp_send_json_error('No se recibió respuesta de Authorize.net. Intente nuevamente.');
             exit;
         }
 
-        $response_body = json_decode(wp_remote_retrieve_body($response), true);
-        if (!is_array($response_body)) {
-            if (WP_DEBUG) {
-                error_log('SDPI Authorize.net Error: Invalid response body');
-            }
-            wp_send_json_error('Respuesta inválida de Authorize.net.');
-            exit;
-        }
-
-        $messages = $response_body['messages'] ?? array();
-        $result_code = isset($messages['resultCode']) ? $messages['resultCode'] : '';
-        $transaction_response = $response_body['transactionResponse'] ?? array();
-        $response_code = isset($transaction_response['responseCode']) ? (string)$transaction_response['responseCode'] : '';
-
-        if (strtoupper($result_code) !== 'OK' || $response_code !== '1') {
+        if ($response->getMessages()->getResultCode() !== 'Ok') {
             $error_message = 'Transacción rechazada.';
-
-            if (!empty($transaction_response['errors'][0]['errorText'])) {
-                $error_message = sanitize_text_field($transaction_response['errors'][0]['errorText']);
-            } elseif (!empty($messages['message'][0]['text'])) {
-                $error_message = sanitize_text_field($messages['message'][0]['text']);
-            }
-
-            if (WP_DEBUG) {
-                error_log('SDPI Authorize.net Decline: ' . $error_message);
+            if ($response->getMessages()->getMessage()) {
+                $error_message = sanitize_text_field($response->getMessages()->getMessage()[0]->getText());
             }
 
             $error_url = get_option('sdpi_payment_error_url');
@@ -2477,8 +2467,23 @@ class SDPI_Form {
             exit;
         }
 
-        $transaction_id = isset($transaction_response['transId']) ? sanitize_text_field($transaction_response['transId']) : '';
-        $auth_code = isset($transaction_response['authCode']) ? sanitize_text_field($transaction_response['authCode']) : '';
+        $tResponse = $response->getTransactionResponse();
+        if (!$tResponse || $tResponse->getResponseCode() !== '1') {
+            $error_message = 'Transacción rechazada.';
+            if ($tResponse && $tResponse->getErrors()) {
+                $error_message = sanitize_text_field($tResponse->getErrors()[0]->getErrorText());
+            }
+
+            $error_url = get_option('sdpi_payment_error_url');
+            wp_send_json_error(array(
+                'message' => $error_message,
+                'redirect_url' => !empty($error_url) ? esc_url($error_url) : ''
+            ));
+            exit;
+        }
+
+        $transaction_id = sanitize_text_field($tResponse->getTransId());
+        $auth_code = sanitize_text_field($tResponse->getAuthCode());
 
         $session->set_status($session_id, 'completado');
         $session->update_data($session_id, array(

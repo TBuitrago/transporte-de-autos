@@ -30,67 +30,6 @@
     var paymentContext = null;
     var paymentEnabled = typeof sdpi_payment !== 'undefined' && !!sdpi_payment.enabled;
     var paymentBlockedMessage = (typeof sdpi_payment !== 'undefined' && sdpi_payment.message) ? sdpi_payment.message : '';
-    var acceptSources = [
-        'https://js.authorize.net/v1/Accept.js',
-        'https://js2.authorize.net/v1/Accept.js'
-    ];
-    var acceptLoadPromise = null;
-
-    function loadAcceptFrom(index) {
-        return new Promise(function(resolve, reject) {
-            if (window.Accept && typeof window.Accept.dispatchData === 'function') {
-                resolve();
-                return;
-            }
-
-            var src = acceptSources[index];
-            if (!src) {
-                reject('No se pudo descargar Accept.js desde los dominios permitidos.');
-                return;
-            }
-
-            var existingTag = document.querySelector('script[src="' + src + '"]');
-            if (existingTag) {
-                existingTag.parentElement.removeChild(existingTag);
-            }
-
-            var script = document.createElement('script');
-            script.src = src;
-            script.async = false;
-            script.onload = function() {
-                if (window.Accept && typeof window.Accept.dispatchData === 'function') {
-                    resolve();
-                } else {
-                    reject('Accept.js cargó pero no expuso la función necesaria.');
-                }
-            };
-            script.onerror = function() {
-                reject('No se pudo cargar el script: ' + src);
-            };
-            document.head.appendChild(script);
-        }).catch(function(error) {
-            if (index + 1 < acceptSources.length) {
-                return loadAcceptFrom(index + 1);
-            }
-            return Promise.reject(error);
-        });
-    }
-
-    function ensureAcceptReady() {
-        if (!paymentEnabled) {
-            return Promise.reject(paymentBlockedMessage || 'Los pagos no están habilitados.');
-        }
-
-        if (window.Accept && typeof window.Accept.dispatchData === 'function') {
-            return Promise.resolve();
-        }
-
-        if (!acceptLoadPromise) {
-            acceptLoadPromise = loadAcceptFrom(0);
-        }
-
-        return acceptLoadPromise;
-    }
 
     function setProgressStep(step) {
         currentProgressStep = step;
@@ -858,35 +797,65 @@
         });
     }
 
-    function handleAuthorizeResponse(response, $button) {
-        if (response && response.messages && response.messages.resultCode === 'Ok' && response.opaqueData) {
-            updateSummaryFooter('info', 'Procesando tu pago...');
-            sendPaymentToServer(response.opaqueData.dataDescriptor, response.opaqueData.dataValue, $button);
+    $(document).on('click', '#sdpi-payment-submit', function() {
+        if (!paymentEnabled) {
+            showPaymentError(paymentBlockedMessage || 'Los pagos no están disponibles en este momento.');
             return;
         }
 
-        var message = 'No se pudo validar la tarjeta. Verifica los datos ingresados.';
-        if (response && response.messages && response.messages.message && response.messages.message[0]) {
-            message = response.messages.message[0].text;
-        }
-        showPaymentError(message);
-        if ($button) {
-            $button.prop('disabled', false).text('Pagar ahora');
-        }
-    }
+        var $button = $(this);
+        var cardNumber = ($('#sdpi-card-number').val() || '').replace(/\s+/g, '');
+        var expMonth = ($('#sdpi-card-exp-month').val() || '').replace(/\D+/g, '');
+        var expYear = ($('#sdpi-card-exp-year').val() || '').replace(/\D+/g, '');
+        var cvv = ($('#sdpi-card-cvv').val() || '').replace(/\D+/g, '');
+        var zip = ($('#sdpi-card-zip').val() || '').replace(/\s+/g, '');
 
-    function sendPaymentToServer(descriptor, value, $button) {
+        if (!/^\d{13,19}$/.test(cardNumber)) {
+            showPaymentError('Número de tarjeta inválido.');
+            return;
+        }
+        if (!/^\d{1,2}$/.test(expMonth)) {
+            showPaymentError('Mes de expiración inválido.');
+            return;
+        }
+        if (!/^\d{2,4}$/.test(expYear)) {
+            showPaymentError('Año de expiración inválido.');
+            return;
+        }
+        if (!/^\d{3,4}$/.test(cvv)) {
+            showPaymentError('Código de seguridad inválido.');
+            return;
+        }
+
+        if (expMonth.length === 1) {
+            expMonth = '0' + expMonth;
+        }
+        if (expYear.length === 2) {
+            expYear = '20' + expYear;
+        }
+
+        var payload = {
+            action: 'sdpi_process_payment',
+            nonce: sdpi_ajax.nonce,
+            card_number: cardNumber,
+            card_exp_month: expMonth,
+            card_exp_year: expYear,
+            card_cvv: cvv,
+            card_zip: zip
+        };
+        if (paymentContext && paymentContext.session_id) {
+            payload.session_id = paymentContext.session_id;
+        }
+
+        $button.prop('disabled', true).text('Procesando...');
+        updateSummaryFooter('info', 'Procesando el pago, por favor espera...');
+        $('#sdpi-payment-feedback').hide();
+
         $.ajax({
             url: sdpi_ajax.ajax_url,
             type: 'POST',
             dataType: 'json',
-            data: {
-                action: 'sdpi_process_payment',
-                nonce: sdpi_ajax.nonce,
-                data_descriptor: descriptor,
-                data_value: value,
-                session_id: paymentContext && paymentContext.session_id ? paymentContext.session_id : ''
-            },
+            data: payload,
             success: function(response) {
                 if (response && response.success && response.data) {
                     var successMessage = response.data.message || 'Pago procesado exitosamente.';
@@ -930,90 +899,6 @@
                 $('#sdpi-card-cvv').val('');
             }
         });
-    }
-
-    $(document).on('click', '#sdpi-payment-submit', function() {
-        if (!paymentEnabled) {
-            showPaymentError('Los pagos no están disponibles en este momento.');
-            return;
-        }
-        if (!paymentContext || !paymentContext.client_key || !paymentContext.api_login_id) {
-            showPaymentError('No se pudo obtener la configuración de pago. Guarda nuevamente la información anterior.');
-            return;
-        }
-
-        var $button = $(this);
-        var cardNumber = ($('#sdpi-card-number').val() || '').replace(/\s+/g, '');
-        var expMonth = ($('#sdpi-card-exp-month').val() || '').replace(/\D+/g, '');
-        var expYear = ($('#sdpi-card-exp-year').val() || '').replace(/\D+/g, '');
-        var cvv = ($('#sdpi-card-cvv').val() || '').replace(/\D+/g, '');
-        var zip = ($('#sdpi-card-zip').val() || '').replace(/\s+/g, '');
-
-        if (!/^\d{13,19}$/.test(cardNumber)) {
-            showPaymentError('Número de tarjeta inválido.');
-            return;
-        }
-        if (!/^\d{1,2}$/.test(expMonth)) {
-            showPaymentError('Mes de expiración inválido.');
-            return;
-        }
-        if (!/^\d{2,4}$/.test(expYear)) {
-            showPaymentError('Año de expiración inválido.');
-            return;
-        }
-        if (!/^\d{3,4}$/.test(cvv)) {
-            showPaymentError('Código de seguridad inválido.');
-            return;
-        }
-
-        if (expMonth.length === 1) {
-            expMonth = '0' + expMonth;
-        }
-        if (expYear.length === 2) {
-            expYear = '20' + expYear;
-        }
-
-        var authData = {
-            clientKey: paymentContext.client_key,
-            apiLoginID: paymentContext.api_login_id
-        };
-
-        var cardData = {
-            cardNumber: cardNumber,
-            month: expMonth,
-            year: expYear,
-            cardCode: cvv
-        };
-
-        if (zip) {
-            cardData.zip = zip;
-        }
-
-        var secureData = {
-            authData: authData,
-            cardData: cardData
-        };
-
-        $button.prop('disabled', true).text('Validando...');
-        updateSummaryFooter('info', 'Validando los datos de la tarjeta...');
-        $('#sdpi-payment-feedback').hide();
-
-        ensureAcceptReady()
-            .then(function() {
-                Accept.dispatchData(secureData, function(response) {
-                    handleAuthorizeResponse(response, $button);
-                });
-            })
-            .catch(function(errorMsg) {
-                var message = 'No se pudo cargar la librería de pagos.';
-                if (errorMsg) {
-                    message += ' ' + errorMsg;
-                } else {
-                    message += ' Intenta refrescar la página.';
-                }
-                showPaymentError(message);
-                $button.prop('disabled', false).text('Pagar ahora');
-            });
     });
 
     // Clear form button

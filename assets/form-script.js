@@ -919,10 +919,14 @@
 
     // Handle payment button click
     $(document).on('click', '.sdpi-pay-btn', function() {
-        if ($(this).attr('id') === 'sdpi-payment-submit') {
+        var buttonId = $(this).attr('id');
+        if (buttonId !== 'sdpi-summary-continue-btn' && buttonId !== 'sdpi-inline-continue-btn') {
             return;
         }
-        var quoteData = $(this).data('quote') || {};
+        var quoteData = $(this).data('quote')
+            || $('#sdpi-additional-info').data('quote')
+            || window.currentQuoteData
+            || {};
         quoteData.transport_type = quoteData.transport_type || (quoteData.maritime_involved ? 'maritime' : 'terrestrial');
         var isMaritime = quoteData.transport_type === 'maritime';
         var $additionalInfoContainer = $('#sdpi-additional-info');

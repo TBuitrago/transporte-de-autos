@@ -62,6 +62,11 @@
         if ($reviewText.length) {
             $reviewText.text(finalMessage);
         }
+
+        var $paymentText = $('#sdpi-payment-summary-footer-text');
+        if ($paymentText.length) {
+            $paymentText.text(finalMessage);
+        }
     }
 
     function toggleContinueButton(data) {
@@ -133,6 +138,10 @@
 
     function resetPaymentPanel() {
         paymentContext = null;
+        var $paymentScreen = $('#sdpi-payment-screen');
+        if ($paymentScreen.length) {
+            $paymentScreen.hide();
+        }
         var $panel = $('#sdpi-payment-panel');
         if ($panel.length) {
             $panel.hide();
@@ -146,6 +155,10 @@
             $feedback.hide().removeClass('error success').css('color', '').text('');
         }
         $('#sdpi-payment-amount-display').text('--');
+        $('#sdpi-payment-summary-panel').hide();
+        $('#sdpi-review-summary-panel').hide();
+        $('#sdpi-ai-continue').prop('disabled', false).text('Proceder al Checkout');
+        $('#sdpi-maritime-continue').prop('disabled', false).text('Proceder al Checkout');
     }
 
     function showPaymentPanel(context) {
@@ -155,7 +168,8 @@
 
         paymentContext = context;
         var $panel = $('#sdpi-payment-panel');
-        if (!$panel.length) {
+        var $paymentScreen = $('#sdpi-payment-screen');
+        if (!$panel.length || !$paymentScreen.length) {
             return;
         }
 
@@ -179,7 +193,12 @@
             $feedback.hide().removeClass('error success').css('color', '').text('');
         }
 
+        $('#sdpi-additional-info').hide();
+        $('#sdpi-review-summary-panel').hide();
+        $('#sdpi-payment-summary-panel').show();
+        $paymentScreen.show();
         $panel.show();
+        $('html, body').animate({ scrollTop: $paymentScreen.offset().top - 40 }, 300);
         updateSummaryFooter('info', 'Ingresa los datos de tu tarjeta para completar el pago.');
     }
 
@@ -232,13 +251,25 @@
 
     function updateReviewSummaryPrice(value) {
         var $price = $('#sdpi-review-summary-price');
+        if ($price.length) {
+            var hasValue = value && value.trim() !== '';
+            var displayValue = hasValue ? value : 'Pendiente';
+            $price.text(displayValue);
+            $('#sdpi-review-summary-panel .sdpi-summary-total').toggleClass('pending', !hasValue);
+        }
+
+        updatePaymentSummaryPrice(value);
+    }
+
+    function updatePaymentSummaryPrice(value) {
+        var $price = $('#sdpi-payment-summary-price');
         if (!$price.length) { return; }
 
         var hasValue = value && value.trim() !== '';
         var displayValue = hasValue ? value : 'Pendiente';
 
         $price.text(displayValue);
-        $('#sdpi-review-summary-panel .sdpi-summary-total').toggleClass('pending', !hasValue);
+        $('#sdpi-payment-summary-panel .sdpi-summary-total').toggleClass('pending', !hasValue);
     }
 
     function setReviewSummaryValue(selector, value) {
@@ -254,6 +285,29 @@
         }
     }
 
+    function setPaymentSummaryValue(selector, value) {
+        var $value = $(selector);
+        if (!$value.length) { return; }
+        var $item = $value.closest('.sdpi-summary-item');
+        if (value && value.trim() !== '') {
+            $value.text(value);
+            if ($item.length) { $item.removeClass('pending'); }
+        } else {
+            $value.text('Pendiente');
+            if ($item.length) { $item.addClass('pending'); }
+        }
+    }
+
+    function resetPaymentSummary() {
+        setPaymentSummaryValue('#sdpi-payment-summary-pickup', '');
+        setPaymentSummaryValue('#sdpi-payment-summary-delivery', '');
+        setPaymentSummaryValue('#sdpi-payment-summary-trailer', '');
+        setPaymentSummaryValue('#sdpi-payment-summary-vehicle', '');
+        setPaymentSummaryValue('#sdpi-payment-summary-transport-type', '');
+        $('#sdpi-payment-summary-transport-type-row').hide();
+        updatePaymentSummaryPrice('');
+    }
+
     function resetReviewSummary() {
         setReviewSummaryValue('#sdpi-review-summary-pickup', '');
         setReviewSummaryValue('#sdpi-review-summary-delivery', '');
@@ -261,6 +315,7 @@
         setReviewSummaryValue('#sdpi-review-summary-vehicle', '');
         setReviewSummaryValue('#sdpi-review-summary-transport-type', '');
         $('#sdpi-review-summary-transport-type-row').hide();
+        resetPaymentSummary();
         updateReviewSummaryPrice('');
     }
 
@@ -280,7 +335,27 @@
             setReviewSummaryValue('#sdpi-review-summary-transport-type', '');
         }
 
+        updatePaymentSummary(details);
         updateReviewSummaryPrice(details.price || '');
+    }
+
+    function updatePaymentSummary(details) {
+        if (!details) { return; }
+
+        setPaymentSummaryValue('#sdpi-payment-summary-pickup', details.pickup || '');
+        setPaymentSummaryValue('#sdpi-payment-summary-delivery', details.delivery || '');
+        setPaymentSummaryValue('#sdpi-payment-summary-trailer', details.trailer || '');
+        setPaymentSummaryValue('#sdpi-payment-summary-vehicle', details.vehicle || '');
+
+        if (details.transport && details.transport.trim() !== '') {
+            $('#sdpi-payment-summary-transport-type-row').show();
+            setPaymentSummaryValue('#sdpi-payment-summary-transport-type', details.transport);
+        } else {
+            $('#sdpi-payment-summary-transport-type-row').hide();
+            setPaymentSummaryValue('#sdpi-payment-summary-transport-type', '');
+        }
+
+        updatePaymentSummaryPrice(details.price || '');
     }
 
     function lockPricingForm(data) {
@@ -767,7 +842,7 @@
                     }
                     showPaymentPanel(paymentData);
                     if (btn) {
-                        btn.prop('disabled', false).text('Editar información');
+                        btn.prop('disabled', false).text('Proceder al Checkout');
                         btn.data('quote', quoteData);
                     }
                 } else {
@@ -936,6 +1011,9 @@
         var $introSubtitle = $('#sdpi-additional-info .sdpi-review-intro p');
         var $introChecklist = $('#sdpi-additional-info .sdpi-review-checklist');
 
+        $('#sdpi-payment-screen').hide();
+        $('#sdpi-payment-summary-panel').hide();
+
         try {
             var pickupLabel = quoteData.pickup_city ? (quoteData.pickup_city + ' (' + quoteData.pickup_zip + ')') : ($('#sdpi_pickup_city').val() + ' (' + $('#sdpi_pickup_zip').val() + ')');
             var deliveryLabel = quoteData.delivery_city ? (quoteData.delivery_city + ' (' + quoteData.delivery_zip + ')') : ($('#sdpi_delivery_city').val() + ' (' + $('#sdpi_delivery_zip').val() + ')');
@@ -1096,7 +1174,26 @@
         $('#sdpi-pricing-form').show();
         $('#sdpi-summary-panel').show();
         $('#sdpi-review-summary-panel').hide();
+        $('#sdpi-payment-screen').hide();
+        $('#sdpi-payment-summary-panel').hide();
         updateSummaryFooter('info', defaultSummaryFooter);
+    });
+
+    $(document).on('click', '#sdpi-payment-back-btn', function() {
+        $('#sdpi-payment-screen').hide();
+        $('#sdpi-payment-summary-panel').hide();
+        $('#sdpi-additional-info').show();
+        $('#sdpi-review-summary-panel').show();
+        var transport = $('#sdpi-additional-info').attr('data-transport');
+        var summaryFooterMessage = transport === 'maritime'
+            ? 'Completa la informacion maritima para continuar.'
+            : 'Completa la informacion de recogida y entrega para continuar.';
+        updateSummaryFooter('info', summaryFooterMessage);
+        $('#sdpi-ai-continue').prop('disabled', false).text('Proceder al Checkout');
+        $('#sdpi-maritime-continue').prop('disabled', false).text('Proceder al Checkout');
+        if ($('#sdpi-additional-info').length) {
+            $('html, body').animate({ scrollTop: $('#sdpi-additional-info').offset().top - 40 }, 300);
+        }
     });
 
     // Continuar al pago: validar y guardar info adicional, luego iniciar pago

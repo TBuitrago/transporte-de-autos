@@ -255,7 +255,7 @@ class SDPI_Form {
                 </div>
                 <div class="sdpi-progress-step" data-step="4">
                     <span class="sdpi-progress-number">4</span>
-                    <span class="sdpi-progress-label">Resumen</span>
+                    <span class="sdpi-progress-label">Resumen y Pago</span>
                 </div>
             </div>
             <div class="sdpi-form-layout">
@@ -736,7 +736,7 @@ class SDPI_Form {
 
                         <div class="sdpi-form-actions">
                             <button type="button" class="sdpi-clear-btn" id="sdpi-ai-cancel">Volver</button>
-                            <button type="button" class="sdpi-pay-btn" id="sdpi-ai-continue">Guardar y continuar</button>
+                            <button type="button" class="sdpi-pay-btn" id="sdpi-ai-continue">Proceder al Checkout</button>
                         </div>
                     </form>
 
@@ -990,40 +990,9 @@ class SDPI_Form {
 
                         <div class="sdpi-form-actions">
                             <button type="button" class="sdpi-clear-btn" id="sdpi-maritime-cancel">Volver</button>
-                            <button type="button" class="sdpi-pay-btn" id="sdpi-maritime-continue">Guardar y continuar</button>
+                            <button type="button" class="sdpi-pay-btn" id="sdpi-maritime-continue">Proceder al Checkout</button>
                         </div>
                     </form>
-
-                    <div class="sdpi-form-card sdpi-review-card sdpi-payment-card" id="sdpi-payment-panel" style="display:none;">
-                        <h3>Pago con tarjeta</h3>
-                        <p class="sdpi-payment-amount">Total a pagar: <span id="sdpi-payment-amount-display">--</span></p>
-                        <form id="sdpi-payment-form" autocomplete="off">
-                            <div class="sdpi-form-group">
-                                <label for="sdpi-card-number">Número de tarjeta</label>
-                                <input type="tel" id="sdpi-card-number" inputmode="numeric" maxlength="25" placeholder="1234 5678 9012 3456" required>
-                            </div>
-                            <div class="sdpi-form-row">
-                                <div class="sdpi-form-group sdpi-col-3">
-                                    <label for="sdpi-card-exp-month">Mes (MM)</label>
-                                    <input type="tel" id="sdpi-card-exp-month" inputmode="numeric" maxlength="2" placeholder="MM" required>
-                                </div>
-                                <div class="sdpi-form-group sdpi-col-3">
-                                    <label for="sdpi-card-exp-year">Año (YYYY)</label>
-                                    <input type="tel" id="sdpi-card-exp-year" inputmode="numeric" maxlength="4" placeholder="YYYY" required>
-                                </div>
-                                <div class="sdpi-form-group sdpi-col-3">
-                                    <label for="sdpi-card-cvv">CVV</label>
-                                    <input type="tel" id="sdpi-card-cvv" inputmode="numeric" maxlength="4" placeholder="123" required>
-                                </div>
-                            </div>
-                            <div class="sdpi-form-group">
-                                <label for="sdpi-card-zip">Código postal (opcional)</label>
-                                <input type="tel" id="sdpi-card-zip" inputmode="numeric" maxlength="10" placeholder="Zip del titular">
-                            </div>
-                            <div class="sdpi-payment-feedback" id="sdpi-payment-feedback" style="display:none;"></div>
-                            <button type="button" class="sdpi-pay-btn" id="sdpi-payment-submit">Pagar ahora</button>
-                        </form>
-                    </div>
                 </div>
 
                 <aside class="sdpi-summary-panel sdpi-review-summary-panel" id="sdpi-review-summary-panel" style="display:none;">
@@ -1059,6 +1028,82 @@ class SDPI_Form {
                     </div>
                     <div class="sdpi-summary-footer is-info">
                         <p id="sdpi-review-summary-footer-text">Confirma tus datos y completa la informacion solicitada.</p>
+                    </div>
+                </aside>
+            </div>
+        </div>
+
+        <div id="sdpi-payment-screen" class="sdpi-review-screen" style="display:none;">
+            <div class="sdpi-form-layout">
+                <div class="sdpi-review-main">
+                    <div class="sdpi-form-card sdpi-review-card sdpi-payment-card" id="sdpi-payment-panel">
+                        <h3>Pago con tarjeta</h3>
+                        <p class="sdpi-payment-amount">Total a pagar: <span id="sdpi-payment-amount-display">--</span></p>
+                        <div class="sdpi-form-actions sdpi-payment-actions">
+                            <button type="button" class="sdpi-clear-btn" id="sdpi-payment-back-btn">Editar información</button>
+                        </div>
+                        <form id="sdpi-payment-form" autocomplete="off">
+                            <div class="sdpi-form-group">
+                                <label for="sdpi-card-number">Número de tarjeta</label>
+                                <input type="tel" id="sdpi-card-number" inputmode="numeric" maxlength="25" placeholder="1234 5678 9012 3456" required>
+                            </div>
+                            <div class="sdpi-form-row">
+                                <div class="sdpi-form-group sdpi-col-3">
+                                    <label for="sdpi-card-exp-month">Mes (MM)</label>
+                                    <input type="tel" id="sdpi-card-exp-month" inputmode="numeric" maxlength="2" placeholder="MM" required>
+                                </div>
+                                <div class="sdpi-form-group sdpi-col-3">
+                                    <label for="sdpi-card-exp-year">Año (YYYY)</label>
+                                    <input type="tel" id="sdpi-card-exp-year" inputmode="numeric" maxlength="4" placeholder="YYYY" required>
+                                </div>
+                                <div class="sdpi-form-group sdpi-col-3">
+                                    <label for="sdpi-card-cvv">CVV</label>
+                                    <input type="tel" id="sdpi-card-cvv" inputmode="numeric" maxlength="4" placeholder="123" required>
+                                </div>
+                            </div>
+                            <div class="sdpi-form-group">
+                                <label for="sdpi-card-zip">Código postal (opcional)</label>
+                                <input type="tel" id="sdpi-card-zip" inputmode="numeric" maxlength="10" placeholder="Zip del titular">
+                            </div>
+                            <div class="sdpi-payment-feedback" id="sdpi-payment-feedback" style="display:none;"></div>
+                            <button type="button" class="sdpi-pay-btn" id="sdpi-payment-submit">Pagar ahora</button>
+                        </form>
+                    </div>
+                </div>
+
+                <aside class="sdpi-summary-panel sdpi-review-summary-panel" id="sdpi-payment-summary-panel" style="display:none;">
+                    <div class="sdpi-summary-header">
+                        <h3>Resumen de tu cotizacion</h3>
+                        <p>Verifica los datos antes de realizar el pago.</p>
+                    </div>
+                    <div class="sdpi-summary-body">
+                        <div class="sdpi-summary-item pending">
+                            <span class="sdpi-summary-label">Ciudad de origen</span>
+                            <span class="sdpi-summary-value" id="sdpi-payment-summary-pickup">Pendiente</span>
+                        </div>
+                        <div class="sdpi-summary-item pending">
+                            <span class="sdpi-summary-label">Ciudad de destino</span>
+                            <span class="sdpi-summary-value" id="sdpi-payment-summary-delivery">Pendiente</span>
+                        </div>
+                        <div class="sdpi-summary-item pending">
+                            <span class="sdpi-summary-label">Tipo de trailer</span>
+                            <span class="sdpi-summary-value" id="sdpi-payment-summary-trailer">Pendiente</span>
+                        </div>
+                        <div class="sdpi-summary-item pending">
+                            <span class="sdpi-summary-label">Vehiculo</span>
+                            <span class="sdpi-summary-value" id="sdpi-payment-summary-vehicle">Pendiente</span>
+                        </div>
+                        <div class="sdpi-summary-item pending" id="sdpi-payment-summary-transport-type-row">
+                            <span class="sdpi-summary-label">Tipo de transporte</span>
+                            <span class="sdpi-summary-value" id="sdpi-payment-summary-transport-type">Pendiente</span>
+                        </div>
+                    </div>
+                    <div class="sdpi-summary-total pending">
+                        <span class="sdpi-summary-total-label">Precio final</span>
+                        <span class="sdpi-summary-total-value" id="sdpi-payment-summary-price">Pendiente</span>
+                    </div>
+                    <div class="sdpi-summary-footer is-info">
+                        <p id="sdpi-payment-summary-footer-text">Ingresa los datos de tu tarjeta para completar el pago.</p>
                     </div>
                 </aside>
             </div>

@@ -80,6 +80,9 @@ class SDPI_Form {
             true
         );
 
+        $privacy_policy_url = esc_url(get_option('sdpi_privacy_policy_url'));
+        $terms_conditions_url = esc_url(get_option('sdpi_terms_conditions_url'));
+
         wp_localize_script('sdpi-form-script', 'sdpi_ajax', array(
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('sdpi_nonce'),
@@ -87,11 +90,13 @@ class SDPI_Form {
             'error_text' => 'Error al obtener cotizacion'
         ));
 
-        wp_localize_script('sdpi-form-script', 'sdpi_ajax', array(
-            'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('sdpi_nonce'),
-            'loading_text' => 'Obteniendo cotizacion...',
-            'error_text' => 'Error al obtener cotizacion'
+        wp_localize_script('sdpi-form-script', 'sdpi_legal', array(
+            'privacy_policy_url' => $privacy_policy_url,
+            'terms_conditions_url' => $terms_conditions_url,
+            'checkbox_text' => 'Al continuar aceptas nuestra {privacy_link} y nuestros {terms_link}.',
+            'privacy_text' => 'Política de Privacidad',
+            'terms_text' => 'Términos y Condiciones',
+            'error_message' => 'Debes aceptar la Política de Privacidad y los Términos y Condiciones para continuar.'
         ));
 
         wp_localize_script('sdpi-form-script', 'sdpi_payment', array(

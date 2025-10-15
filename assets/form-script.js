@@ -689,6 +689,16 @@
         setProgressStep(3);
         
         // Crear y mostrar el formulario de contacto
+        var privacyUrl = (typeof sdpi_legal !== 'undefined' && sdpi_legal.privacy_policy_url) ? sdpi_legal.privacy_policy_url : '#';
+        var termsUrl = (typeof sdpi_legal !== 'undefined' && sdpi_legal.terms_conditions_url) ? sdpi_legal.terms_conditions_url : '#';
+        var privacyText = (typeof sdpi_legal !== 'undefined' && sdpi_legal.privacy_text) ? sdpi_legal.privacy_text : 'Política de Privacidad';
+        var termsText = (typeof sdpi_legal !== 'undefined' && sdpi_legal.terms_text) ? sdpi_legal.terms_text : 'Términos y Condiciones';
+        var legalCheckboxText = (typeof sdpi_legal !== 'undefined' && sdpi_legal.checkbox_text) ? sdpi_legal.checkbox_text : 'Al continuar aceptas nuestra {privacy_link} y nuestros {terms_link}.';
+
+        var privacyLink = '<a href="' + privacyUrl + '" target="_blank" rel="noopener noreferrer">' + privacyText + '</a>';
+        var termsLink = '<a href="' + termsUrl + '" target="_blank" rel="noopener noreferrer">' + termsText + '</a>';
+        legalCheckboxText = legalCheckboxText.replace('{privacy_link}', privacyLink).replace('{terms_link}', termsLink);
+
         var contactFormHtml = `
             <div id="sdpi-contact-form-container" class="sdpi-form-section">
                 <h3>Información de Contacto</h3>
@@ -713,6 +723,14 @@
                                placeholder="Ej: juan@email.com">
                     </div>
 
+                    <div class="sdpi-form-group sdpi-form-legal">
+                        <label class="sdpi-checkbox-label" for="sdpi_contact_accept">
+                            <input type="checkbox" id="sdpi_contact_accept" name="contact_accept">
+                            <span class="sdpi-checkbox-text">` + legalCheckboxText + `</span>
+                        </label>
+                        <p class="sdpi-form-error" id="sdpi-contact-legal-error" style="display:none;"></p>
+                    </div>
+
                     <div class="sdpi-form-submit">
                         <button type="submit" class="sdpi-submit-btn" id="sdpi-contact-submit-btn">Ver Mi Cotización</button>
                         <button type="button" class="sdpi-clear-btn" id="sdpi-contact-back-btn">Volver</button>
@@ -729,6 +747,12 @@
             e.preventDefault();
             submitContactInfo();
         });
+
+        $('#sdpi_contact_accept').on('change', function() {
+            if ($(this).is(':checked')) {
+                $('#sdpi-contact-legal-error').hide().text('');
+            }
+        });
         
         // Manejar el boton de volver
         $('#sdpi-contact-back-btn').on('click', function() {
@@ -743,6 +767,15 @@
     
     // NUEVA FUNCION: Enviar informacion de contacto y obtener precio final
     function submitContactInfo() {
+        var legalErrorMessage = (typeof sdpi_legal !== 'undefined' && sdpi_legal.error_message) ? sdpi_legal.error_message : 'Debes aceptar la Política de Privacidad y los Términos y Condiciones para continuar.';
+        var legalErrorContainer = $('#sdpi-contact-legal-error');
+        legalErrorContainer.hide().text('');
+
+        if (!$('#sdpi_contact_accept').is(':checked')) {
+            legalErrorContainer.text(legalErrorMessage).show();
+            return;
+        }
+
         var contactData = {
             action: 'sdpi_finalize_quote_with_contact',
             nonce: sdpi_ajax.nonce,
@@ -751,13 +784,13 @@
             client_email: $('#sdpi_contact_email').val().trim(),
             quote_data: JSON.stringify(window.currentQuoteData)
         };
-        
+
         // ValidaciON BASICA
         if (!contactData.client_name || !contactData.client_phone || !contactData.client_email) {
             alert('Todos los campos de contacto son requeridos.');
             return;
         }
-        
+
         // vALIDACION de email
         var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(contactData.client_email)) {

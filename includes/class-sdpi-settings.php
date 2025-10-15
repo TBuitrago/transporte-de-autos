@@ -32,6 +32,8 @@ class SDPI_Settings {
         register_setting('sdpi_settings', 'sdpi_authorize_public_client_key', array('sanitize_callback' => array($this, 'sanitize_trimmed_text')));
         register_setting('sdpi_settings', 'sdpi_payment_success_url', array('sanitize_callback' => array($this, 'sanitize_url_field')));
         register_setting('sdpi_settings', 'sdpi_payment_error_url', array('sanitize_callback' => array($this, 'sanitize_url_field')));
+        register_setting('sdpi_settings', 'sdpi_privacy_policy_url', array('sanitize_callback' => array($this, 'sanitize_url_field')));
+        register_setting('sdpi_settings', 'sdpi_terms_conditions_url', array('sanitize_callback' => array($this, 'sanitize_url_field')));
 
         add_settings_section(
             'sdpi_api_section',
@@ -148,6 +150,29 @@ class SDPI_Settings {
             'sdpi_settings',
             'sdpi_payment_redirects_section'
         );
+
+        add_settings_section(
+            'sdpi_legal_section',
+            'Avisos Legales',
+            array($this, 'legal_section_callback'),
+            'sdpi_settings'
+        );
+
+        add_settings_field(
+            'sdpi_privacy_policy_url',
+            'URL de Política de Privacidad',
+            array($this, 'privacy_policy_url_field_callback'),
+            'sdpi_settings',
+            'sdpi_legal_section'
+        );
+
+        add_settings_field(
+            'sdpi_terms_conditions_url',
+            'URL de Términos y Condiciones',
+            array($this, 'terms_conditions_url_field_callback'),
+            'sdpi_settings',
+            'sdpi_legal_section'
+        );
     }
 
     public function api_section_callback() {
@@ -182,7 +207,7 @@ class SDPI_Settings {
             echo '<p style="color: #d63638;">Please save your API key first before testing the connection.</p>';
             return;
         }
-        
+
         echo '<button type="button" id="sdpi-test-connection" class="button button-secondary">Test API Connection</button>';
         echo '<div id="sdpi-test-result" style="margin-top: 10px;"></div>';
         echo '<script>
@@ -391,6 +416,22 @@ class SDPI_Settings {
             </div>
         </div>
         <?php
+    }
+
+    public function legal_section_callback() {
+        echo '<p>Configura los enlaces legales que se mostrarán en el formulario de información de contacto.</p>';
+    }
+
+    public function privacy_policy_url_field_callback() {
+        $privacy_url = get_option('sdpi_privacy_policy_url');
+        echo '<input type="url" name="sdpi_privacy_policy_url" value="' . esc_url($privacy_url) . '" class="regular-text" placeholder="https://tusitio.com/politica-de-privacidad" />';
+        echo '<p class="description">URL que se usará para el enlace de la Política de Privacidad.</p>';
+    }
+
+    public function terms_conditions_url_field_callback() {
+        $terms_url = get_option('sdpi_terms_conditions_url');
+        echo '<input type="url" name="sdpi_terms_conditions_url" value="' . esc_url($terms_url) . '" class="regular-text" placeholder="https://tusitio.com/terminos" />';
+        echo '<p class="description">URL que se usará para el enlace de los Términos y Condiciones.</p>';
     }
 
     public function sanitize_trimmed_text($value) {

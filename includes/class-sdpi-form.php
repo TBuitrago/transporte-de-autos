@@ -242,6 +242,13 @@ class SDPI_Form {
         // MODIFICADO: Ya no verificamos datos de contacto al inicio
         // El formulario de cotizacion se muestra directamente
 
+        $icons_base_url = plugin_dir_url(__FILE__) . '../assets/icons/';
+        $summary_icons = array(
+            'location' => $icons_base_url . 'location.svg',
+            'inland'   => $icons_base_url . 'inland.svg',
+            'car'      => $icons_base_url . 'car.svg',
+        );
+
         ob_start();
         ?>
         <div class="sdpi-pricing-form">
@@ -365,22 +372,37 @@ class SDPI_Form {
                 </div>
                 <div class="sdpi-summary-body">
                     <div class="sdpi-summary-item pending">
+                        <span class="sdpi-summary-icon" aria-hidden="true">
+                            <img src="<?php echo esc_url($summary_icons['location']); ?>" alt="" role="presentation">
+                        </span>
                         <span class="sdpi-summary-label">Ciudad de origen</span>
                         <span class="sdpi-summary-value" id="sdpi-summary-pickup">Pendiente</span>
                     </div>
                     <div class="sdpi-summary-item pending">
+                        <span class="sdpi-summary-icon" aria-hidden="true">
+                            <img src="<?php echo esc_url($summary_icons['location']); ?>" alt="" role="presentation">
+                        </span>
                         <span class="sdpi-summary-label">Ciudad de destino</span>
                         <span class="sdpi-summary-value" id="sdpi-summary-delivery">Pendiente</span>
                     </div>
                     <div class="sdpi-summary-item pending">
+                        <span class="sdpi-summary-icon" aria-hidden="true">
+                            <img src="<?php echo esc_url($summary_icons['inland']); ?>" alt="" role="presentation">
+                        </span>
                         <span class="sdpi-summary-label">Tipo de trailer</span>
                         <span class="sdpi-summary-value" id="sdpi-summary-trailer">Pendiente</span>
                     </div>
                     <div class="sdpi-summary-item pending">
+                        <span class="sdpi-summary-icon" aria-hidden="true">
+                            <img src="<?php echo esc_url($summary_icons['car']); ?>" alt="" role="presentation">
+                        </span>
                         <span class="sdpi-summary-label">Vehiculo</span>
                         <span class="sdpi-summary-value" id="sdpi-summary-vehicle">Pendiente</span>
                     </div>
                     <div class="sdpi-summary-item pending" id="sdpi-summary-transport-type-row" style="display:none;">
+                        <span class="sdpi-summary-icon" aria-hidden="true">
+                            <img src="<?php echo esc_url($summary_icons['inland']); ?>" alt="" role="presentation">
+                        </span>
                         <span class="sdpi-summary-label">Tipo de transporte</span>
                         <span class="sdpi-summary-value" id="sdpi-summary-transport-type">Pendiente</span>
                     </div>
@@ -1007,22 +1029,37 @@ class SDPI_Form {
                     </div>
                     <div class="sdpi-summary-body">
                         <div class="sdpi-summary-item pending">
+                            <span class="sdpi-summary-icon" aria-hidden="true">
+                                <img src="<?php echo esc_url($summary_icons['location']); ?>" alt="" role="presentation">
+                            </span>
                             <span class="sdpi-summary-label">Ciudad de origen</span>
                             <span class="sdpi-summary-value" id="sdpi-review-summary-pickup">Pendiente</span>
                         </div>
                         <div class="sdpi-summary-item pending">
+                            <span class="sdpi-summary-icon" aria-hidden="true">
+                                <img src="<?php echo esc_url($summary_icons['location']); ?>" alt="" role="presentation">
+                            </span>
                             <span class="sdpi-summary-label">Ciudad de destino</span>
                             <span class="sdpi-summary-value" id="sdpi-review-summary-delivery">Pendiente</span>
                         </div>
                         <div class="sdpi-summary-item pending">
+                            <span class="sdpi-summary-icon" aria-hidden="true">
+                                <img src="<?php echo esc_url($summary_icons['inland']); ?>" alt="" role="presentation">
+                            </span>
                             <span class="sdpi-summary-label">Tipo de trailer</span>
                             <span class="sdpi-summary-value" id="sdpi-review-summary-trailer">Pendiente</span>
                         </div>
                         <div class="sdpi-summary-item pending">
+                            <span class="sdpi-summary-icon" aria-hidden="true">
+                                <img src="<?php echo esc_url($summary_icons['car']); ?>" alt="" role="presentation">
+                            </span>
                             <span class="sdpi-summary-label">Vehiculo</span>
                             <span class="sdpi-summary-value" id="sdpi-review-summary-vehicle">Pendiente</span>
                         </div>
                         <div class="sdpi-summary-item pending" id="sdpi-review-summary-transport-type-row">
+                            <span class="sdpi-summary-icon" aria-hidden="true">
+                                <img src="<?php echo esc_url($summary_icons['inland']); ?>" alt="" role="presentation">
+                            </span>
                             <span class="sdpi-summary-label">Tipo de transporte</span>
                             <span class="sdpi-summary-value" id="sdpi-review-summary-transport-type">Pendiente</span>
                         </div>
@@ -1083,22 +1120,37 @@ class SDPI_Form {
                     </div>
                     <div class="sdpi-summary-body">
                         <div class="sdpi-summary-item pending">
+                            <span class="sdpi-summary-icon" aria-hidden="true">
+                                <img src="<?php echo esc_url($summary_icons['location']); ?>" alt="" role="presentation">
+                            </span>
                             <span class="sdpi-summary-label">Ciudad de origen</span>
                             <span class="sdpi-summary-value" id="sdpi-payment-summary-pickup">Pendiente</span>
                         </div>
                         <div class="sdpi-summary-item pending">
+                            <span class="sdpi-summary-icon" aria-hidden="true">
+                                <img src="<?php echo esc_url($summary_icons['location']); ?>" alt="" role="presentation">
+                            </span>
                             <span class="sdpi-summary-label">Ciudad de destino</span>
                             <span class="sdpi-summary-value" id="sdpi-payment-summary-delivery">Pendiente</span>
                         </div>
                         <div class="sdpi-summary-item pending">
+                            <span class="sdpi-summary-icon" aria-hidden="true">
+                                <img src="<?php echo esc_url($summary_icons['inland']); ?>" alt="" role="presentation">
+                            </span>
                             <span class="sdpi-summary-label">Tipo de trailer</span>
                             <span class="sdpi-summary-value" id="sdpi-payment-summary-trailer">Pendiente</span>
                         </div>
                         <div class="sdpi-summary-item pending">
+                            <span class="sdpi-summary-icon" aria-hidden="true">
+                                <img src="<?php echo esc_url($summary_icons['car']); ?>" alt="" role="presentation">
+                            </span>
                             <span class="sdpi-summary-label">Vehiculo</span>
                             <span class="sdpi-summary-value" id="sdpi-payment-summary-vehicle">Pendiente</span>
                         </div>
                         <div class="sdpi-summary-item pending" id="sdpi-payment-summary-transport-type-row">
+                            <span class="sdpi-summary-icon" aria-hidden="true">
+                                <img src="<?php echo esc_url($summary_icons['inland']); ?>" alt="" role="presentation">
+                            </span>
                             <span class="sdpi-summary-label">Tipo de transporte</span>
                             <span class="sdpi-summary-value" id="sdpi-payment-summary-transport-type">Pendiente</span>
                         </div>

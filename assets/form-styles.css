@@ -1495,24 +1495,31 @@
 .sdpi-summary-item {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 0.75rem;
     padding: 0.75rem 0;
     border-bottom: 1px solid rgba(23, 32, 95, 0.08);
-    position: relative;
-    padding-left: 1.5rem;
 }
 
-.sdpi-summary-item::before {
-    content: '✓';
-    color: #2F7955;
-    font-weight: 600;
-    position: absolute;
-    left: 0;
+.sdpi-summary-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: rgba(47, 121, 85, 0.12);
 }
 
-.sdpi-summary-item.pending::before {
-    content: '•';
-    color: rgba(23, 32, 95, 0.3);
+.sdpi-summary-icon img {
+    width: 1rem;
+    height: 1rem;
+    display: block;
+}
+
+.sdpi-summary-item.pending .sdpi-summary-icon {
+    background: rgba(23, 32, 95, 0.08);
+    opacity: 0.7;
 }
 
 .sdpi-summary-item.pending .sdpi-summary-value {
@@ -1524,12 +1531,15 @@
     font-size: 0.85rem;
     letter-spacing: 0.04em;
     text-transform: uppercase;
+    flex: 1;
+    min-width: 0;
 }
 
 .sdpi-summary-value {
     color: #17205F;
     font-weight: 600;
     font-size: 1rem;
+    margin-left: auto;
 }
 
 .sdpi-summary-total {

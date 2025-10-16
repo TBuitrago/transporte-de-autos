@@ -351,9 +351,9 @@ class SDPI_Form {
 
         $icons_base_url = plugin_dir_url(__FILE__) . '../assets/icons/';
         $summary_icons = array(
-            'location' => $icons_base_url . 'location.svg',
-            'inland'   => $icons_base_url . 'inland.svg',
-            'car'      => $icons_base_url . 'car.svg',
+            'location' => $icons_base_url . 'Location.webp',
+            'inland'   => $icons_base_url . 'Inland.webp',
+            'car'      => $icons_base_url . 'Car.webp',
         );
 
         $this->summary_icons = $summary_icons;

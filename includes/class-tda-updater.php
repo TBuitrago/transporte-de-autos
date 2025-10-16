@@ -90,8 +90,12 @@ class TDA_GitHub_Updater {
      * Add headers required by the GitHub API.
      */
     public function set_github_headers($args, $url) {
-        if (strpos($url, 'api.github.com') === false) {
+        if (!is_string($url) || stripos($url, 'api.github.com') === false) {
             return $args;
+        }
+
+        if (!isset($args['headers']) || (!is_array($args['headers']) && !($args['headers'] instanceof ArrayAccess))) {
+            $args['headers'] = array();
         }
 
         if (empty($args['headers']['User-Agent'])) {

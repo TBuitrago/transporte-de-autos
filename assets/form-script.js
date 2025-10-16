@@ -1,6 +1,7 @@
 ﻿jQuery(document).ready(function($) {
     $("#sdpi_trailer_type, #sdpi_vehicle_type").on("change", updateLiveSummary);
     $("#sdpi_vehicle_make, #sdpi_vehicle_model, #sdpi_vehicle_year").on("input change", updateLiveSummary);
+    $('#sdpi_vehicle_inoperable, #sdpi_vehicle_electric').on('change', updateLiveSummary);
     'use strict';
     
     console.log('SDPI Form Script loaded - NEW FLOW');
@@ -298,6 +299,28 @@
         }
     }
 
+    function toggleSurchargeClass($element, shouldHighlight) {
+        if (!$element || !$element.length) { return; }
+        if (shouldHighlight) {
+            $element.addClass('sdpi-summary-surcharge');
+        } else {
+            $element.removeClass('sdpi-summary-surcharge');
+        }
+    }
+
+    function updateSurchargeDisplay(setter, selector, isSelected, highlight) {
+        if (typeof setter !== 'function') { return; }
+        var value = isSelected ? 'Sí' : 'No';
+        setter(selector, value);
+        toggleSurchargeClass($(selector), !!highlight && !!isSelected);
+    }
+
+    function clearSurchargeDisplay(setter, selector) {
+        if (typeof setter !== 'function') { return; }
+        setter(selector, '');
+        toggleSurchargeClass($(selector), false);
+    }
+
     function resetPaymentSummary() {
         setPaymentSummaryValue('#sdpi-payment-summary-pickup', '');
         setPaymentSummaryValue('#sdpi-payment-summary-delivery', '');
@@ -306,6 +329,8 @@
         setPaymentSummaryValue('#sdpi-payment-summary-transport-type', '');
         $('#sdpi-payment-summary-transport-type-row').hide();
         updatePaymentSummaryPrice('');
+        clearSurchargeDisplay(setPaymentSummaryValue, '#sdpi-payment-summary-inoperable');
+        clearSurchargeDisplay(setPaymentSummaryValue, '#sdpi-payment-summary-electric');
     }
 
     function resetReviewSummary() {
@@ -317,6 +342,8 @@
         $('#sdpi-review-summary-transport-type-row').hide();
         resetPaymentSummary();
         updateReviewSummaryPrice('');
+        clearSurchargeDisplay(setReviewSummaryValue, '#sdpi-review-summary-inoperable');
+        clearSurchargeDisplay(setReviewSummaryValue, '#sdpi-review-summary-electric');
     }
 
     function updateReviewSummary(details) {
@@ -333,6 +360,18 @@
         } else {
             $('#sdpi-review-summary-transport-type-row').hide();
             setReviewSummaryValue('#sdpi-review-summary-transport-type', '');
+        }
+
+        if (typeof details.inoperable !== 'undefined') {
+            updateSurchargeDisplay(setReviewSummaryValue, '#sdpi-review-summary-inoperable', !!details.inoperable, !!details.surchargeHighlight);
+        } else {
+            clearSurchargeDisplay(setReviewSummaryValue, '#sdpi-review-summary-inoperable');
+        }
+
+        if (typeof details.electric !== 'undefined') {
+            updateSurchargeDisplay(setReviewSummaryValue, '#sdpi-review-summary-electric', !!details.electric, !!details.surchargeHighlight);
+        } else {
+            clearSurchargeDisplay(setReviewSummaryValue, '#sdpi-review-summary-electric');
         }
 
         updatePaymentSummary(details);
@@ -353,6 +392,18 @@
         } else {
             $('#sdpi-payment-summary-transport-type-row').hide();
             setPaymentSummaryValue('#sdpi-payment-summary-transport-type', '');
+        }
+
+        if (typeof details.inoperable !== 'undefined') {
+            updateSurchargeDisplay(setPaymentSummaryValue, '#sdpi-payment-summary-inoperable', !!details.inoperable, !!details.surchargeHighlight);
+        } else {
+            clearSurchargeDisplay(setPaymentSummaryValue, '#sdpi-payment-summary-inoperable');
+        }
+
+        if (typeof details.electric !== 'undefined') {
+            updateSurchargeDisplay(setPaymentSummaryValue, '#sdpi-payment-summary-electric', !!details.electric, !!details.surchargeHighlight);
+        } else {
+            clearSurchargeDisplay(setPaymentSummaryValue, '#sdpi-payment-summary-electric');
         }
 
         updatePaymentSummaryPrice(details.price || '');
@@ -447,6 +498,11 @@
         }
         setSummaryValue('#sdpi-summary-vehicle', vehicleParts.join(' '));
 
+        var isInoperable = $('#sdpi_vehicle_inoperable').is(':checked');
+        var isElectric = $('#sdpi_vehicle_electric').is(':checked');
+        updateSurchargeDisplay(setSummaryValue, '#sdpi-summary-inoperable', isInoperable, false);
+        updateSurchargeDisplay(setSummaryValue, '#sdpi-summary-electric', isElectric, false);
+
         setSummaryValue('#sdpi-summary-transport-type', '');
         if ($('#sdpi-pricing-form').is(':visible')) {
             if (vehicleType) {
@@ -517,8 +573,9 @@
     });
     $("#sdpi_trailer_type, #sdpi_vehicle_type").on("change", updateLiveSummary);
     $("#sdpi_vehicle_make, #sdpi_vehicle_model, #sdpi_vehicle_year").on("input change", updateLiveSummary);
+    $('#sdpi_vehicle_inoperable, #sdpi_vehicle_electric').on('change', updateLiveSummary);
 
-    
+
     // Handle city selection
     $(document).on('click', '.sdpi-city-option', function() {
         var cityData = $(this).data('city');
@@ -1073,6 +1130,8 @@
             setSummaryValue('#sdpi-summary-vehicle', vehicleSummary);
             setSummaryPrice(formattedPrice);
             setSummaryValue('#sdpi-summary-transport-type', formatTransportLabel(isMaritime ? 'maritime' : 'terrestrial'));
+            updateSurchargeDisplay(setSummaryValue, '#sdpi-summary-inoperable', isInoperable, isMaritime);
+            updateSurchargeDisplay(setSummaryValue, '#sdpi-summary-electric', isElectric, isMaritime);
 
             updateReviewSummary({
                 pickup: pickupLabel,
@@ -1080,7 +1139,10 @@
                 trailer: trailerText,
                 vehicle: vehicleSummary,
                 transport: formatTransportLabel(isMaritime ? 'maritime' : 'terrestrial'),
-                price: formattedPrice
+                price: formattedPrice,
+                inoperable: isInoperable,
+                electric: isElectric,
+                surchargeHighlight: isMaritime
             });
 
             if ($additionalInfoContainer.length) {

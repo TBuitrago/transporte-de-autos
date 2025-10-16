@@ -469,8 +469,8 @@ class SDPI_Form {
                 </div>
 
                 <div class="sdpi-form-submit">
-                    <button type="submit" class="sdpi-submit-btn" id="sdpi-submit-btn">Obtener cotizacion</button>
-                    <button type="button" class="sdpi-pay-btn" id="sdpi-inline-continue-btn" style="display:none;">Continuar</button>
+                    <button type="submit" class="sdpi-submit-btn" id="sdpi-submit-btn">Obtener cotización</button>
+                    <button type="button" class="sdpi-pay-btn" id="sdpi-inline-continue-btn" style="display:none;">Pagar en línea</button>
                 </div>
             </form>
 
@@ -492,7 +492,7 @@ class SDPI_Form {
                         array(
                             'id' => 'sdpi-summary-continue-btn',
                             'class' => 'sdpi-pay-btn',
-                            'label' => 'Continuar',
+                            'label' => 'Pagar en línea',
                             'type' => 'button',
                         ),
                     ),
@@ -803,7 +803,9 @@ class SDPI_Form {
                 $this->render_summary_item('location', 'Ciudad de origen', $value_prefix . '-pickup');
                 $this->render_summary_item('location', 'Ciudad de destino', $value_prefix . '-delivery');
                 $this->render_summary_item('inland', 'Tipo de trailer', $value_prefix . '-trailer');
-                $this->render_summary_item('car', 'Vehiculo', $value_prefix . '-vehicle');
+                $this->render_summary_item('car', 'Vehículo', $value_prefix . '-vehicle');
+                $this->render_summary_item('car', 'Vehículo inoperable', $value_prefix . '-inoperable');
+                $this->render_summary_item('car', 'Vehículo eléctrico', $value_prefix . '-electric');
                 $this->render_summary_item('inland', 'Tipo de transporte', $value_prefix . '-transport-type', $transport_row_id, $args['transport_row_hidden']);
                 ?>
             </div>
@@ -1355,7 +1357,7 @@ class SDPI_Form {
                                placeholder="Ej: juan@email.com">
                     </div>
                 <div class="sdpi-form-submit">
-                    <button type="submit" class="sdpi-submit-btn" id="sdpi-submit-btn">Obtener cotizacion</button>
+                    <button type="submit" class="sdpi-submit-btn" id="sdpi-submit-btn">Obtener cotización</button>
                 </div>
             </form>
             </div>

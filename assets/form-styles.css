@@ -1478,6 +1478,13 @@
     word-break: break-word;
 }
 
+.sdpi-summary-value.sdpi-summary-surcharge::after {
+    content: ' +';
+    color: #d17a00;
+    font-weight: 700;
+    margin-left: 0.15rem;
+}
+
 .sdpi-summary-total {
     display: flex;
     align-items: center;

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Custom form handler for Transporte de Autos - FIXED VERSION
  */

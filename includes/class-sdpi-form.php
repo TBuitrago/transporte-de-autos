@@ -360,7 +360,7 @@ class SDPI_Form {
 
         ob_start();
         ?>
-        <div class="sdpi-pricing-form">
+        <div class="sdpi-pricing-form sdpi-screen-wrapper">
             <div class="sdpi-progress-bar" id="sdpi-progress-bar">
                 <div class="sdpi-progress-step active" data-step="1">
                     <span class="sdpi-progress-number">1</span>
@@ -875,8 +875,10 @@ class SDPI_Form {
                     <img src="<?php echo esc_url($icon_url); ?>" alt="" role="presentation">
                 <?php endif; ?>
             </span>
-            <span class="sdpi-summary-label"><?php echo esc_html($label); ?></span>
-            <span class="sdpi-summary-value" id="<?php echo esc_attr($value_id); ?>">Pendiente</span>
+            <div class="sdpi-summary-content">
+                <span class="sdpi-summary-label"><?php echo esc_html($label); ?></span>
+                <span class="sdpi-summary-value" id="<?php echo esc_attr($value_id); ?>">Pendiente</span>
+            </div>
         </div>
         <?php
     }
@@ -887,7 +889,7 @@ class SDPI_Form {
      */
     private function render_additional_info_screen() {
         ?>
-        <div id="sdpi-additional-info" class="sdpi-review-screen" style="display:none;">
+        <div id="sdpi-additional-info" class="sdpi-screen-wrapper sdpi-review-screen" style="display:none;">
             <div class="sdpi-form-layout">
                 <div class="sdpi-review-main">
                     <div class="sdpi-form-card sdpi-review-intro">
@@ -1258,7 +1260,7 @@ class SDPI_Form {
             </div>
         </div>
 
-        <div id="sdpi-payment-screen" class="sdpi-review-screen" style="display:none;">
+        <div id="sdpi-payment-screen" class="sdpi-screen-wrapper sdpi-review-screen" style="display:none;">
             <div class="sdpi-form-layout">
                 <div class="sdpi-review-main">
                     <div class="sdpi-form-card sdpi-review-card sdpi-payment-card" id="sdpi-payment-panel">

@@ -98,7 +98,8 @@
     margin-top: 2rem;
 }
 
-.sdpi-submit-btn {
+.sdpi-submit-btn,
+.sdpi-pay-btn {
     background: #17205F;
     color: #ffffff;
     border: none;
@@ -109,47 +110,30 @@
     cursor: pointer;
     transition: all 0.3s ease;
     box-shadow: 0 14px 32px rgba(23, 32, 95, 0.35);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    text-align: center;
 }
 
-.sdpi-submit-btn:hover:not(:disabled) {
+.sdpi-submit-btn:hover:not(:disabled),
+.sdpi-pay-btn:hover:not(:disabled) {
     transform: translateY(-2px);
     box-shadow: 0 18px 42px rgba(23, 32, 95, 0.4);
     background: #1e2b7d;
 }
 
-.sdpi-submit-btn:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-    transform: none;
-}
-
-/* Payment button styles */
-.sdpi-pay-btn {
-    background: linear-gradient(135deg, #2F7955, #256143);
-    color: #ffffff;
-    border: none;
-    padding: 1rem 2.3rem;
-    font-size: 1.05rem;
-    font-weight: 600;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 14px 30px rgba(47, 121, 85, 0.35);
-    margin-top: 1rem;
-    display: block;
-    width: 100%;
-}
-
-.sdpi-pay-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 18px 40px rgba(47, 121, 85, 0.4);
-    background: linear-gradient(135deg, #256143, #1d4d35);
-}
-
+.sdpi-submit-btn:disabled,
 .sdpi-pay-btn:disabled {
     opacity: 0.7;
     cursor: not-allowed;
     transform: none;
+}
+
+.sdpi-pay-btn {
+    margin-top: 1rem;
+    width: 100%;
 }
 
 .sdpi-clear-btn {
@@ -168,39 +152,6 @@
 .sdpi-clear-btn:hover {
     background: rgba(23, 32, 95, 0.06);
     transform: translateY(-1px);
-}
-
-/* Payment button styles */
-.sdpi-pay-btn {
-    background: linear-gradient(135deg, #27ae60, #219a52);
-    color: white;
-    border: none;
-    padding: 1rem 2rem;
-    font-size: 1.1rem;
-    font-weight: 600;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
-    margin-top: 1rem;
-    display: block;
-    width: 100%;
-    max-width: 300px;
-    margin-left: auto;
-    margin-right: auto;
-}
-
-.sdpi-pay-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(39, 174, 96, 0.4);
-    background: linear-gradient(135deg, #219a52, #1e8449);
-}
-
-.sdpi-pay-btn:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-    transform: none;
-    background: #95a5a6;
 }
 
 /* Loading indicator */
@@ -856,44 +807,6 @@
     margin-bottom: 0;
 }
 
-/* Maritime buttons */
-#sdpi-maritime-continue {
-    background: linear-gradient(135deg, #007cba, #005a87);
-    color: white;
-    border: none;
-    padding: 1rem 2rem;
-    font-size: 1.1rem;
-    font-weight: 600;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(0, 124, 186, 0.3);
-}
-
-#sdpi-maritime-continue:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 124, 186, 0.4);
-    background: linear-gradient(135deg, #005a87, #004666);
-}
-
-#sdpi-maritime-cancel {
-    background: #6c757d;
-    color: white;
-    border: none;
-    padding: 0.75rem 1.5rem;
-    font-size: 1rem;
-    font-weight: 500;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    margin-left: 1rem;
-}
-
-#sdpi-maritime-cancel:hover {
-    background: #5a6268;
-    transform: translateY(-1px);
-}
-
 /* Transport type indicator */
 #sdpi-summary-transport-type-row {
     background: #e3f2fd;
@@ -907,7 +820,8 @@
     color: #007cba;
 }
 /* === SDPI 2025 redesign overrides === */
-.sdpi-pricing-form {
+.sdpi-pricing-form,
+.sdpi-screen-wrapper {
     max-width: 1100px;
     margin: 2.5rem auto;
     padding: 3rem;
@@ -916,7 +830,7 @@
     box-shadow: 0 24px 60px rgba(23, 32, 95, 0.08);
 }
 
-.sdpi-pricing-form, .sdpi-form, .sdpi-summary-panel {
+.sdpi-pricing-form, .sdpi-screen-wrapper, .sdpi-form, .sdpi-summary-panel {
     font-family: "Poppins", sans-serif;
     color: #17205F;
 }
@@ -1507,7 +1421,7 @@
 
 .sdpi-summary-item {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: flex-start;
     gap: 0.75rem;
     padding: 0.75rem 0;
@@ -1530,6 +1444,14 @@
     display: block;
 }
 
+.sdpi-summary-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    flex: 1;
+    min-width: 0;
+}
+
 .sdpi-summary-item.pending .sdpi-summary-icon {
     background: rgba(23, 32, 95, 0.08);
     opacity: 0.7;
@@ -1544,15 +1466,16 @@
     font-size: 0.85rem;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    flex: 1;
-    min-width: 0;
+    display: block;
 }
 
 .sdpi-summary-value {
+    display: block;
     color: #17205F;
     font-weight: 600;
     font-size: 1rem;
-    margin-left: auto;
+    line-height: 1.4;
+    word-break: break-word;
 }
 
 .sdpi-summary-total {
@@ -1666,6 +1589,7 @@
 
 .sdpi-form-actions .sdpi-pay-btn {
     width: auto;
+    margin-top: 0;
 }
 
 .sdpi-form-actions .sdpi-clear-btn {
@@ -1725,48 +1649,10 @@
     display: none;
 }
 
-.sdpi-submit-btn {
-    background: #17205F;
-    color: #ffffff;
-    border: none;
-    padding: 1.05rem 2.5rem;
-    font-size: 1.05rem;
-    font-weight: 600;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 14px 32px rgba(23, 32, 95, 0.35);
-}
-
-.sdpi-submit-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 18px 42px rgba(23, 32, 95, 0.4);
-    background: #1e2b7d;
-}
-
 .sdpi-submit-helper {
     margin-top: 0.85rem;
     color: #5c628f;
     font-size: 0.9rem;
-}
-
-.sdpi-pay-btn {
-    background: linear-gradient(135deg, #2F7955, #256143);
-    color: #ffffff;
-    border: none;
-    padding: 1rem 2.3rem;
-    font-size: 1.05rem;
-    font-weight: 600;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 14px 30px rgba(47, 121, 85, 0.35);
-}
-
-.sdpi-pay-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 18px 40px rgba(47, 121, 85, 0.4);
-    background: linear-gradient(135deg, #256143, #1d4d35);
 }
 
 .sdpi-summary-total.pending {

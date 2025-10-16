@@ -232,6 +232,112 @@ class SDPI_Form {
     }
 
     /**
+     * Dispatch an automatic Zapier update respecting the 10 minute session window
+     */
+    private function dispatch_zapier_update($session_id, $quote_data, $extra_data = array(), $close_session = false) {
+        if (empty($session_id) || empty($quote_data) || !is_array($quote_data) || !isset($quote_data['final_price'])) {
+            return;
+        }
+
+        $session = new SDPI_Session();
+        $session_row = $session->get($session_id);
+        $session_data = is_array($session_row) ? ($session_row['data'] ?? array()) : array();
+
+        $tracking = array();
+        if (isset($session_data['zapier_tracking']) && is_array($session_data['zapier_tracking'])) {
+            $tracking = $session_data['zapier_tracking'];
+        }
+
+        if (!empty($tracking['closed'])) {
+            return;
+        }
+
+        $now = current_time('timestamp');
+        $window = (defined('MINUTE_IN_SECONDS') ? MINUTE_IN_SECONDS : 60) * 10;
+        $first_sent = isset($tracking['first_sent_at']) ? intval($tracking['first_sent_at']) : 0;
+        $expires_at = isset($tracking['expires_at']) ? intval($tracking['expires_at']) : ($first_sent ? ($first_sent + $window) : 0);
+
+        if ($first_sent && $now > ($expires_at ?: ($first_sent + $window))) {
+            $tracking['closed'] = true;
+            $tracking['closed_reason'] = 'expired';
+            $tracking['closed_at'] = $now;
+            $session->update_data($session_id, array('zapier_tracking' => $tracking));
+            return;
+        }
+
+        if (!$first_sent) {
+            $tracking['first_sent_at'] = $now;
+            $tracking['expires_at'] = $now + $window;
+        }
+
+        $tracking['last_sent_at'] = $now;
+
+        if ($close_session) {
+            $tracking['closed'] = true;
+            $tracking['closed_reason'] = 'payment';
+            $tracking['closed_at'] = $now;
+        }
+
+        $session->update_data($session_id, array('zapier_tracking' => $tracking));
+
+        $payload_extra = is_array($extra_data) ? $extra_data : array();
+
+        if (empty($payload_extra['client']) && isset($session_data['client_info'])) {
+            $payload_extra['client'] = $session_data['client_info'];
+        }
+
+        if (empty($payload_extra['shipping']) && isset($session_data['shipping'])) {
+            $payload_extra['shipping'] = $session_data['shipping'];
+        }
+
+        if (empty($payload_extra['maritime_details'])) {
+            if (isset($session_data['maritime']) && is_array($session_data['maritime'])) {
+                $payload_extra['maritime_details'] = $session_data['maritime'];
+            } elseif (isset($quote_data['maritime_details'])) {
+                $payload_extra['maritime_details'] = $quote_data['maritime_details'];
+            }
+        }
+
+        if (empty($payload_extra['transport_type'])) {
+            if (isset($session_data['transport_type'])) {
+                $payload_extra['transport_type'] = $session_data['transport_type'];
+            } elseif (!empty($quote_data['transport_type'])) {
+                $payload_extra['transport_type'] = $quote_data['transport_type'];
+            } elseif (!empty($quote_data['maritime_involved'])) {
+                $payload_extra['transport_type'] = 'maritime';
+            } else {
+                $payload_extra['transport_type'] = 'terrestrial';
+            }
+        }
+
+        if (empty($payload_extra['payment']) && isset($session_data['payment'])) {
+            $payload_extra['payment'] = $session_data['payment'];
+        }
+
+        $payload_extra['session_id'] = $session_id;
+
+        $this->send_to_zapier(
+            $quote_data['pickup_zip'] ?? '',
+            $quote_data['delivery_zip'] ?? '',
+            $quote_data['trailer_type'] ?? '',
+            $quote_data['vehicle_type'] ?? '',
+            !empty($quote_data['vehicle_inoperable']),
+            !empty($quote_data['vehicle_electric']),
+            $quote_data['vehicle_make'] ?? '',
+            $quote_data['vehicle_model'] ?? '',
+            $quote_data['vehicle_year'] ?? '',
+            $quote_data,
+            !empty($quote_data['maritime_involved']),
+            $payload_extra
+        );
+
+        $history = new SDPI_History();
+        if (method_exists($history, 'mark_zapier_status')) {
+            $history->mark_zapier_status($session_id, 'sent');
+        }
+    }
+
+    /**
      * Render the pricing form
      */
     public function render_form() {
@@ -1459,6 +1565,21 @@ class SDPI_Form {
             )
         ));
 
+        $this->dispatch_zapier_update(
+            $session_id,
+            $quote_data,
+            array(
+                'client' => array(
+                    'name' => $client_name,
+                    'email' => $client_email,
+                    'phone' => $client_phone,
+                    'captured_at' => $client_captured_at
+                ),
+                'shipping' => $quote_data['shipping'] ?? array(),
+                'transport_type' => $quote_data['transport_type'] ?? (!empty($quote_data['maritime_involved']) ? 'maritime' : 'terrestrial')
+            )
+        );
+
         // Return the quote data with success flag
         $response_data = $quote_data;
         $response_data['session_id'] = $session_id;
@@ -1571,6 +1692,13 @@ class SDPI_Form {
         if ($session_id) {
             $history = new SDPI_History();
             $history->update_additional_shipping($session_id, $shipping_details);
+
+            $session_row = $session->get($session_id);
+            $session_data = is_array($session_row) ? ($session_row['data'] ?? array()) : array();
+            $quote_data = isset($session_data['quote']) && is_array($session_data['quote']) ? $session_data['quote'] : array();
+            if (!empty($quote_data)) {
+                $this->dispatch_zapier_update($session_id, $quote_data, array('shipping' => $shipping_details));
+            }
         }
 
         wp_send_json_success('Informacion adicional guardada exitosamente.');
@@ -1761,6 +1889,21 @@ class SDPI_Form {
             'saved_at' => current_time('mysql')
         );
         $history->update_additional_shipping($session_id, $maritime_shipping_summary);
+
+        $session_row = $session->get($session_id);
+        $session_data = is_array($session_row) ? ($session_row['data'] ?? array()) : array();
+        $quote_data = isset($session_data['quote']) && is_array($session_data['quote']) ? $session_data['quote'] : array();
+        if (!empty($quote_data)) {
+            $this->dispatch_zapier_update(
+                $session_id,
+                $quote_data,
+                array(
+                    'maritime_details' => $maritime_details,
+                    'shipping' => $maritime_shipping_summary,
+                    'transport_type' => 'maritime'
+                )
+            );
+        }
 
         wp_send_json_success(array(
             'message' => 'Informacion maritima guardada exitosamente.',
@@ -2603,34 +2746,15 @@ class SDPI_Form {
         $extra_data = array(
             'client' => $client_info,
             'shipping' => $shipping_details,
-            'maritime_details' => isset($session_data['maritime_details']) ? $session_data['maritime_details'] : ($quote_data['maritime_details'] ?? array()),
+            'maritime_details' => isset($session_data['maritime']) ? $session_data['maritime'] : ($session_data['maritime_details'] ?? ($quote_data['maritime_details'] ?? array())),
             'transport_type' => isset($session_data['transport_type']) ? $session_data['transport_type'] : (!empty($quote_data['maritime_involved']) ? 'maritime' : 'terrestrial'),
-            'session_id' => $session_id,
             'payment' => array(
                 'transaction_id' => $transaction_id,
                 'auth_code' => $auth_code
             )
         );
 
-        $this->send_to_zapier(
-            $quote_data['pickup_zip'] ?? '',
-            $quote_data['delivery_zip'] ?? '',
-            $quote_data['trailer_type'] ?? '',
-            $quote_data['vehicle_type'] ?? '',
-            !empty($quote_data['vehicle_inoperable']),
-            !empty($quote_data['vehicle_electric']),
-            $quote_data['vehicle_make'] ?? '',
-            $quote_data['vehicle_model'] ?? '',
-            $quote_data['vehicle_year'] ?? '',
-            $quote_data,
-            !empty($quote_data['maritime_involved']),
-            $extra_data
-        );
-
-        // Mark Zapier status as sent
-        if (method_exists($history, 'mark_zapier_status')) {
-            $history->mark_zapier_status($session_id, 'sent');
-        }
+        $this->dispatch_zapier_update($session_id, $quote_data, $extra_data, true);
 
         $success_url = get_option('sdpi_payment_success_url');
 

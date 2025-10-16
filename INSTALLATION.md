@@ -1,4 +1,4 @@
-# Guía de Instalación - Super Dispatch Pricing Insights
+# Guía de Instalación - Transporte de Autos
 
 ## 📋 Requisitos del Sistema
 
@@ -25,27 +25,27 @@
 ### Paso 2: Subir al Servidor
 ```bash
 # Opción 1: Via FTP/SFTP
-# Subir la carpeta 'super-dispatch-pricing-insights' a:
+# Subir la carpeta 'transporte-de-autos' a:
 /wp-content/plugins/
 
 # Opción 2: Via WP-CLI
-wp plugin install /path/to/super-dispatch-pricing-insights.zip --activate
+wp plugin install /path/to/transporte-de-autos.zip --activate
 ```
 
 ### Paso 3: Activar el Plugin
 1. Ir al panel de administración de WordPress
 2. Navegar a `Plugins > Plugins Instalados`
-3. Buscar "Super Dispatch Pricing Insights"
+3. Buscar "Transporte de Autos"
 4. Hacer clic en "Activar"
 
 ### Paso 4: Verificar Activación
 - El plugin debería aparecer en la lista de plugins activos
-- Debería aparecer un menú "Super Dispatch Pricing" en el admin
+- Debería aparecer un menú "Transporte de Autos" en el admin
 
 ## ⚙️ Configuración Inicial
 
 ### Paso 1: Configurar API Key
-1. Ir a `Configuración > Super Dispatch Pricing`
+1. Ir a `Configuración > Transporte de Autos`
 2. Ingresar la API key proporcionada por Super Dispatch
 3. Hacer clic en "Guardar Configuración"
 4. Probar la conexión con el botón "Probar Conexión"
@@ -54,7 +54,7 @@ wp plugin install /path/to/super-dispatch-pricing-insights.zip --activate
 
 #### Opción A: Importación Automática (Recomendada)
 1. Descargar archivo de ciudades de [simplemaps.com](https://simplemaps.com/data/us-cities)
-2. Ir a `Configuración > Super Dispatch Pricing`
+2. Ir a `Configuración > Transporte de Autos`
 3. Usar la herramienta de importación (si está disponible)
 
 #### Opción B: Importación Manual
@@ -89,7 +89,7 @@ INSERT INTO wp_sdpi_cities (city, state_id, zips) VALUES
 ### Paso 3: Configurar Pagos (opcional)
 1. Verifica que el sitio use **HTTPS** (Accept.js sólo funciona en conexiones seguras).
 2. Obtén en Authorize.net los valores de **API Login ID**, **Transaction Key** y **Public Client Key**.
-3. En `Configuración > Super Dispatch Pricing` selecciona el entorno (Sandbox/Producción) y pega las credenciales.
+3. En `Configuración > Transporte de Autos` selecciona el entorno (Sandbox/Producción) y pega las credenciales.
 4. Define las URLs de redirección de **Éxito** y **Error**.
 5. Utiliza el botón "Probar conexión" y realiza una transacción de prueba en sandbox antes de pasar a producción.
 
@@ -97,8 +97,8 @@ INSERT INTO wp_sdpi_cities (city, state_id, zips) VALUES
 1. Verificar que el plugin tenga permisos de escritura
 2. Configurar permisos de archivos si es necesario:
 ```bash
-chmod 755 /wp-content/plugins/super-dispatch-pricing-insights/
-chmod 644 /wp-content/plugins/super-dispatch-pricing-insights/*.php
+chmod 755 /wp-content/plugins/transporte-de-autos/
+chmod 644 /wp-content/plugins/transporte-de-autos/*.php
 ```
 
 ## 🔧 Configuración Avanzada
@@ -138,11 +138,11 @@ SHOW INDEX FROM wp_sdpi_cities;
 
 ### Test 1: Verificar Plugin Activo
 1. Ir a `Plugins > Plugins Instalados`
-2. Confirmar que "Super Dispatch Pricing Insights" esté activo
+2. Confirmar que "Transporte de Autos" esté activo
 3. Verificar que no haya errores de activación
 
 ### Test 2: Verificar Configuración
-1. Ir a `Configuración > Super Dispatch Pricing`
+1. Ir a `Configuración > Transporte de Autos`
 2. Verificar que la API key esté configurada
 3. Probar la conexión con la API
 
@@ -245,7 +245,7 @@ tail -f /var/log/nginx/error.log
 ### Actualización Automática
 ```bash
 # Via WP-CLI
-wp plugin update super-dispatch-pricing-insights
+wp plugin update transporte-de-autos
 
 # Via WordPress Admin
 # Ir a Plugins > Actualizaciones
@@ -277,7 +277,7 @@ DROP TABLE wp_sdpi_cities;
 mysqldump -u username -p database_name > backup.sql
 
 # Backup de archivos
-tar -czf plugin_backup.tar.gz /wp-content/plugins/super-dispatch-pricing-insights/
+tar -czf plugin_backup.tar.gz /wp-content/plugins/transporte-de-autos/
 ```
 
 ## 📞 Soporte

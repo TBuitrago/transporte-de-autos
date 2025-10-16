@@ -1,6 +1,6 @@
 <?php
 /**
- * Cities database handler for Super Dispatch Pricing Insights
+ * Cities database handler for Transporte de Autos
  */
 
 class SDPI_Cities {

@@ -1,11 +1,11 @@
 <?php
 /**
- * Plugin Name: Super Dispatch Pricing Insights
+ * Plugin Name: Transporte de Autos
  * Description: Get real-time freight pricing quotes with custom forms or Gravity Forms integration
  * Version: 1.4.0
  * Author: Tomas Buitrago - TBA Digitals
  * License: GPL v2 or later
- * Text Domain: super-dispatch-pricing
+ * Text Domain: transporte-de-autos
  */
 
 // Prevent direct access
@@ -14,19 +14,48 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('SDPI_PLUGIN_DIR', plugin_dir_path(__FILE__));
-define('SDPI_PLUGIN_URL', plugin_dir_url(__FILE__));
-define('SDPI_VERSION', '1.4.0');
+define('TDA_PLUGIN_DIR', plugin_dir_path(__FILE__));
+define('TDA_PLUGIN_URL', plugin_dir_url(__FILE__));
+define('TDA_VERSION', '1.4.0');
+
+// Backwards compatibility with legacy constant names
+if (!defined('SDPI_PLUGIN_DIR')) {
+    define('SDPI_PLUGIN_DIR', TDA_PLUGIN_DIR);
+}
+
+if (!defined('SDPI_PLUGIN_URL')) {
+    define('SDPI_PLUGIN_URL', TDA_PLUGIN_URL);
+}
+
+if (!defined('SDPI_VERSION')) {
+    define('SDPI_VERSION', TDA_VERSION);
+}
 
 // Include required files
-require_once SDPI_PLUGIN_DIR . 'includes/class-sdpi-settings.php';
-require_once SDPI_PLUGIN_DIR . 'includes/class-sdpi-api.php';
-require_once SDPI_PLUGIN_DIR . 'includes/class-sdpi-form.php';
-require_once SDPI_PLUGIN_DIR . 'includes/class-sdpi-cities.php';
-require_once SDPI_PLUGIN_DIR . 'includes/class-sdpi-maritime.php';
-require_once SDPI_PLUGIN_DIR . 'includes/class-sdpi-history.php';
-require_once SDPI_PLUGIN_DIR . 'includes/class-sdpi-session.php';
-require_once SDPI_PLUGIN_DIR . 'auth/autoload.php';
+require_once TDA_PLUGIN_DIR . 'includes/class-sdpi-settings.php';
+require_once TDA_PLUGIN_DIR . 'includes/class-sdpi-api.php';
+require_once TDA_PLUGIN_DIR . 'includes/class-sdpi-form.php';
+require_once TDA_PLUGIN_DIR . 'includes/class-sdpi-cities.php';
+require_once TDA_PLUGIN_DIR . 'includes/class-sdpi-maritime.php';
+require_once TDA_PLUGIN_DIR . 'includes/class-sdpi-history.php';
+require_once TDA_PLUGIN_DIR . 'includes/class-sdpi-session.php';
+require_once TDA_PLUGIN_DIR . 'auth/autoload.php';
+require_once TDA_PLUGIN_DIR . 'includes/class-tda-updater.php';
+
+new TDA_GitHub_Updater(
+    __FILE__,
+    array(
+        'slug'              => 'transporte-de-autos',
+        'additional_slugs'  => array('transporte-de-autos', 'super-dispatch-pricing-insights'),
+        'user'              => 'tbadigitals',
+        'repo'              => 'transporte-de-autos',
+    )
+);
+
+function tda_load_textdomain() {
+    load_plugin_textdomain('transporte-de-autos', false, dirname(plugin_basename(__FILE__)) . '/languages');
+}
+add_action('plugins_loaded', 'tda_load_textdomain');
 
 // Initialize the plugin
 function sdpi_init() {
@@ -97,7 +126,7 @@ function sdpi_activate() {
     // Add admin notice about configuration
     add_action('admin_notices', function() {
         echo '<div class="notice notice-success is-dismissible">';
-        echo '<p><strong>Super Dispatch Pricing Insights:</strong> Plugin activated successfully! Please configure your API key in <a href="' . admin_url('options-general.php?page=super-dispatch-pricing') . '">Settings → Super Dispatch Pricing</a>.</p>';
+        echo '<p><strong>Transporte de Autos:</strong> Plugin activated successfully! Please configure your API key in <a href="' . admin_url('options-general.php?page=transporte-de-autos') . '">Settings → Transporte de Autos</a>.</p>';
         echo '</div>';
     });
 }
@@ -158,7 +187,7 @@ function sdpi_test_api_connection() {
 // Add plugin action links
 add_filter('plugin_action_links_' . plugin_basename(__FILE__), 'sdpi_plugin_action_links');
 function sdpi_plugin_action_links($links) {
-    $settings_link = '<a href="' . admin_url('options-general.php?page=super-dispatch-pricing') . '">Settings</a>';
+    $settings_link = '<a href="' . admin_url('options-general.php?page=transporte-de-autos') . '">' . esc_html__('Settings', 'transporte-de-autos') . '</a>';
     array_unshift($links, $settings_link);
     return $links;
 }

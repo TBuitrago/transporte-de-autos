@@ -1,4 +1,4 @@
-# Super Dispatch Pricing Insights - Documentación Técnica
+# Transporte de Autos - Documentación Técnica
 
 ## Perfil del Desarrollador
 **Tomas Buitrago**  
@@ -32,7 +32,7 @@ Cada cotización avanza por los estados `inicial → cotizador → checkout → 
 ## Clases Principales
 
 ### `SDPI_Settings`
-- Renderiza la pantalla de ajustes (`Settings → Super Dispatch Pricing`).
+- Renderiza la pantalla de ajustes (`Settings → Transporte de Autos`).
 - Registra opciones de API key, caché, credenciales de Authorize.net, URLs de éxito/error y webhook de Zapier.
 - Expone botones de prueba para la API de Super Dispatch.
 
@@ -51,6 +51,11 @@ Responsable del flujo completo del formulario, AJAX y pagos:
 - `ajax_initiate_payment()` prepara el payload para Accept.js y cambia el estado a `checkout`.
 - `ajax_process_payment()` valida el nonce de Accept.js, envía el cargo a Authorize.net y marca el estado `completado`.
 - `send_to_zapier()` arma el payload del webhook (opcional) con datos de contacto, vehículo, tarifas y estado del flujo.
+
+### `TDA_GitHub_Updater`
+- Consulta periódicamente las releases públicas del repositorio `tbadigitals/transporte-de-autos`.
+- Añade los datos de actualización al transient `update_plugins` y responde a la ventana de detalles (`plugins_api`).
+- Expone nombre, versión, enlace al repositorio y notas del release directamente en el administrador de WordPress.
 
 ### `SDPI_Maritime`
 - Utilidades para identificar si un ZIP pertenece a San Juan (`009`).

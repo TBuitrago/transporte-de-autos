@@ -1,6 +1,6 @@
 <?php
 /**
- * Settings class for Super Dispatch Pricing Insights
+ * Settings class for Transporte de Autos
  */
 
 class SDPI_Settings {
@@ -13,10 +13,10 @@ class SDPI_Settings {
 
     public function add_admin_menu() {
         add_options_page(
-            'Super Dispatch Pricing Insights',
-            'Super Dispatch Pricing',
+            'Transporte de Autos',
+            'Transporte de Autos',
             'manage_options',
-            'super-dispatch-pricing',
+            'transporte-de-autos',
             array($this, 'settings_page')
         );
     }
@@ -176,7 +176,7 @@ class SDPI_Settings {
     }
 
     public function api_section_callback() {
-        echo '<p>Configure your Super Dispatch Pricing Insights API settings. The plugin will use these settings to connect to the Super Dispatch API.</p>';
+        echo '<p>Configure your Transporte de Autos settings. The plugin will use these values to connect to the Super Dispatch API.</p>';
     }
 
     public function api_key_field_callback() {
@@ -192,7 +192,7 @@ class SDPI_Settings {
     public function api_endpoint_field_callback() {
         $endpoint = get_option('sdpi_api_endpoint');
         echo '<input type="url" name="sdpi_api_endpoint" value="' . esc_url($endpoint) . '" class="regular-text" />';
-        echo '<p class="description">The API endpoint URL for Super Dispatch Pricing Insights</p>';
+        echo '<p class="description">The API endpoint URL used by Transporte de Autos</p>';
     }
 
     public function cache_time_field_callback() {
@@ -314,19 +314,19 @@ class SDPI_Settings {
         $api_key = get_option('sdpi_api_key');
         if (empty($api_key)) {
             echo '<div class="notice notice-warning is-dismissible">';
-            echo '<p><strong>Super Dispatch Pricing Insights:</strong> Please configure your API key in <a href="' . admin_url('options-general.php?page=super-dispatch-pricing') . '">Settings → Super Dispatch Pricing</a> to enable the plugin.</p>';
+            echo '<p><strong>Transporte de Autos:</strong> Please configure your API key in <a href="' . admin_url('options-general.php?page=transporte-de-autos') . '">Settings → Transporte de Autos</a> to enable the plugin.</p>';
             echo '</div>';
         }
 
         if (!$this->is_authorize_configured()) {
             echo '<div class="notice notice-warning is-dismissible">';
-            echo '<p><strong>Super Dispatch Pricing Insights:</strong> Configura tus credenciales de Authorize.net en <a href="' . admin_url('options-general.php?page=super-dispatch-pricing') . '">Settings → Super Dispatch Pricing</a> para habilitar el cobro con tarjeta.</p>';
+            echo '<p><strong>Transporte de Autos:</strong> Configura tus credenciales de Authorize.net en <a href="' . admin_url('options-general.php?page=transporte-de-autos') . '">Settings → Transporte de Autos</a> para habilitar el cobro con tarjeta.</p>';
             echo '</div>';
         }
 
         if ($this->is_authorize_configured() && !$this->is_site_https()) {
             echo '<div class="notice notice-error is-dismissible">';
-            echo '<p><strong>Super Dispatch Pricing Insights:</strong> Authorize.net requiere que tu sitio cargue sobre <code>https://</code>. Configura un certificado SSL y actualiza la URL del sitio antes de intentar procesar pagos.</p>';
+            echo '<p><strong>Transporte de Autos:</strong> Authorize.net requiere que tu sitio cargue sobre <code>https://</code>. Configura un certificado SSL y actualiza la URL del sitio antes de intentar procesar pagos.</p>';
             echo '</div>';
         }
     }

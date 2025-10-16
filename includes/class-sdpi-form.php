@@ -1,6 +1,6 @@
 ﻿<?php
 /**
- * Custom form handler for Super Dispatch Pricing Insights - FIXED VERSION
+ * Custom form handler for Transporte de Autos - FIXED VERSION
  */
 
 use net\authorize\api\constants\ANetEnvironment;
@@ -105,7 +105,7 @@ class SDPI_Form {
             'success_url' => esc_url(get_option('sdpi_payment_success_url')),
             'error_url' => esc_url(get_option('sdpi_payment_error_url')),
             'message' => ($authorize_ready && !$is_secure)
-                ? __('Los pagos con tarjeta requieren que el sitio esté publicado con HTTPS.', 'super-dispatch-pricing')
+                ? __('Los pagos con tarjeta requieren que el sitio esté publicado con HTTPS.', 'transporte-de-autos')
                 : ''
         ));
 

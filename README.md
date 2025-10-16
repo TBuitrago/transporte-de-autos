@@ -1,7 +1,7 @@
-# Super Dispatch Pricing Insights Plugin
+# Transporte de Autos
 
 ## Descripción General
-Super Dispatch Pricing Insights (SDPI) es un plugin de WordPress que permite cotizar envíos de vehículos en tiempo real aprovechando la API de Super Dispatch. El formulario guía al cliente a través de un flujo de varias etapas, captura datos completos antes de revelar el precio y consolida todo el proceso en un historial administrativo listo para enviar a Zapier u otros sistemas CRM.
+Transporte de Autos (TDA) es un plugin de WordPress que permite cotizar envíos de vehículos en tiempo real aprovechando la API de Super Dispatch. El formulario guía al cliente a través de un flujo de varias etapas, captura datos completos antes de revelar el precio y consolida todo el proceso en un historial administrativo listo para enviar a Zapier u otros sistemas CRM.
 
 ## Características Principales
 ### Cotizador Inteligente
@@ -28,6 +28,9 @@ Super Dispatch Pricing Insights (SDPI) es un plugin de WordPress que permite cot
 - Indicadores de estado de Zapier y fecha del último intento por registro.
 - Herramientas de debugging, logging selectivo y caché de respuestas de la API.
 
+### Actualizaciones Automáticas
+- Autoupdater integrado que verifica las releases públicas de GitHub y ofrece la actualización directamente desde el administrador de WordPress.
+
 ## Flujo de Cotización
 1. **Captura inicial:** el cliente completa datos de origen, destino y vehículo.
 2. **Cálculo interno:** SDPI consulta la API de Super Dispatch (o calcula tramo terrestre cuando hay transporte marítimo) y guarda la respuesta en la sesión.
@@ -46,12 +49,12 @@ Inserta el formulario en cualquier página o entrada con:
 El formulario carga sus assets solamente cuando detecta el shortcode, evitando afectar otras páginas del sitio.
 
 ## Integraciones Externas
-- **Super Dispatch Pricing Insights API:** obtiene recomendaciones de precio y nivel de confianza.
+- **Transporte de Autos API:** obtiene recomendaciones de precio y nivel de confianza.
 - **Authorize.net Accept.js:** tokeniza la tarjeta y procesa cargos directos.
 - **Zapier / CRM:** envía los datos consolidados vía webhook, incluyendo detalles de contacto, vehículo y tarifas marítimas.
 
 ## Configuración Esencial
-1. **API de Super Dispatch:** agrega la API key en `Ajustes → Super Dispatch Pricing` y prueba la conexión.
+1. **API de Super Dispatch:** agrega la API key en `Ajustes → Transporte de Autos` y prueba la conexión.
 2. **Base de datos de ciudades:** importa el dataset (automático o manual) para habilitar el autocompletado.
 3. **Authorize.net:** define entorno (sandbox/producción), API Login ID, Transaction Key y Public Client Key.
 4. **URLs de redirección:** configura páginas de éxito y error para el flujo de pago.

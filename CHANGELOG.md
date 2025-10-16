@@ -1,4 +1,8 @@
-# Changelog - Super Dispatch Pricing Insights
+# Changelog - Transporte de Autos
+
+## Unreleased
+- Added a native GitHub-based autoupdater to deliver release ZIP packages directly in WordPress.
+- Renamed the plugin interface, settings, and documentation to Transporte de Autos.
 
 ## [Unreleased]
 

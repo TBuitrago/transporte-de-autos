@@ -1,6 +1,6 @@
 <?php
 /**
- * API class for Super Dispatch Pricing Insights
+ * API class for Transporte de Autos
  */
 
 class SDPI_API {

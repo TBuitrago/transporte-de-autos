@@ -1,15 +1,15 @@
 {
   "plugin": {
-    "name": "Super Dispatch Pricing Insights",
-    "slug": "super-dispatch-pricing-insights",
+    "name": "Transporte de Autos",
+    "slug": "transporte-de-autos",
     "version": "1.4.0",
     "description": "Plugin de WordPress que integra la API de Super Dispatch para proporcionar cotizaciones de transporte de vehículos en tiempo real, incluyendo soporte para transporte marítimo a Puerto Rico.",
     "author": "Tomas Buitrago",
     "author_uri": "https://tbadigitals.com",
-    "plugin_uri": "https://tbadigitals.com/super-dispatch-pricing-insights",
+    "plugin_uri": "https://github.com/tbadigitals/transporte-de-autos",
     "license": "GPL v2 or later",
     "license_uri": "https://www.gnu.org/licenses/gpl-2.0.html",
-    "text_domain": "super-dispatch-pricing-insights",
+    "text_domain": "transporte-de-autos",
     "domain_path": "/languages",
     "network": false,
     "requires_wp": "5.0",
@@ -139,8 +139,8 @@
   "admin_pages": [
     {
       "slug": "sdpi-settings",
-      "title": "Super Dispatch Pricing",
-      "menu_title": "Super Dispatch Pricing",
+      "title": "Transporte de Autos",
+      "menu_title": "Transporte de Autos",
       "capability": "manage_options",
       "icon": "dashicons-truck",
       "position": 30
@@ -209,9 +209,9 @@
   },
   "support": {
     "email": "sdpi@tbadigitals.com",
-    "documentation_url": "https://tbadigitals.com/docs/super-dispatch-pricing-insights",
-    "github_issues": "https://github.com/tbadigitals/super-dispatch-pricing-insights/issues",
-    "wordpress_support": "https://wordpress.org/support/plugin/super-dispatch-pricing-insights"
+    "documentation_url": "https://tbadigitals.com/docs/transporte-de-autos",
+    "github_issues": "https://github.com/tbadigitals/transporte-de-autos/issues",
+    "wordpress_support": "https://wordpress.org/support/plugin/transporte-de-autos"
   }
 }
 

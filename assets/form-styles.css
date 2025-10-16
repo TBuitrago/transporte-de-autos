@@ -49,17 +49,13 @@
 .sdpi-form-group select {
     width: 100%;
     max-width: 100%;
-    padding: 0.75rem;
+    padding: 0 0 0 0.75rem;
     border: 2px solid #e1e5e9;
     border-radius: 8px;
     font-size: 1rem;
     transition: all 0.3s ease;
     background: #ffffff;
     box-sizing: border-box;
-}
-
-.sdpi-form-group select {
-    padding-left: 0.75rem;
 }
 
 .sdpi-form-group input[type="text"]:focus,

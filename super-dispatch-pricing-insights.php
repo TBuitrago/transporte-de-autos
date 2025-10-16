@@ -109,10 +109,14 @@ function sdpi_activate() {
         add_option('sdpi_payment_error_url', '');
     }
     
-    // Create cities table
+    // Create cities table and import packaged dataset
     $cities = new SDPI_Cities();
     $cities->create_table();
-    
+    $import_result = $cities->import_packaged_cities(true);
+    if (is_wp_error($import_result)) {
+        error_log('SDPI Cities import failed: ' . $import_result->get_error_message());
+    }
+
     // Create history table
     $history = new SDPI_History();
     $history->create_table();

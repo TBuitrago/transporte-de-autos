@@ -6,10 +6,12 @@
 class SDPI_Cities {
 
     private $table_name;
+    private $packaged_csv;
 
     public function __construct() {
         global $wpdb;
         $this->table_name = $wpdb->prefix . 'sdpi_cities';
+        $this->packaged_csv = trailingslashit(TDA_PLUGIN_DIR) . 'assets/data/wp_sdpi_cities.csv';
         $this->init_hooks();
     }
 
@@ -34,24 +36,118 @@ class SDPI_Cities {
             id int(11) NOT NULL AUTO_INCREMENT,
             city varchar(100) NOT NULL,
             state_id varchar(2) NOT NULL,
-            state_name varchar(50) NOT NULL,
-            county_name varchar(100) NOT NULL,
-            lat decimal(10,6) NOT NULL,
-            lng decimal(10,6) NOT NULL,
-            population int(11) DEFAULT NULL,
-            age_median decimal(4,1) DEFAULT NULL,
-            income int(11) DEFAULT NULL,
             zips text DEFAULT NULL,
             PRIMARY KEY (id),
             KEY city (city),
-            KEY state_id (state_id),
-            KEY state_name (state_name),
-            KEY lat (lat),
-            KEY lng (lng)
+            KEY state_id (state_id)
         ) $charset_collate;";
 
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
+    }
+
+    /**
+     * Import the packaged CSV on activation or when manually requested.
+     *
+     * @param bool $force Whether to truncate existing data before importing.
+     * @return array|WP_Error Summary or error.
+     */
+    public function import_packaged_cities($force = false) {
+        if (!file_exists($this->packaged_csv)) {
+            return new WP_Error(
+                'sdpi_cities_missing_csv',
+                sprintf(
+                    /* translators: %s: CSV path */
+                    __('Could not locate the packaged cities CSV at %s.', 'transporte-de-autos'),
+                    esc_html($this->packaged_csv)
+                )
+            );
+        }
+
+        return $this->import_from_csv($this->packaged_csv, $force);
+    }
+
+    /**
+     * Import cities from any CSV file.
+     *
+     * @param string $file_path
+     * @param bool   $truncate_existing
+     * @return array|WP_Error Summary array with imported/skipped counts.
+     */
+    public function import_from_csv($file_path, $truncate_existing = false) {
+        global $wpdb;
+
+        if (!file_exists($file_path) || !is_readable($file_path)) {
+            return new WP_Error(
+                'sdpi_cities_unreadable_csv',
+                __('The provided CSV file could not be read.', 'transporte-de-autos')
+            );
+        }
+
+        if ($truncate_existing) {
+            $wpdb->query("TRUNCATE TABLE {$this->table_name}");
+        } else {
+            $existing = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$this->table_name}");
+            if ($existing > 0) {
+                return array(
+                    'imported' => 0,
+                    'skipped'  => 0,
+                    'existing' => $existing,
+                );
+            }
+        }
+
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(0);
+        }
+
+        $handle = fopen($file_path, 'r');
+        if (!$handle) {
+            return new WP_Error(
+                'sdpi_cities_open_failed',
+                __('Unable to open the CSV file for reading.', 'transporte-de-autos')
+            );
+        }
+
+        $imported = 0;
+        $skipped  = 0;
+        $batch    = array();
+        $batch_size = 500;
+
+        $first_row = fgetcsv($handle);
+        if ($first_row !== false && !$this->is_header_row($first_row)) {
+            $normalized = $this->normalize_row($first_row);
+            if ($normalized) {
+                $batch[] = $normalized;
+            } else {
+                $skipped++;
+            }
+        }
+
+        while (($row = fgetcsv($handle)) !== false) {
+            $normalized = $this->normalize_row($row);
+            if (!$normalized) {
+                $skipped++;
+                continue;
+            }
+
+            $batch[] = $normalized;
+            if (count($batch) >= $batch_size) {
+                $imported += $this->bulk_insert($batch);
+                $batch = array();
+            }
+        }
+
+        if (!empty($batch)) {
+            $imported += $this->bulk_insert($batch);
+        }
+
+        fclose($handle);
+
+        return array(
+            'imported' => $imported,
+            'skipped'  => $skipped,
+        );
     }
 
 
@@ -197,6 +293,8 @@ class SDPI_Cities {
                 $this->handle_import();
             } elseif ($_POST['action'] === 'clear_cities') {
                 $this->clear_cities();
+            } elseif ($_POST['action'] === 'reimport_packaged') {
+                $this->handle_packaged_reimport();
             }
         }
 
@@ -223,23 +321,28 @@ class SDPI_Cities {
                 <form method="post" enctype="multipart/form-data">
                     <input type="hidden" name="action" value="import_cities">
                     <?php wp_nonce_field('sdpi_import_cities', 'sdpi_import_nonce'); ?>
-                    
+
                     <p>
                         <label for="cities_file">Select CSV file:</label><br>
                         <input type="file" id="cities_file" name="cities_file" accept=".csv" required>
                     </p>
-                    
+
                     <p>
                         <input type="submit" class="button button-primary" value="Import Cities">
                     </p>
                 </form>
-                
-                <p><strong>Instructions:</strong></p>
-                <ol>
-                    <li>Download the cities data from <a href="https://simplemaps.com/data/us-cities" target="_blank">simplemaps.com</a></li>
-                    <li>Save as CSV file</li>
-                    <li>Upload and import</li>
-                </ol>
+
+                <p class="description">Upload a CSV that follows the <code>id, city, state_id, zips</code> format to replace the existing dataset.</p>
+            </div>
+
+            <div class="card">
+                <h2>Reimport Packaged Dataset</h2>
+                <form method="post">
+                    <input type="hidden" name="action" value="reimport_packaged">
+                    <?php wp_nonce_field('sdpi_reimport_packaged', 'sdpi_reimport_nonce'); ?>
+                    <p>The plugin ships with a pre-populated CSV. Use this action to restore it at any time.</p>
+                    <p><input type="submit" class="button" value="Restore Packaged Cities"></p>
+                </form>
             </div>
 
             <?php if ($cities_count > 0): ?>
@@ -308,59 +411,29 @@ class SDPI_Cities {
         }
 
         $file = $_FILES['cities_file']['tmp_name'];
-        $handle = fopen($file, 'r');
-        
-        if (!$handle) {
-            wp_die('Could not open file');
+        $result = $this->import_from_csv($file, true);
+
+        if (is_wp_error($result)) {
+            echo "<div class='notice notice-error'><p>" . esc_html($result->get_error_message()) . "</p></div>";
+            return;
         }
 
-        // Skip header row
-        $header = fgetcsv($handle);
-        
-        $imported = 0;
-        $errors = 0;
-
-        while (($data = fgetcsv($handle)) !== FALSE) {
-            if (count($data) < 10) {
-                $errors++;
-                continue;
-            }
-
-            $result = $this->insert_city($data);
-            if ($result) {
-                $imported++;
-            } else {
-                $errors++;
-            }
-        }
-
-        fclose($handle);
-
-        echo "<div class='notice notice-success'><p>Import completed. Imported: {$imported}, Errors: {$errors}</p></div>";
+        echo "<div class='notice notice-success'><p>Import completed. Imported: " . intval($result['imported']) . ", Skipped: " . intval($result['skipped']) . "</p></div>";
     }
 
-    /**
-     * Insert city data
-     */
-    private function insert_city($data) {
-        global $wpdb;
+    private function handle_packaged_reimport() {
+        if (!wp_verify_nonce($_POST['sdpi_reimport_nonce'], 'sdpi_reimport_packaged')) {
+            wp_die('Security check failed');
+        }
 
-        return $wpdb->insert(
-            $this->table_name,
-            array(
-                'city' => sanitize_text_field($data[0]),
-                'state_id' => sanitize_text_field($data[1]),
-                'state_name' => sanitize_text_field($data[2]),
-                'county_name' => sanitize_text_field($data[3]),
-                'lat' => floatval($data[4]),
-                'lng' => floatval($data[5]),
-                'population' => intval($data[6]),
-                'age_median' => floatval($data[7]),
-                'income' => intval($data[8]),
-                'zips' => sanitize_text_field($data[9])
-            ),
-            array('%s', '%s', '%s', '%s', '%f', '%f', '%d', '%f', '%d', '%s')
-        );
+        $result = $this->import_packaged_cities(true);
+
+        if (is_wp_error($result)) {
+            echo "<div class='notice notice-error'><p>" . esc_html($result->get_error_message()) . "</p></div>";
+            return;
+        }
+
+        echo "<div class='notice notice-success'><p>Packaged dataset restored. Imported: " . intval($result['imported']) . ", Skipped: " . intval($result['skipped']) . "</p></div>";
     }
 
     /**
@@ -373,7 +446,84 @@ class SDPI_Cities {
 
         global $wpdb;
         $wpdb->query("TRUNCATE TABLE {$this->table_name}");
-        
+
         echo "<div class='notice notice-success'><p>All cities cleared from database.</p></div>";
+    }
+
+    private function normalize_row($row) {
+        if (!is_array($row) || count($row) < 3) {
+            return null;
+        }
+
+        $id = isset($row[0]) ? intval(preg_replace('/[^0-9]/', '', $row[0])) : 0;
+        $city = isset($row[1]) ? sanitize_text_field($row[1]) : '';
+        $state_id = isset($row[2]) ? strtoupper(substr(sanitize_text_field($row[2]), 0, 2)) : '';
+        $zips_raw = isset($row[3]) ? $row[3] : '';
+
+        if ($id <= 0 || $city === '' || $state_id === '') {
+            return null;
+        }
+
+        $zips = $this->sanitize_zip_list($zips_raw);
+
+        return array(
+            'id' => $id,
+            'city' => $city,
+            'state_id' => $state_id,
+            'zips' => $zips,
+        );
+    }
+
+    private function sanitize_zip_list($value) {
+        $value = is_string($value) ? $value : '';
+        $value = preg_replace('/[^0-9\s]/', ' ', $value);
+        $value = preg_replace('/\s+/', ' ', $value);
+        $value = trim($value);
+
+        return $value !== '' ? $value : null;
+    }
+
+    private function is_header_row($row) {
+        if (!is_array($row)) {
+            return false;
+        }
+
+        $normalized = array_map('strtolower', $row);
+
+        return in_array('city', $normalized, true) && in_array('state_id', $normalized, true);
+    }
+
+    private function bulk_insert($batch) {
+        global $wpdb;
+
+        if (empty($batch)) {
+            return 0;
+        }
+
+        $placeholders = array();
+        $values = array();
+
+        foreach ($batch as $row) {
+            if ($row['zips'] === null) {
+                $placeholders[] = '(%d, %s, %s, NULL)';
+                $values[] = $row['id'];
+                $values[] = $row['city'];
+                $values[] = $row['state_id'];
+            } else {
+                $placeholders[] = '(%d, %s, %s, %s)';
+                $values[] = $row['id'];
+                $values[] = $row['city'];
+                $values[] = $row['state_id'];
+                $values[] = $row['zips'];
+            }
+        }
+
+        $sql = "INSERT INTO {$this->table_name} (id, city, state_id, zips) VALUES " . implode(', ', $placeholders) .
+            " ON DUPLICATE KEY UPDATE city = VALUES(city), state_id = VALUES(state_id), zips = VALUES(zips)";
+
+        $prepared = $wpdb->prepare($sql, $values);
+        $wpdb->query($prepared);
+
+        return count($batch);
     }
 }

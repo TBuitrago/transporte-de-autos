@@ -137,6 +137,83 @@
         }) + ' USD';
     }
 
+    function normalizePhaseAmount(amount) {
+        var parsed = parseFloat(amount);
+        if (isNaN(parsed) || !isFinite(parsed)) {
+            return null;
+        }
+        if (parsed < 0) {
+            parsed = 0;
+        }
+        return parsed;
+    }
+
+    function setPhaseTotalValue(selector, amount) {
+        var $value = $(selector);
+        if (!$value.length) { return; }
+
+        var $row = $value.closest('.sdpi-summary-subtotal');
+        if (typeof amount === 'number' && !isNaN(amount)) {
+            var formatted = formatCurrency(amount);
+            if (!formatted) {
+                formatted = '$0.00 USD';
+            }
+            $value.text(formatted);
+            if ($row.length) {
+                $row.removeClass('pending');
+            }
+        } else {
+            $value.text('Pendiente');
+            if ($row.length) {
+                $row.addClass('pending');
+            }
+        }
+    }
+
+    function updatePhaseTotals(maritimeAmount, terrestrialAmount) {
+        var maritimeValue = normalizePhaseAmount(maritimeAmount);
+        var terrestrialValue = normalizePhaseAmount(terrestrialAmount);
+
+        setPhaseTotalValue('#sdpi-summary-maritime-total', maritimeValue);
+        setPhaseTotalValue('#sdpi-summary-terrestrial-total', terrestrialValue);
+        setPhaseTotalValue('#sdpi-review-summary-maritime-total', maritimeValue);
+        setPhaseTotalValue('#sdpi-review-summary-terrestrial-total', terrestrialValue);
+        setPhaseTotalValue('#sdpi-payment-summary-maritime-total', maritimeValue);
+        setPhaseTotalValue('#sdpi-payment-summary-terrestrial-total', terrestrialValue);
+    }
+
+    function calculatePhaseTotals(data, isMaritime, electricSurcharge, inoperableFee) {
+        var maritimeCost = parseFloat(data && data.maritime_cost ? data.maritime_cost : 0);
+        if (isNaN(maritimeCost)) { maritimeCost = 0; }
+
+        var terrestrialCost = parseFloat(data && data.terrestrial_cost ? data.terrestrial_cost : 0);
+        if (isNaN(terrestrialCost)) { terrestrialCost = 0; }
+
+        var finalPriceAmount = parseFloat(data && data.final_price ? data.final_price : 0);
+        if (isNaN(finalPriceAmount)) { finalPriceAmount = 0; }
+
+        var normalizedElectric = parseFloat(electricSurcharge || 0);
+        if (isNaN(normalizedElectric) || normalizedElectric < 0) { normalizedElectric = 0; }
+
+        var normalizedInoperable = parseFloat(inoperableFee || 0);
+        if (isNaN(normalizedInoperable) || normalizedInoperable < 0) { normalizedInoperable = 0; }
+
+        var maritimeTotal = 0;
+        if (isMaritime) {
+            maritimeTotal = maritimeCost + normalizedElectric + normalizedInoperable;
+        }
+
+        var terrestrialTotal = isMaritime ? terrestrialCost : finalPriceAmount;
+
+        if (maritimeTotal < 0) { maritimeTotal = 0; }
+        if (terrestrialTotal < 0) { terrestrialTotal = 0; }
+
+        return {
+            maritime: maritimeTotal,
+            terrestrial: terrestrialTotal
+        };
+    }
+
     function resetPaymentPanel() {
         paymentContext = null;
         var $paymentScreen = $('#sdpi-payment-screen');
@@ -369,6 +446,8 @@
         updatePaymentSummaryPrice('');
         clearSurchargeDisplay(setPaymentSummaryValue, '#sdpi-payment-summary-inoperable');
         clearSurchargeDisplay(setPaymentSummaryValue, '#sdpi-payment-summary-electric');
+        setPhaseTotalValue('#sdpi-payment-summary-maritime-total', null);
+        setPhaseTotalValue('#sdpi-payment-summary-terrestrial-total', null);
     }
 
     function resetReviewSummary() {
@@ -382,6 +461,10 @@
         updateReviewSummaryPrice('');
         clearSurchargeDisplay(setReviewSummaryValue, '#sdpi-review-summary-inoperable');
         clearSurchargeDisplay(setReviewSummaryValue, '#sdpi-review-summary-electric');
+        setPhaseTotalValue('#sdpi-review-summary-maritime-total', null);
+        setPhaseTotalValue('#sdpi-review-summary-terrestrial-total', null);
+        setPhaseTotalValue('#sdpi-summary-maritime-total', null);
+        setPhaseTotalValue('#sdpi-summary-terrestrial-total', null);
     }
 
     function updateReviewSummary(details) {
@@ -424,6 +507,15 @@
             );
         } else {
             clearSurchargeDisplay(setReviewSummaryValue, '#sdpi-review-summary-electric');
+        }
+
+        var hasMaritimeTotal = typeof details.maritimeTotal !== 'undefined';
+        var hasTerrestrialTotal = typeof details.terrestrialTotal !== 'undefined';
+        if (hasMaritimeTotal || hasTerrestrialTotal) {
+            updatePhaseTotals(
+                hasMaritimeTotal ? details.maritimeTotal : null,
+                hasTerrestrialTotal ? details.terrestrialTotal : null
+            );
         }
 
         updatePaymentSummary(details);
@@ -473,6 +565,16 @@
         }
 
         updatePaymentSummaryPrice(details.price || '');
+
+        var hasMaritimeTotal = typeof details.maritimeTotal !== 'undefined';
+        if (hasMaritimeTotal) {
+            setPhaseTotalValue('#sdpi-payment-summary-maritime-total', normalizePhaseAmount(details.maritimeTotal));
+        }
+
+        var hasTerrestrialTotal = typeof details.terrestrialTotal !== 'undefined';
+        if (hasTerrestrialTotal) {
+            setPhaseTotalValue('#sdpi-payment-summary-terrestrial-total', normalizePhaseAmount(details.terrestrialTotal));
+        }
     }
 
     function lockPricingForm(data) {
@@ -1000,6 +1102,15 @@
             true
         );
 
+        var phaseTotals = calculatePhaseTotals(data, isMaritime, electricSurcharge, inoperableFee);
+        updatePhaseTotals(phaseTotals.maritime, phaseTotals.terrestrial);
+        data.total_maritime_cost = phaseTotals.maritime;
+        data.total_terrestrial_cost = phaseTotals.terrestrial;
+        if (window.currentQuoteData && window.currentQuoteData !== data) {
+            window.currentQuoteData.total_maritime_cost = phaseTotals.maritime;
+            window.currentQuoteData.total_terrestrial_cost = phaseTotals.terrestrial;
+        }
+
         setProgressStep(4);
         toggleContinueButton(data);
         updateSummaryFooter('success', 'Cotizacion lista. Revisa el total y continua.');
@@ -1220,6 +1331,15 @@
 
             var formattedPrice = formatCurrency(quoteData.final_price);
 
+            var phaseTotals = calculatePhaseTotals(quoteData, isMaritime, electricSurcharge, inoperableFee);
+            updatePhaseTotals(phaseTotals.maritime, phaseTotals.terrestrial);
+            quoteData.total_maritime_cost = phaseTotals.maritime;
+            quoteData.total_terrestrial_cost = phaseTotals.terrestrial;
+            if (window.currentQuoteData && window.currentQuoteData !== quoteData) {
+                window.currentQuoteData.total_maritime_cost = phaseTotals.maritime;
+                window.currentQuoteData.total_terrestrial_cost = phaseTotals.terrestrial;
+            }
+
             setSummaryValue('#sdpi-summary-pickup', pickupLabel);
             setSummaryValue('#sdpi-summary-delivery', deliveryLabel);
             setSummaryValue('#sdpi-summary-trailer', trailerText);
@@ -1240,7 +1360,9 @@
                 electric: isElectric,
                 surchargeHighlight: isMaritime,
                 inoperableFee: inoperableFee,
-                electricSurcharge: electricSurcharge
+                electricSurcharge: electricSurcharge,
+                maritimeTotal: phaseTotals.maritime,
+                terrestrialTotal: phaseTotals.terrestrial
             });
 
             if ($additionalInfoContainer.length) {

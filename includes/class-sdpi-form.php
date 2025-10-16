@@ -809,6 +809,16 @@ class SDPI_Form {
                 $this->render_summary_item('inland', 'Tipo de transporte', $value_prefix . '-transport-type', $transport_row_id, $args['transport_row_hidden']);
                 ?>
             </div>
+            <div class="sdpi-summary-subtotals">
+                <div class="sdpi-summary-subtotal pending">
+                    <span class="sdpi-summary-subtotal-label">Total Transporte Marítimo</span>
+                    <span class="sdpi-summary-subtotal-value" id="<?php echo esc_attr($value_prefix); ?>-maritime-total">Pendiente</span>
+                </div>
+                <div class="sdpi-summary-subtotal pending">
+                    <span class="sdpi-summary-subtotal-label">Total Transporte Terrestre</span>
+                    <span class="sdpi-summary-subtotal-value" id="<?php echo esc_attr($value_prefix); ?>-terrestrial-total">Pendiente</span>
+                </div>
+            </div>
             <div class="sdpi-summary-total pending">
                 <span class="sdpi-summary-total-label"><?php echo esc_html($args['total_label']); ?></span>
                 <span class="sdpi-summary-total-value" id="<?php echo esc_attr($args['total_value_id']); ?>">Pendiente</span>
@@ -1291,7 +1301,7 @@ class SDPI_Form {
                                 </div>
                             </div>
                             <div class="sdpi-form-group">
-                                <label for="sdpi-card-zip">Código postal (opcional)</label>
+                                <label for="sdpi-card-zip">Código postal</label>
                                 <input type="tel" id="sdpi-card-zip" inputmode="numeric" maxlength="10" placeholder="Zip del titular">
                             </div>
                             <div class="sdpi-payment-feedback" id="sdpi-payment-feedback" style="display:none;"></div>
@@ -2364,7 +2374,9 @@ class SDPI_Form {
             'price' => $final_price, // For backward compatibility
             'confidence_percentage' => $confidence * 100,
             'inoperable_fee' => 0,
-            'electric_surcharge' => $electric_surcharge
+            'electric_surcharge' => $electric_surcharge,
+            'terrestrial_cost' => $final_price,
+            'maritime_cost' => 0
         );
     }
 

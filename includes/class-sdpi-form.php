@@ -351,9 +351,14 @@ class SDPI_Form {
 
         $icons_base_url = plugin_dir_url(__FILE__) . '../assets/icons/';
         $summary_icons = array(
-            'location' => $icons_base_url . 'Location.webp',
-            'inland'   => $icons_base_url . 'Inland.webp',
-            'car'      => $icons_base_url . 'Car.webp',
+            'location'           => $icons_base_url . 'Location.webp',
+            'inland'             => $icons_base_url . 'Inland.webp',
+            'car'                => $icons_base_url . 'Car.webp',
+            'inoperable'         => $icons_base_url . 'tda-inoperable.webp',
+            'electric'           => $icons_base_url . 'tda-ev.webp',
+            'transport-type'     => $icons_base_url . 'tipo-de-transporte.webp',
+            'maritime-total'     => $icons_base_url . 'tda-maritimo.webp',
+            'terrestrial-total'  => $icons_base_url . 'Car.webp',
         );
 
         $this->summary_icons = $summary_icons;
@@ -804,20 +809,30 @@ class SDPI_Form {
                 $this->render_summary_item('location', 'Ciudad de destino', $value_prefix . '-delivery');
                 $this->render_summary_item('inland', 'Tipo de trailer', $value_prefix . '-trailer');
                 $this->render_summary_item('car', 'Vehículo', $value_prefix . '-vehicle');
-                $this->render_summary_item('car', 'Vehículo inoperable', $value_prefix . '-inoperable');
-                $this->render_summary_item('car', 'Vehículo eléctrico', $value_prefix . '-electric');
-                $this->render_summary_item('inland', 'Tipo de transporte', $value_prefix . '-transport-type', $transport_row_id, $args['transport_row_hidden']);
+                $this->render_summary_item('inoperable', 'Vehículo inoperable', $value_prefix . '-inoperable');
+                $this->render_summary_item('electric', 'Vehículo eléctrico', $value_prefix . '-electric');
+                $this->render_summary_item('transport-type', 'Tipo de transporte', $value_prefix . '-transport-type', $transport_row_id, $args['transport_row_hidden']);
                 ?>
             </div>
             <div class="sdpi-summary-subtotals">
-                <div class="sdpi-summary-subtotal pending">
-                    <span class="sdpi-summary-subtotal-label">Total Transporte Marítimo</span>
-                    <span class="sdpi-summary-subtotal-value" id="<?php echo esc_attr($value_prefix); ?>-maritime-total">Pendiente</span>
-                </div>
-                <div class="sdpi-summary-subtotal pending">
-                    <span class="sdpi-summary-subtotal-label">Total Transporte Terrestre</span>
-                    <span class="sdpi-summary-subtotal-value" id="<?php echo esc_attr($value_prefix); ?>-terrestrial-total">Pendiente</span>
-                </div>
+                <?php
+                $this->render_summary_item(
+                    'maritime-total',
+                    'Total Transporte Marítimo',
+                    $value_prefix . '-maritime-total',
+                    '',
+                    false,
+                    array('sdpi-summary-subtotal', 'sdpi-hidden')
+                );
+                $this->render_summary_item(
+                    'terrestrial-total',
+                    'Total Transporte Terrestre',
+                    $value_prefix . '-terrestrial-total',
+                    '',
+                    false,
+                    array('sdpi-summary-subtotal', 'sdpi-hidden')
+                );
+                ?>
             </div>
             <div class="sdpi-summary-total pending">
                 <span class="sdpi-summary-total-label"><?php echo esc_html($args['total_label']); ?></span>
@@ -869,9 +884,23 @@ class SDPI_Form {
      * @param string $wrapper_id Optional DOM id for the wrapper row.
      * @param bool   $hidden    Whether the row should be hidden initially.
      */
-    private function render_summary_item($icon_key, $label, $value_id, $wrapper_id = '', $hidden = false) {
+    private function render_summary_item($icon_key, $label, $value_id, $wrapper_id = '', $hidden = false, $extra_classes = array()) {
         $icon_url = isset($this->summary_icons[$icon_key]) ? $this->summary_icons[$icon_key] : '';
         $attributes = '';
+        $classes = array('sdpi-summary-item', 'pending');
+
+        if (!empty($extra_classes)) {
+            if (!is_array($extra_classes)) {
+                $extra_classes = array($extra_classes);
+            }
+            foreach ($extra_classes as $class) {
+                if (!empty($class)) {
+                    $classes[] = $class;
+                }
+            }
+        }
+
+        $class_attribute = ' class="' . esc_attr(implode(' ', array_unique($classes))) . '"';
 
         if (!empty($wrapper_id)) {
             $attributes .= ' id="' . esc_attr($wrapper_id) . '"';
@@ -881,7 +910,7 @@ class SDPI_Form {
             $attributes .= ' style="display:none;"';
         }
         ?>
-        <div class="sdpi-summary-item pending"<?php echo $attributes; ?>>
+        <div<?php echo $class_attribute . $attributes; ?>>
             <span class="sdpi-summary-icon" aria-hidden="true">
                 <?php if (!empty($icon_url)) : ?>
                     <img src="<?php echo esc_url($icon_url); ?>" alt="" role="presentation">

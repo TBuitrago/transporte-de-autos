@@ -153,7 +153,9 @@
         if (!$value.length) { return; }
 
         var $row = $value.closest('.sdpi-summary-subtotal');
-        if (typeof amount === 'number' && !isNaN(amount)) {
+        var hasAmount = typeof amount === 'number' && !isNaN(amount) && isFinite(amount) && amount > 0;
+
+        if (hasAmount) {
             var formatted = formatCurrency(amount);
             if (!formatted) {
                 formatted = '$0.00 USD';
@@ -161,11 +163,13 @@
             $value.text(formatted);
             if ($row.length) {
                 $row.removeClass('pending');
+                $row.removeClass('sdpi-hidden');
             }
         } else {
             $value.text('Pendiente');
             if ($row.length) {
                 $row.addClass('pending');
+                $row.addClass('sdpi-hidden');
             }
         }
     }
@@ -198,15 +202,18 @@
         var normalizedInoperable = parseFloat(inoperableFee || 0);
         if (isNaN(normalizedInoperable) || normalizedInoperable < 0) { normalizedInoperable = 0; }
 
-        var maritimeTotal = 0;
+        var maritimeTotal = null;
         if (isMaritime) {
-            maritimeTotal = maritimeCost + normalizedElectric + normalizedInoperable;
+            var computedMaritime = maritimeCost + normalizedElectric + normalizedInoperable;
+            if (isFinite(computedMaritime) && computedMaritime > 0) {
+                maritimeTotal = computedMaritime;
+            }
         }
 
-        var terrestrialTotal = isMaritime ? terrestrialCost : finalPriceAmount;
-
-        if (maritimeTotal < 0) { maritimeTotal = 0; }
-        if (terrestrialTotal < 0) { terrestrialTotal = 0; }
+        var terrestrialCandidate = isMaritime ? terrestrialCost : finalPriceAmount;
+        var terrestrialTotal = (isFinite(terrestrialCandidate) && terrestrialCandidate > 0)
+            ? terrestrialCandidate
+            : null;
 
         return {
             maritime: maritimeTotal,

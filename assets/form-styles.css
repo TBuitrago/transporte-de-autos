@@ -58,6 +58,10 @@
     box-sizing: border-box;
 }
 
+.sdpi-form-group select {
+    padding-left: 0.75rem;
+}
+
 .sdpi-form-group input[type="text"]:focus,
 .sdpi-form-group input[type="number"]:focus,
 .sdpi-form-group input[type="tel"]:focus,

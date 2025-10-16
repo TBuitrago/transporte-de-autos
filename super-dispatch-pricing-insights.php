@@ -18,6 +18,11 @@ define('TDA_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('TDA_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('TDA_VERSION', '1.4.0');
 
+// Allow temporarily disabling the GitHub-based auto-updater.
+if (!defined('TDA_DISABLE_GITHUB_UPDATES')) {
+    define('TDA_DISABLE_GITHUB_UPDATES', true);
+}
+
 // Backwards compatibility with legacy constant names
 if (!defined('SDPI_PLUGIN_DIR')) {
     define('SDPI_PLUGIN_DIR', TDA_PLUGIN_DIR);
@@ -42,15 +47,17 @@ require_once TDA_PLUGIN_DIR . 'includes/class-sdpi-session.php';
 require_once TDA_PLUGIN_DIR . 'auth/autoload.php';
 require_once TDA_PLUGIN_DIR . 'includes/class-tda-updater.php';
 
-new TDA_GitHub_Updater(
-    __FILE__,
-    array(
-        'slug'              => 'transporte-de-autos',
-        'additional_slugs'  => array('transporte-de-autos', 'super-dispatch-pricing-insights'),
-        'user'              => 'tbadigitals',
-        'repo'              => 'transporte-de-autos',
-    )
-);
+if (!TDA_DISABLE_GITHUB_UPDATES) {
+    new TDA_GitHub_Updater(
+        __FILE__,
+        array(
+            'slug'              => 'transporte-de-autos',
+            'additional_slugs'  => array('transporte-de-autos', 'super-dispatch-pricing-insights'),
+            'user'              => 'tbadigitals',
+            'repo'              => 'transporte-de-autos',
+        )
+    );
+}
 
 function tda_load_textdomain() {
     load_plugin_textdomain('transporte-de-autos', false, dirname(plugin_basename(__FILE__)) . '/languages');

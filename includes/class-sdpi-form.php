@@ -10,6 +10,7 @@ use net\authorize\api\controller as AnetController;
 class SDPI_Form {
 
     private $api;
+    private $summary_icons = array();
 
     public function __construct() {
         $this->api = new SDPI_API();
@@ -355,6 +356,8 @@ class SDPI_Form {
             'car'      => $icons_base_url . 'car.svg',
         );
 
+        $this->summary_icons = $summary_icons;
+
         ob_start();
         ?>
         <div class="sdpi-pricing-form">
@@ -471,59 +474,31 @@ class SDPI_Form {
                 </div>
             </form>
 
-            <aside class="sdpi-summary-panel" id="sdpi-summary-panel">
-                <div class="sdpi-summary-header">
-                    <h3>Resumen de tu cotizacion</h3>
-                    <p>Actualizamos esta seccion mientras avanzas en el formulario.</p>
-                </div>
-                <div class="sdpi-summary-body">
-                    <div class="sdpi-summary-item pending">
-                        <span class="sdpi-summary-icon" aria-hidden="true">
-                            <img src="<?php echo esc_url($summary_icons['location']); ?>" alt="" role="presentation">
-                        </span>
-                        <span class="sdpi-summary-label">Ciudad de origen</span>
-                        <span class="sdpi-summary-value" id="sdpi-summary-pickup">Pendiente</span>
-                    </div>
-                    <div class="sdpi-summary-item pending">
-                        <span class="sdpi-summary-icon" aria-hidden="true">
-                            <img src="<?php echo esc_url($summary_icons['location']); ?>" alt="" role="presentation">
-                        </span>
-                        <span class="sdpi-summary-label">Ciudad de destino</span>
-                        <span class="sdpi-summary-value" id="sdpi-summary-delivery">Pendiente</span>
-                    </div>
-                    <div class="sdpi-summary-item pending">
-                        <span class="sdpi-summary-icon" aria-hidden="true">
-                            <img src="<?php echo esc_url($summary_icons['inland']); ?>" alt="" role="presentation">
-                        </span>
-                        <span class="sdpi-summary-label">Tipo de trailer</span>
-                        <span class="sdpi-summary-value" id="sdpi-summary-trailer">Pendiente</span>
-                    </div>
-                    <div class="sdpi-summary-item pending">
-                        <span class="sdpi-summary-icon" aria-hidden="true">
-                            <img src="<?php echo esc_url($summary_icons['car']); ?>" alt="" role="presentation">
-                        </span>
-                        <span class="sdpi-summary-label">Vehiculo</span>
-                        <span class="sdpi-summary-value" id="sdpi-summary-vehicle">Pendiente</span>
-                    </div>
-                    <div class="sdpi-summary-item pending" id="sdpi-summary-transport-type-row" style="display:none;">
-                        <span class="sdpi-summary-icon" aria-hidden="true">
-                            <img src="<?php echo esc_url($summary_icons['inland']); ?>" alt="" role="presentation">
-                        </span>
-                        <span class="sdpi-summary-label">Tipo de transporte</span>
-                        <span class="sdpi-summary-value" id="sdpi-summary-transport-type">Pendiente</span>
-                    </div>
-                </div>
-                <div class="sdpi-summary-total pending">
-                    <span class="sdpi-summary-total-label">Precio estimado</span>
-                    <span class="sdpi-summary-total-value" id="sdpi-summary-price">Pendiente</span>
-                </div>
-                <div class="sdpi-summary-actions" id="sdpi-summary-actions">
-                    <button type="button" class="sdpi-pay-btn" id="sdpi-summary-continue-btn">Continuar</button>
-                </div>
-                <div class="sdpi-summary-footer">
-                    <p id="sdpi-summary-footer-text">Completa el formulario para calcular tu cotizacion y continuar.</p>
-                </div>
-            </aside>
+            <?php
+            $this->render_summary_panel(array(
+                'panel_id' => 'sdpi-summary-panel',
+                'title' => 'Resumen de tu cotizacion',
+                'subtitle' => 'Actualizamos esta seccion mientras avanzas en el formulario.',
+                'value_prefix' => 'sdpi-summary',
+                'total_label' => 'Precio estimado',
+                'total_value_id' => 'sdpi-summary-price',
+                'footer_id' => 'sdpi-summary-footer-text',
+                'footer_text' => 'Completa el formulario para calcular tu cotizacion y continuar.',
+                'transport_row_hidden' => true,
+                'actions' => array(
+                    'wrapper_class' => 'sdpi-summary-actions',
+                    'wrapper_id' => 'sdpi-summary-actions',
+                    'buttons' => array(
+                        array(
+                            'id' => 'sdpi-summary-continue-btn',
+                            'class' => 'sdpi-pay-btn',
+                            'label' => 'Continuar',
+                            'type' => 'button',
+                        ),
+                    ),
+                ),
+            ));
+            ?>
             </div>
 
             <!-- Loading indicator -->
@@ -767,6 +742,143 @@ class SDPI_Form {
         </script>
         <?php
         return ob_get_clean();
+    }
+
+    /**
+     * Render a reusable summary panel to keep layout consistent across screens.
+     *
+     * @param array $args Configuration arguments for the panel.
+     */
+    private function render_summary_panel(array $args = array()) {
+        $defaults = array(
+            'panel_id' => 'sdpi-summary-panel',
+            'extra_classes' => '',
+            'title' => 'Resumen de tu cotizacion',
+            'subtitle' => '',
+            'value_prefix' => 'sdpi-summary',
+            'total_label' => 'Precio estimado',
+            'total_value_id' => '',
+            'footer_id' => '',
+            'footer_text' => '',
+            'footer_state_class' => '',
+            'transport_row_hidden' => false,
+            'transport_row_id' => '',
+            'actions' => array(),
+            'initially_hidden' => false,
+        );
+
+        $args = wp_parse_args($args, $defaults);
+
+        $value_prefix = $args['value_prefix'];
+        if (empty($args['total_value_id'])) {
+            $args['total_value_id'] = $value_prefix . '-price';
+        }
+        if (empty($args['footer_id'])) {
+            $args['footer_id'] = $value_prefix . '-footer-text';
+        }
+
+        $transport_row_id = !empty($args['transport_row_id'])
+            ? $args['transport_row_id']
+            : $value_prefix . '-transport-type-row';
+
+        $panel_classes = trim('sdpi-summary-panel ' . $args['extra_classes']);
+        $panel_style = $args['initially_hidden'] ? ' style="display:none;"' : '';
+
+        $footer_class = 'sdpi-summary-footer';
+        if (!empty($args['footer_state_class'])) {
+            $footer_class .= ' ' . trim($args['footer_state_class']);
+        }
+
+        ob_start();
+        ?>
+        <aside class="<?php echo esc_attr($panel_classes); ?>" id="<?php echo esc_attr($args['panel_id']); ?>"<?php echo $panel_style; ?>>
+            <div class="sdpi-summary-header">
+                <h3><?php echo esc_html($args['title']); ?></h3>
+                <?php if (!empty($args['subtitle'])) : ?>
+                    <p><?php echo esc_html($args['subtitle']); ?></p>
+                <?php endif; ?>
+            </div>
+            <div class="sdpi-summary-body">
+                <?php
+                $this->render_summary_item('location', 'Ciudad de origen', $value_prefix . '-pickup');
+                $this->render_summary_item('location', 'Ciudad de destino', $value_prefix . '-delivery');
+                $this->render_summary_item('inland', 'Tipo de trailer', $value_prefix . '-trailer');
+                $this->render_summary_item('car', 'Vehiculo', $value_prefix . '-vehicle');
+                $this->render_summary_item('inland', 'Tipo de transporte', $value_prefix . '-transport-type', $transport_row_id, $args['transport_row_hidden']);
+                ?>
+            </div>
+            <div class="sdpi-summary-total pending">
+                <span class="sdpi-summary-total-label"><?php echo esc_html($args['total_label']); ?></span>
+                <span class="sdpi-summary-total-value" id="<?php echo esc_attr($args['total_value_id']); ?>">Pendiente</span>
+            </div>
+            <?php if (!empty($args['actions']) && !empty($args['actions']['buttons'])) :
+                $actions = $args['actions'];
+                $wrapper_class = !empty($actions['wrapper_class']) ? $actions['wrapper_class'] : 'sdpi-summary-actions';
+                $wrapper_id = !empty($actions['wrapper_id']) ? $actions['wrapper_id'] : '';
+                $wrapper_attributes = ' class="' . esc_attr(trim($wrapper_class)) . '"';
+                if (!empty($wrapper_id)) {
+                    $wrapper_attributes .= ' id="' . esc_attr($wrapper_id) . '"';
+                }
+                ?>
+                <div<?php echo $wrapper_attributes; ?>>
+                    <?php foreach ($actions['buttons'] as $button) :
+                        if (empty($button['label'])) {
+                            continue;
+                        }
+                        $button_type = !empty($button['type']) ? $button['type'] : 'button';
+                        $button_class = !empty($button['class']) ? trim($button['class']) : '';
+                        $button_id = !empty($button['id']) ? $button['id'] : '';
+                        $button_attributes = '';
+                        if (!empty($button_id)) {
+                            $button_attributes .= ' id="' . esc_attr($button_id) . '"';
+                        }
+                        if (!empty($button_class)) {
+                            $button_attributes .= ' class="' . esc_attr($button_class) . '"';
+                        }
+                        ?>
+                        <button type="<?php echo esc_attr($button_type); ?>"<?php echo $button_attributes; ?>><?php echo esc_html($button['label']); ?></button>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+            <div class="<?php echo esc_attr(trim($footer_class)); ?>">
+                <p id="<?php echo esc_attr($args['footer_id']); ?>"><?php echo esc_html($args['footer_text']); ?></p>
+            </div>
+        </aside>
+        <?php
+        echo ob_get_clean();
+    }
+
+    /**
+     * Render a single summary item with icon and placeholder value.
+     *
+     * @param string $icon_key  Key referencing the icon in the summary icon map.
+     * @param string $label     Label to display for the summary row.
+     * @param string $value_id  DOM id for the value span.
+     * @param string $wrapper_id Optional DOM id for the wrapper row.
+     * @param bool   $hidden    Whether the row should be hidden initially.
+     */
+    private function render_summary_item($icon_key, $label, $value_id, $wrapper_id = '', $hidden = false) {
+        $icon_url = isset($this->summary_icons[$icon_key]) ? $this->summary_icons[$icon_key] : '';
+        $attributes = '';
+
+        if (!empty($wrapper_id)) {
+            $attributes .= ' id="' . esc_attr($wrapper_id) . '"';
+        }
+
+        if ($hidden) {
+            $attributes .= ' style="display:none;"';
+        }
+        ?>
+        <div class="sdpi-summary-item pending"<?php echo $attributes; ?>>
+            <span class="sdpi-summary-icon" aria-hidden="true">
+                <?php if (!empty($icon_url)) : ?>
+                    <img src="<?php echo esc_url($icon_url); ?>" alt="" role="presentation">
+                <?php endif; ?>
+            </span>
+            <span class="sdpi-summary-label"><?php echo esc_html($label); ?></span>
+            <span class="sdpi-summary-value" id="<?php echo esc_attr($value_id); ?>">Pendiente</span>
+        </div>
+        <?php
     }
 
     /**
@@ -1128,56 +1240,21 @@ class SDPI_Form {
                     </form>
                 </div>
 
-                <aside class="sdpi-summary-panel sdpi-review-summary-panel" id="sdpi-review-summary-panel" style="display:none;">
-                    <div class="sdpi-summary-header">
-                        <h3>Resumen de tu cotizacion</h3>
-                        <p>Verifica los datos antes de continuar.</p>
-                    </div>
-                    <div class="sdpi-summary-body">
-                        <div class="sdpi-summary-item pending">
-                            <span class="sdpi-summary-icon" aria-hidden="true">
-                                <img src="<?php echo esc_url($summary_icons['location']); ?>" alt="" role="presentation">
-                            </span>
-                            <span class="sdpi-summary-label">Ciudad de origen</span>
-                            <span class="sdpi-summary-value" id="sdpi-review-summary-pickup">Pendiente</span>
-                        </div>
-                        <div class="sdpi-summary-item pending">
-                            <span class="sdpi-summary-icon" aria-hidden="true">
-                                <img src="<?php echo esc_url($summary_icons['location']); ?>" alt="" role="presentation">
-                            </span>
-                            <span class="sdpi-summary-label">Ciudad de destino</span>
-                            <span class="sdpi-summary-value" id="sdpi-review-summary-delivery">Pendiente</span>
-                        </div>
-                        <div class="sdpi-summary-item pending">
-                            <span class="sdpi-summary-icon" aria-hidden="true">
-                                <img src="<?php echo esc_url($summary_icons['inland']); ?>" alt="" role="presentation">
-                            </span>
-                            <span class="sdpi-summary-label">Tipo de trailer</span>
-                            <span class="sdpi-summary-value" id="sdpi-review-summary-trailer">Pendiente</span>
-                        </div>
-                        <div class="sdpi-summary-item pending">
-                            <span class="sdpi-summary-icon" aria-hidden="true">
-                                <img src="<?php echo esc_url($summary_icons['car']); ?>" alt="" role="presentation">
-                            </span>
-                            <span class="sdpi-summary-label">Vehiculo</span>
-                            <span class="sdpi-summary-value" id="sdpi-review-summary-vehicle">Pendiente</span>
-                        </div>
-                        <div class="sdpi-summary-item pending" id="sdpi-review-summary-transport-type-row">
-                            <span class="sdpi-summary-icon" aria-hidden="true">
-                                <img src="<?php echo esc_url($summary_icons['inland']); ?>" alt="" role="presentation">
-                            </span>
-                            <span class="sdpi-summary-label">Tipo de transporte</span>
-                            <span class="sdpi-summary-value" id="sdpi-review-summary-transport-type">Pendiente</span>
-                        </div>
-                    </div>
-                    <div class="sdpi-summary-total pending">
-                        <span class="sdpi-summary-total-label">Precio final</span>
-                        <span class="sdpi-summary-total-value" id="sdpi-review-summary-price">Pendiente</span>
-                    </div>
-                    <div class="sdpi-summary-footer is-info">
-                        <p id="sdpi-review-summary-footer-text">Confirma tus datos y completa la informacion solicitada.</p>
-                    </div>
-                </aside>
+                <?php
+                $this->render_summary_panel(array(
+                    'panel_id' => 'sdpi-review-summary-panel',
+                    'extra_classes' => 'sdpi-review-summary-panel',
+                    'title' => 'Resumen de tu cotizacion',
+                    'subtitle' => 'Verifica los datos antes de continuar.',
+                    'value_prefix' => 'sdpi-review-summary',
+                    'total_label' => 'Precio final',
+                    'total_value_id' => 'sdpi-review-summary-price',
+                    'footer_id' => 'sdpi-review-summary-footer-text',
+                    'footer_text' => 'Confirma tus datos y completa la informacion solicitada.',
+                    'footer_state_class' => 'is-info',
+                    'initially_hidden' => true,
+                ));
+                ?>
             </div>
         </div>
 
@@ -1219,56 +1296,21 @@ class SDPI_Form {
                     </div>
                 </div>
 
-                <aside class="sdpi-summary-panel sdpi-review-summary-panel" id="sdpi-payment-summary-panel" style="display:none;">
-                    <div class="sdpi-summary-header">
-                        <h3>Resumen de tu cotizacion</h3>
-                        <p>Verifica los datos antes de realizar el pago.</p>
-                    </div>
-                    <div class="sdpi-summary-body">
-                        <div class="sdpi-summary-item pending">
-                            <span class="sdpi-summary-icon" aria-hidden="true">
-                                <img src="<?php echo esc_url($summary_icons['location']); ?>" alt="" role="presentation">
-                            </span>
-                            <span class="sdpi-summary-label">Ciudad de origen</span>
-                            <span class="sdpi-summary-value" id="sdpi-payment-summary-pickup">Pendiente</span>
-                        </div>
-                        <div class="sdpi-summary-item pending">
-                            <span class="sdpi-summary-icon" aria-hidden="true">
-                                <img src="<?php echo esc_url($summary_icons['location']); ?>" alt="" role="presentation">
-                            </span>
-                            <span class="sdpi-summary-label">Ciudad de destino</span>
-                            <span class="sdpi-summary-value" id="sdpi-payment-summary-delivery">Pendiente</span>
-                        </div>
-                        <div class="sdpi-summary-item pending">
-                            <span class="sdpi-summary-icon" aria-hidden="true">
-                                <img src="<?php echo esc_url($summary_icons['inland']); ?>" alt="" role="presentation">
-                            </span>
-                            <span class="sdpi-summary-label">Tipo de trailer</span>
-                            <span class="sdpi-summary-value" id="sdpi-payment-summary-trailer">Pendiente</span>
-                        </div>
-                        <div class="sdpi-summary-item pending">
-                            <span class="sdpi-summary-icon" aria-hidden="true">
-                                <img src="<?php echo esc_url($summary_icons['car']); ?>" alt="" role="presentation">
-                            </span>
-                            <span class="sdpi-summary-label">Vehiculo</span>
-                            <span class="sdpi-summary-value" id="sdpi-payment-summary-vehicle">Pendiente</span>
-                        </div>
-                        <div class="sdpi-summary-item pending" id="sdpi-payment-summary-transport-type-row">
-                            <span class="sdpi-summary-icon" aria-hidden="true">
-                                <img src="<?php echo esc_url($summary_icons['inland']); ?>" alt="" role="presentation">
-                            </span>
-                            <span class="sdpi-summary-label">Tipo de transporte</span>
-                            <span class="sdpi-summary-value" id="sdpi-payment-summary-transport-type">Pendiente</span>
-                        </div>
-                    </div>
-                    <div class="sdpi-summary-total pending">
-                        <span class="sdpi-summary-total-label">Precio final</span>
-                        <span class="sdpi-summary-total-value" id="sdpi-payment-summary-price">Pendiente</span>
-                    </div>
-                    <div class="sdpi-summary-footer is-info">
-                        <p id="sdpi-payment-summary-footer-text">Ingresa los datos de tu tarjeta para completar el pago.</p>
-                    </div>
-                </aside>
+                <?php
+                $this->render_summary_panel(array(
+                    'panel_id' => 'sdpi-payment-summary-panel',
+                    'extra_classes' => 'sdpi-review-summary-panel',
+                    'title' => 'Resumen de tu cotizacion',
+                    'subtitle' => 'Verifica los datos antes de realizar el pago.',
+                    'value_prefix' => 'sdpi-payment-summary',
+                    'total_label' => 'Precio final',
+                    'total_value_id' => 'sdpi-payment-summary-price',
+                    'footer_id' => 'sdpi-payment-summary-footer-text',
+                    'footer_text' => 'Ingresa los datos de tu tarjeta para completar el pago.',
+                    'footer_state_class' => 'is-info',
+                    'initially_hidden' => true,
+                ));
+                ?>
             </div>
         </div>
         <?php

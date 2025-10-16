@@ -1472,6 +1472,20 @@
     border: 1px solid rgba(23, 32, 95, 0.08);
     position: sticky;
     top: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+}
+
+.sdpi-form-layout > .sdpi-summary-panel {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+@media (min-width: 1025px) {
+    .sdpi-form-layout > .sdpi-summary-panel {
+        max-width: 340px;
+    }
 }
 
 .sdpi-summary-header h3 {

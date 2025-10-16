@@ -2078,11 +2078,11 @@ class SDPI_Form {
             'vehicle_year' => $vehicle_year,
             'maritime_involved' => $involves_maritime,
             'inoperable_fee' => $inoperable_fee,
+            'electric_surcharge' => $final_price_data['electric_surcharge'] ?? 0,
             'maritime_direction' => $maritime_direction,
             'maritime_cost' => $involves_maritime ? ($final_price_data['maritime_cost'] ?? 0) : 0,
             'us_port' => $involves_maritime ? ($final_price_data['us_port'] ?? null) : null,
             'terrestrial_cost' => $involves_maritime ? ($final_price_data['terrestrial_cost'] ?? 0) : 0,
-            'inoperable_fee' => $inoperable_fee,
             'api_response' => $api_response,
             'final_price' => $final_price_data['final_price'],
             'base_price' => $final_price_data['base_price'] ?? 0,
@@ -2240,7 +2240,8 @@ class SDPI_Form {
             'us_port' => null,
             'terrestrial_cost' => 0,
             'maritime_cost' => $maritime_cost,
-            'inoperable_fee' => $inoperable_fee
+            'inoperable_fee' => $inoperable_fee,
+            'electric_surcharge' => $electric_surcharge
         );
     }
 
@@ -2268,7 +2269,8 @@ class SDPI_Form {
                 'us_port' => $maritime_result['us_port'],
                 'terrestrial_cost' => $maritime_result['terrestrial_cost'],
                 'maritime_cost' => $maritime_result['maritime_cost'],
-                'inoperable_fee' => $maritime_result['inoperable_fee'] ?? 0
+                'inoperable_fee' => $maritime_result['inoperable_fee'] ?? 0,
+                'electric_surcharge' => $maritime_result['electric_surcharge'] ?? 0
             );
         }
         
@@ -2361,7 +2363,8 @@ class SDPI_Form {
             'breakdown' => $breakdown,
             'price' => $final_price, // For backward compatibility
             'confidence_percentage' => $confidence * 100,
-            'inoperable_fee' => 0
+            'inoperable_fee' => 0,
+            'electric_surcharge' => $electric_surcharge
         );
     }
 

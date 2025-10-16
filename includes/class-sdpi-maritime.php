@@ -136,7 +136,8 @@ class SDPI_Maritime {
                 'maritime_involved' => false,
                 'us_port' => null,
                 'breakdown' => null,
-                'inoperable_fee' => 0
+                'inoperable_fee' => 0,
+                'electric_surcharge' => $electric_surcharge
             ];
         }
 
@@ -198,7 +199,8 @@ class SDPI_Maritime {
             'maritime_involved' => true,
             'us_port' => $us_port,
             'breakdown' => $breakdown,
-            'inoperable_fee' => $inoperable_fee
+            'inoperable_fee' => $inoperable_fee,
+            'electric_surcharge' => $electric_surcharge
         ];
     }
     

@@ -808,13 +808,6 @@
 }
 
 /* Transport type indicator */
-#sdpi-summary-transport-type-row {
-    background: #e3f2fd;
-    padding: 8px;
-    border-radius: 4px;
-    margin: 5px 0;
-}
-
 #sdpi-summary-transport-type {
     font-weight: bold;
     color: #007cba;
@@ -1478,11 +1471,8 @@
     word-break: break-word;
 }
 
-.sdpi-summary-value.sdpi-summary-surcharge::after {
-    content: ' +';
+.sdpi-summary-value.sdpi-summary-surcharge {
     color: #d17a00;
-    font-weight: 700;
-    margin-left: 0.15rem;
 }
 
 .sdpi-summary-total {

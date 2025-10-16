@@ -235,7 +235,9 @@
 
         if ($value.attr('id') === 'sdpi-summary-transport-type') {
             if (value && value.trim() !== '') {
+                if ($item.length) { $item.css('display', 'flex'); }
             } else {
+                if ($item.length) { $item.hide(); }
             }
         }
     }
@@ -308,17 +310,53 @@
         }
     }
 
-    function updateSurchargeDisplay(setter, selector, isSelected, highlight) {
+    function updateSurchargeDisplay(setter, selector, isSelected, highlight, amount, showOnlyWhenApplicable) {
         if (typeof setter !== 'function') { return; }
+
+        var shouldHighlight = !!highlight;
+        var surchargeAmount = (typeof amount !== 'undefined' && amount !== null) ? parseFloat(amount) : null;
+        var requireApplicability = !!showOnlyWhenApplicable;
+        var $value = $(selector);
+
+        if (!$value.length) { return; }
+
+        var $item = $value.closest('.sdpi-summary-item');
+        var shouldShowRow = !requireApplicability || (isSelected && shouldHighlight);
+
+        if ($item.length) {
+            if (shouldShowRow) {
+                $item.css('display', 'flex');
+            } else {
+                $item.hide();
+            }
+        }
+
+        if (!shouldShowRow) {
+            setter(selector, '');
+            toggleSurchargeClass($value, false);
+            return;
+        }
+
         var value = isSelected ? 'Sí' : 'No';
+        if (isSelected && surchargeAmount !== null && !isNaN(surchargeAmount) && surchargeAmount > 0) {
+            value = 'Sí (+' + formatCurrency(surchargeAmount) + ')';
+        }
+
         setter(selector, value);
-        toggleSurchargeClass($(selector), !!highlight && !!isSelected);
+        toggleSurchargeClass($value, isSelected && shouldHighlight);
     }
 
     function clearSurchargeDisplay(setter, selector) {
         if (typeof setter !== 'function') { return; }
+        var $value = $(selector);
+        if ($value.length) {
+            var $item = $value.closest('.sdpi-summary-item');
+            if ($item.length) {
+                $item.hide();
+            }
+            toggleSurchargeClass($value, false);
+        }
         setter(selector, '');
-        toggleSurchargeClass($(selector), false);
     }
 
     function resetPaymentSummary() {
@@ -355,7 +393,7 @@
         setReviewSummaryValue('#sdpi-review-summary-vehicle', details.vehicle || '');
 
         if (details.transport && details.transport.trim() !== '') {
-            $('#sdpi-review-summary-transport-type-row').show();
+            $('#sdpi-review-summary-transport-type-row').css('display', 'flex');
             setReviewSummaryValue('#sdpi-review-summary-transport-type', details.transport);
         } else {
             $('#sdpi-review-summary-transport-type-row').hide();
@@ -363,13 +401,27 @@
         }
 
         if (typeof details.inoperable !== 'undefined') {
-            updateSurchargeDisplay(setReviewSummaryValue, '#sdpi-review-summary-inoperable', !!details.inoperable, !!details.surchargeHighlight);
+            updateSurchargeDisplay(
+                setReviewSummaryValue,
+                '#sdpi-review-summary-inoperable',
+                !!details.inoperable,
+                !!details.surchargeHighlight,
+                details.inoperableFee,
+                true
+            );
         } else {
             clearSurchargeDisplay(setReviewSummaryValue, '#sdpi-review-summary-inoperable');
         }
 
         if (typeof details.electric !== 'undefined') {
-            updateSurchargeDisplay(setReviewSummaryValue, '#sdpi-review-summary-electric', !!details.electric, !!details.surchargeHighlight);
+            updateSurchargeDisplay(
+                setReviewSummaryValue,
+                '#sdpi-review-summary-electric',
+                !!details.electric,
+                !!details.surchargeHighlight,
+                details.electricSurcharge,
+                true
+            );
         } else {
             clearSurchargeDisplay(setReviewSummaryValue, '#sdpi-review-summary-electric');
         }
@@ -387,7 +439,7 @@
         setPaymentSummaryValue('#sdpi-payment-summary-vehicle', details.vehicle || '');
 
         if (details.transport && details.transport.trim() !== '') {
-            $('#sdpi-payment-summary-transport-type-row').show();
+            $('#sdpi-payment-summary-transport-type-row').css('display', 'flex');
             setPaymentSummaryValue('#sdpi-payment-summary-transport-type', details.transport);
         } else {
             $('#sdpi-payment-summary-transport-type-row').hide();
@@ -395,13 +447,27 @@
         }
 
         if (typeof details.inoperable !== 'undefined') {
-            updateSurchargeDisplay(setPaymentSummaryValue, '#sdpi-payment-summary-inoperable', !!details.inoperable, !!details.surchargeHighlight);
+            updateSurchargeDisplay(
+                setPaymentSummaryValue,
+                '#sdpi-payment-summary-inoperable',
+                !!details.inoperable,
+                !!details.surchargeHighlight,
+                details.inoperableFee,
+                true
+            );
         } else {
             clearSurchargeDisplay(setPaymentSummaryValue, '#sdpi-payment-summary-inoperable');
         }
 
         if (typeof details.electric !== 'undefined') {
-            updateSurchargeDisplay(setPaymentSummaryValue, '#sdpi-payment-summary-electric', !!details.electric, !!details.surchargeHighlight);
+            updateSurchargeDisplay(
+                setPaymentSummaryValue,
+                '#sdpi-payment-summary-electric',
+                !!details.electric,
+                !!details.surchargeHighlight,
+                details.electricSurcharge,
+                true
+            );
         } else {
             clearSurchargeDisplay(setPaymentSummaryValue, '#sdpi-payment-summary-electric');
         }
@@ -909,6 +975,31 @@
             setSummaryValue('#sdpi-summary-transport-type', formatTransportLabel(data.transport_type));
         }
 
+        var isMaritime = data.transport_type === 'maritime';
+        var inoperableFee = parseFloat(data.inoperable_fee || 0);
+        var electricSurcharge = parseFloat(data.electric_surcharge || 0);
+
+        if (isNaN(inoperableFee)) { inoperableFee = 0; }
+        if (isNaN(electricSurcharge)) { electricSurcharge = 0; }
+
+        updateSurchargeDisplay(
+            setSummaryValue,
+            '#sdpi-summary-inoperable',
+            !!data.vehicle_inoperable,
+            isMaritime,
+            inoperableFee,
+            true
+        );
+
+        updateSurchargeDisplay(
+            setSummaryValue,
+            '#sdpi-summary-electric',
+            !!data.vehicle_electric,
+            isMaritime,
+            electricSurcharge,
+            true
+        );
+
         setProgressStep(4);
         toggleContinueButton(data);
         updateSummaryFooter('success', 'Cotizacion lista. Revisa el total y continua.');
@@ -1117,6 +1208,11 @@
             var isElectric = !!quoteData.vehicle_electric;
             var conditionsValue = isInoperable ? 'Non-Running' : 'Running';
             var fuelValue = isElectric ? 'Electric' : 'Gasoline';
+            var inoperableFee = parseFloat(quoteData.inoperable_fee || 0);
+            var electricSurcharge = parseFloat(quoteData.electric_surcharge || 0);
+
+            if (isNaN(inoperableFee)) { inoperableFee = 0; }
+            if (isNaN(electricSurcharge)) { electricSurcharge = 0; }
 
             if (!vehicleSummary && vehicleTypeLabel) {
                 vehicleSummary = vehicleTypeLabel;
@@ -1130,8 +1226,8 @@
             setSummaryValue('#sdpi-summary-vehicle', vehicleSummary);
             setSummaryPrice(formattedPrice);
             setSummaryValue('#sdpi-summary-transport-type', formatTransportLabel(isMaritime ? 'maritime' : 'terrestrial'));
-            updateSurchargeDisplay(setSummaryValue, '#sdpi-summary-inoperable', isInoperable, isMaritime);
-            updateSurchargeDisplay(setSummaryValue, '#sdpi-summary-electric', isElectric, isMaritime);
+            updateSurchargeDisplay(setSummaryValue, '#sdpi-summary-inoperable', isInoperable, isMaritime, inoperableFee, true);
+            updateSurchargeDisplay(setSummaryValue, '#sdpi-summary-electric', isElectric, isMaritime, electricSurcharge, true);
 
             updateReviewSummary({
                 pickup: pickupLabel,
@@ -1142,7 +1238,9 @@
                 price: formattedPrice,
                 inoperable: isInoperable,
                 electric: isElectric,
-                surchargeHighlight: isMaritime
+                surchargeHighlight: isMaritime,
+                inoperableFee: inoperableFee,
+                electricSurcharge: electricSurcharge
             });
 
             if ($additionalInfoContainer.length) {

@@ -601,22 +601,23 @@ class SDPI_Form {
             return;
         }
 
-        $now = current_time('timestamp');
-        $run_at = $now + $this->zapier_delay_seconds;
+        $now_local = current_time('timestamp');
+        $now_gmt = current_time('timestamp', true);
+        $run_at_gmt = $now_gmt + $this->zapier_delay_seconds;
 
-        wp_schedule_single_event($run_at, 'sdpi_zapier_delayed_push', array($session_id, 'delay'));
+        wp_schedule_single_event($run_at_gmt, 'sdpi_zapier_delayed_push', array($session_id, 'delay'));
 
         $push_state = $this->array_merge_recursive_distinct($push_state, array(
             'status' => 'scheduled',
-            'scheduled_at' => $now,
-            'run_at' => $run_at,
+            'scheduled_at' => $now_local,
+            'run_at' => $run_at_gmt,
             'last_reason' => 'delay'
         ));
 
         $session->update_data($session_id, array('zapier_push' => $push_state));
 
         $history = new SDPI_History();
-        $history->log_zapier_schedule($session_id, $run_at);
+        $history->log_zapier_schedule($session_id, $run_at_gmt);
     }
 
     private function cancel_zapier_schedule($session_id) {

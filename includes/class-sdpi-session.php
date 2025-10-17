@@ -176,10 +176,26 @@ class SDPI_Session {
 	/**
 	 * Deep merge helper for associative arrays
 	 */
+	private function is_sequential_array($value) {
+		if (!is_array($value)) {
+			return false;
+		}
+		return array_keys($value) === range(0, count($value) - 1);
+	}
+
 	private function deep_merge($base, $insert) {
 		foreach ($insert as $key => $value) {
+			if ($key === 'documentation_files') {
+				$base[$key] = is_array($value) ? $value : array();
+				continue;
+			}
+
 			if (is_array($value) && isset($base[$key]) && is_array($base[$key])) {
-				$base[$key] = $this->deep_merge($base[$key], $value);
+				if ($this->is_sequential_array($value) || $this->is_sequential_array($base[$key])) {
+					$base[$key] = $value;
+				} else {
+					$base[$key] = $this->deep_merge($base[$key], $value);
+				}
 			} else {
 				$base[$key] = $value;
 			}

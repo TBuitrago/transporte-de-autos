@@ -49,6 +49,524 @@ jQuery(document).ready(function($) {
     var pickupTypes = ['Subasta', 'Residencia', 'Dealer o negocio'];
     var allowedCountries = ['USA', 'Puerto Rico'];
     var fieldRuleMap = {};
+    var documentationManager = {
+        initialized: false,
+        items: [],
+        uploads: {},
+        maxFiles: 0,
+        maxSize: 0,
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+        allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+    };
+
+    function escapeHtml(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value.replace(/[&<>"']/g, function(match) {
+            var map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return map[match] || match;
+        });
+    }
+
+    function formatFileSize(bytes) {
+        var size = parseInt(bytes, 10);
+        if (!size || size <= 0) {
+            return '0 KB';
+        }
+        var units = ['B', 'KB', 'MB', 'GB'];
+        var index = 0;
+        var result = size;
+        while (result >= 1024 && index < units.length - 1) {
+            result = result / 1024;
+            index++;
+        }
+        if (index === 0) {
+            return result + ' ' + units[index];
+        }
+        return result.toFixed(result < 10 ? 1 : 0) + ' ' + units[index];
+    }
+
+    function documentationUploadsArray() {
+        return Object.keys(documentationManager.uploads).map(function(key) {
+            return documentationManager.uploads[key];
+        });
+    }
+
+    function documentationUploadingCount() {
+        var uploads = documentationUploadsArray();
+        var count = 0;
+        uploads.forEach(function(upload) {
+            if (upload && upload.status === 'uploading') {
+                count++;
+            }
+        });
+        return count;
+    }
+
+    function documentationUploadsInProgress() {
+        return documentationUploadingCount() > 0;
+    }
+
+    function documentationHasFailures() {
+        return documentationUploadsArray().some(function(upload) {
+            return upload && upload.status === 'error';
+        });
+    }
+
+    function documentationRemainingSlots() {
+        var remaining = documentationManager.maxFiles - documentationManager.items.length - documentationUploadingCount();
+        return remaining < 0 ? 0 : remaining;
+    }
+
+    function setDocumentationFeedback(message, type) {
+        var $feedback = $('#sdpi-documentation-feedback');
+        if (!$feedback.length) {
+            return;
+        }
+        var finalType = type || '';
+        if (!message) {
+            $feedback.text('').removeClass('is-error is-success is-info').attr('aria-hidden', 'true');
+            $feedback.data('doc-feedback-type', '');
+            return;
+        }
+        $feedback.removeClass('is-error is-success is-info');
+        if (finalType) {
+            $feedback.addClass('is-' + finalType);
+        }
+        $feedback.text(message).attr('aria-hidden', 'false');
+        $feedback.data('doc-feedback-type', finalType);
+    }
+
+    function updateDocumentationProgress(tempId, percent) {
+        var $item = $('#sdpi-documentation-list').find('li[data-temp-id=\"' + tempId + '\"]');
+        if (!$item.length) {
+            return;
+        }
+        $item.find('.sdpi-document-progress span').css('width', percent + '%');
+        $item.find('.sdpi-document-item__meta').text('Subiendo... ' + percent + '%');
+    }
+
+    function updateDocumentationContinueState() {
+        if (!documentationManager.initialized) {
+            return;
+        }
+        var hasPending = documentationUploadsInProgress();
+        var hasErrors = documentationHasFailures();
+        var disable = hasPending || hasErrors;
+        var feedbackType = $('#sdpi-documentation-feedback').data('doc-feedback-type') || '';
+        if (hasPending) {
+            if (feedbackType !== 'info') {
+                setDocumentationFeedback('Espera a que los archivos terminen de subir.', 'info');
+            }
+        } else if (hasErrors) {
+            setDocumentationFeedback('Resuelve los errores de documentos antes de continuar.', 'error');
+        } else if (feedbackType === 'info' || feedbackType === 'error') {
+            setDocumentationFeedback('', null);
+        }
+        ['#sdpi-maritime-continue', '#sdpi-ai-continue'].forEach(function(selector) {
+            var $btn = $(selector);
+            if (!$btn.length) {
+                return;
+            }
+            if (disable) {
+                if (!$btn.data('doc-original-text')) {
+                    $btn.data('doc-original-text', $btn.text());
+                }
+                $btn.data('doc-disabled', true);
+                var label = hasPending ? 'Esperando cargas...' : 'Corrige los documentos pendientes';
+                $btn.prop('disabled', true).text(label);
+            } else if ($btn.data('doc-disabled')) {
+                var original = $btn.data('doc-original-text') || $btn.text();
+                $btn.prop('disabled', false).text(original);
+                $btn.data('doc-disabled', false);
+            }
+        });
+    }
+
+    function renderDocumentationList() {
+        if (!documentationManager.initialized) {
+            return;
+        }
+        var $list = $('#sdpi-documentation-list');
+        if (!$list.length) {
+            return;
+        }
+        var html = '';
+        var uploads = documentationUploadsArray();
+        uploads.forEach(function(upload) {
+            if (!upload) {
+                return;
+            }
+            if (upload.status === 'uploading') {
+                html += '<li class="sdpi-document-item is-uploading" data-temp-id="' + upload.tempId + '">' +
+                    '<div class="sdpi-document-item__info">' +
+                        '<span class="sdpi-document-item__name">' + escapeHtml(upload.name) + '</span>' +
+                        '<span class="sdpi-document-item__meta">Subiendo... ' + upload.progress + '%</span>' +
+                    '</div>' +
+                    '<div class="sdpi-document-progress"><span style="width:' + upload.progress + '%;"></span></div>' +
+                    '<div class="sdpi-document-item__actions">' +
+                        '<button type="button" class="sdpi-document-remove" data-temp-id="' + upload.tempId + '">Cancelar</button>' +
+                    '</div>' +
+                '</li>';
+            } else if (upload.status === 'error') {
+                var errorMessage = upload.error || 'No se pudo cargar el archivo.';
+                html += '<li class="sdpi-document-item has-error" data-temp-id="' + upload.tempId + '">' +
+                    '<div class="sdpi-document-item__info">' +
+                        '<span class="sdpi-document-item__name">' + escapeHtml(upload.name) + '</span>' +
+                        '<span class="sdpi-document-item__meta">' + escapeHtml(errorMessage) + '</span>' +
+                    '</div>' +
+                    '<div class="sdpi-document-item__actions">' +
+                        '<button type="button" class="sdpi-document-retry" data-temp-id="' + upload.tempId + '">Reintentar</button>' +
+                        '<button type="button" class="sdpi-document-remove" data-temp-id="' + upload.tempId + '">Quitar</button>' +
+                    '</div>' +
+                '</li>';
+            }
+        });
+        documentationManager.items.forEach(function(item) {
+            if (!item) {
+                return;
+            }
+            var extension = '';
+            if (item.name && item.name.indexOf('.') !== -1) {
+                extension = item.name.split('.').pop().toUpperCase();
+            }
+            var metaParts = [];
+            if (item.size) {
+                metaParts.push(formatFileSize(item.size));
+            }
+            if (extension) {
+                metaParts.push(extension);
+            }
+            var meta = metaParts.join(' · ');
+            html += '<li class="sdpi-document-item is-uploaded" data-id="' + item.id + '">' +
+                '<div class="sdpi-document-item__info">' +
+                    '<span class="sdpi-document-item__name">' + escapeHtml(item.name || ('Archivo ' + item.id)) + '</span>' +
+                    '<span class="sdpi-document-item__meta">' + escapeHtml(meta) + '</span>' +
+                '</div>' +
+                '<div class="sdpi-document-item__actions">' +
+                    (item.url ? '<a class="sdpi-document-open" href="' + item.url + '" target="_blank" rel="noopener">Ver</a>' : '') +
+                    '<button type="button" class="sdpi-document-remove" data-id="' + item.id + '">Eliminar</button>' +
+                '</div>' +
+            '</li>';
+        });
+        if (!html) {
+            html = '<li class="sdpi-document-item is-empty">A&uacute;n no has subido documentos.</li>';
+        }
+        $list.html(html);
+        updateDocumentationContinueState();
+    }
+
+    function syncQuoteDocumentation() {
+        if (!documentationManager.initialized) {
+            return;
+        }
+        var docs = documentationManager.items ? documentationManager.items.slice() : [];
+        if (window.currentQuoteData && typeof window.currentQuoteData === 'object') {
+            window.currentQuoteData.documentation_files = docs;
+        }
+        var $maritimeForm = $('#sdpi-maritime-info-form');
+        var maritimeQuote = $maritimeForm.data('quote');
+        if (maritimeQuote && typeof maritimeQuote === 'object') {
+            maritimeQuote.documentation_files = docs;
+            $maritimeForm.data('quote', maritimeQuote);
+        }
+        var $additional = $('#sdpi-additional-info');
+        var additionalQuote = $additional.data('quote');
+        if (additionalQuote && typeof additionalQuote === 'object') {
+            additionalQuote.documentation_files = docs;
+            $additional.data('quote', additionalQuote);
+        }
+    }
+
+    function documentationCanProceed() {
+        if (!documentationManager.initialized) {
+            return true;
+        }
+        return !documentationUploadsInProgress() && !documentationHasFailures();
+    }
+
+    function validateDocumentationFile(file) {
+        if (!file) {
+            return { valid: false, message: 'Archivo no v&aacute;lido.' };
+        }
+        var extension = '';
+        if (file.name && file.name.indexOf('.') !== -1) {
+            extension = file.name.split('.').pop().toLowerCase();
+        }
+        if (documentationManager.allowedExtensions.indexOf(extension) === -1) {
+            return { valid: false, message: 'Formato no permitido. Usa JPG, JPEG, PNG, WEBP o PDF.' };
+        }
+        if (file.type && documentationManager.allowedTypes.indexOf(file.type) === -1) {
+            return { valid: false, message: 'Formato de archivo no permitido.' };
+        }
+        if (file.size > documentationManager.maxSize) {
+            return { valid: false, message: 'Cada archivo debe pesar m&aacute;ximo 10 MB.' };
+        }
+        return { valid: true };
+    }
+
+    function handleDocumentationSelection(fileList) {
+        if (!documentationManager.initialized || !fileList || !fileList.length) {
+            return;
+        }
+        var files = Array.prototype.slice.call(fileList);
+        var available = documentationRemainingSlots();
+        if (available <= 0) {
+            setDocumentationFeedback('Ya alcanzaste el l&iacute;mite de documentos permitidos.', 'error');
+            return;
+        }
+        files.forEach(function(file) {
+            if (!file) {
+                return;
+            }
+            if (documentationManager.items.length + documentationUploadingCount() >= documentationManager.maxFiles) {
+                setDocumentationFeedback('Ya alcanzaste el l&iacute;mite de documentos permitidos.', 'error');
+                return;
+            }
+            var validation = validateDocumentationFile(file);
+            if (!validation.valid) {
+                setDocumentationFeedback(validation.message, 'error');
+                return;
+            }
+            queueDocumentationUpload(file);
+        });
+    }
+
+    function queueDocumentationUpload(file) {
+        var tempId = 'temp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+        documentationManager.uploads[tempId] = {
+            tempId: tempId,
+            file: file,
+            name: file.name,
+            size: file.size,
+            status: 'uploading',
+            progress: 0,
+            error: '',
+            xhr: null
+        };
+        renderDocumentationList();
+        updateDocumentationContinueState();
+        uploadDocumentationFile(documentationManager.uploads[tempId]);
+    }
+
+    function uploadDocumentationFile(upload) {
+        if (!upload) {
+            return;
+        }
+        var formData = new FormData();
+        formData.append('action', 'sdpi_upload_document_file');
+        formData.append('nonce', sdpi_ajax.nonce);
+        formData.append('file', upload.file, upload.file.name);
+
+        var jqxhr = $.ajax({
+            url: sdpi_ajax.ajax_url,
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            xhr: function() {
+                var xhr = $.ajaxSettings.xhr();
+                if (xhr && xhr.upload) {
+                    xhr.upload.addEventListener('progress', function(event) {
+                        if (event.lengthComputable) {
+                            var percent = Math.round((event.loaded / event.total) * 100);
+                            upload.progress = percent;
+                            updateDocumentationProgress(upload.tempId, percent);
+                        }
+                    });
+                }
+                return xhr;
+            }
+        });
+
+        jqxhr.done(function(resp) {
+            if (resp && resp.success && resp.data) {
+                documentationManager.items = resp.data.files || [];
+                delete documentationManager.uploads[upload.tempId];
+                renderDocumentationList();
+                syncQuoteDocumentation();
+                if ($('#sdpi-documentation-feedback').data('doc-feedback-type') !== 'info') {
+                    setDocumentationFeedback('', null);
+                }
+            } else {
+                var message = (resp && resp.data) ? resp.data : 'No se pudo cargar el archivo.';
+                upload.status = 'error';
+                upload.error = message;
+                renderDocumentationList();
+                setDocumentationFeedback(message, 'error');
+            }
+        }).fail(function(xhr, status) {
+            if (status === 'abort') {
+                return;
+            }
+            var message = 'No se pudo cargar el archivo. Intenta nuevamente.';
+            if (xhr && xhr.responseJSON && xhr.responseJSON.data) {
+                message = xhr.responseJSON.data;
+            }
+            upload.status = 'error';
+            upload.error = message;
+            renderDocumentationList();
+            setDocumentationFeedback(message, 'error');
+        }).always(function() {
+            updateDocumentationContinueState();
+        });
+
+        upload.xhr = jqxhr;
+    }
+
+    function deleteDocumentationFile(attachmentId, $trigger) {
+        if (!documentationManager.initialized || !attachmentId) {
+            return;
+        }
+        if ($trigger && $trigger.length) {
+            $trigger.prop('disabled', true);
+        }
+        $.ajax({
+            url: sdpi_ajax.ajax_url,
+            method: 'POST',
+            data: {
+                action: 'sdpi_delete_document_file',
+                nonce: sdpi_ajax.nonce,
+                attachment_id: attachmentId
+            }
+        }).done(function(resp) {
+            if (resp && resp.success && resp.data) {
+                documentationManager.items = resp.data.files || [];
+                renderDocumentationList();
+                syncQuoteDocumentation();
+                setDocumentationFeedback('Archivo eliminado.', 'info');
+            } else {
+                var message = (resp && resp.data) ? resp.data : 'No se pudo eliminar el archivo.';
+                setDocumentationFeedback(message, 'error');
+            }
+        }).fail(function() {
+            setDocumentationFeedback('No se pudo eliminar el archivo.', 'error');
+        }).always(function() {
+            if ($trigger && $trigger.length) {
+                $trigger.prop('disabled', false);
+            }
+            updateDocumentationContinueState();
+        });
+    }
+
+    function loadDocumentationFiles() {
+        if (!documentationManager.initialized) {
+            return;
+        }
+        $.ajax({
+            url: sdpi_ajax.ajax_url,
+            method: 'POST',
+            data: {
+                action: 'sdpi_list_document_files',
+                nonce: sdpi_ajax.nonce
+            }
+        }).done(function(resp) {
+            if (resp && resp.success && resp.data) {
+                documentationManager.items = resp.data.files || [];
+                renderDocumentationList();
+                syncQuoteDocumentation();
+            }
+        }).fail(function() {
+            setDocumentationFeedback('No se pudo cargar la lista de documentos.', 'error');
+        }).always(function() {
+            updateDocumentationContinueState();
+        });
+    }
+
+    function attachDocumentationToQuote(quoteData) {
+        if (!documentationManager.initialized) {
+            return quoteData;
+        }
+        var docs = documentationManager.items ? documentationManager.items.slice() : [];
+        quoteData = quoteData || {};
+        quoteData.documentation_files = docs;
+        return quoteData;
+    }
+
+    function initDocumentationManager() {
+        var $dropzone = $('#sdpi-documentation-dropzone');
+        if (!$dropzone.length || documentationManager.initialized) {
+            return;
+        }
+
+        documentationManager.initialized = true;
+        documentationManager.maxFiles = parseInt($dropzone.data('max-files'), 10) || 5;
+        documentationManager.maxSize = parseInt($dropzone.data('max-size'), 10) || (10 * 1024 * 1024);
+        setDocumentationFeedback('', null);
+
+        $('#sdpi-documentation-trigger').on('click', function(event) {
+            event.preventDefault();
+            $('#sdpi_documentation_input').trigger('click');
+        });
+
+        $('#sdpi_documentation_input').on('change', function(event) {
+            handleDocumentationSelection(event.target.files);
+            $(this).val('');
+        });
+
+        $dropzone.on('dragenter dragover', function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            $dropzone.addClass('is-dragover');
+        });
+
+        $dropzone.on('dragleave dragend drop', function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.type !== 'drop') {
+                $dropzone.removeClass('is-dragover');
+                return;
+            }
+            $dropzone.removeClass('is-dragover');
+            var files = event.originalEvent && event.originalEvent.dataTransfer ? event.originalEvent.dataTransfer.files : null;
+            if (files && files.length) {
+                handleDocumentationSelection(files);
+            }
+        });
+
+        $(document).on('click', '.sdpi-document-remove', function() {
+            var $btn = $(this);
+            var tempId = $btn.data('tempId');
+            var attachmentId = $btn.data('id');
+            if (tempId && documentationManager.uploads[tempId]) {
+                var upload = documentationManager.uploads[tempId];
+                if (upload.xhr && upload.status === 'uploading') {
+                    upload.xhr.abort();
+                }
+                delete documentationManager.uploads[tempId];
+                renderDocumentationList();
+                updateDocumentationContinueState();
+                setDocumentationFeedback('La carga fue cancelada.', 'info');
+                return;
+            }
+            if (attachmentId) {
+                deleteDocumentationFile(attachmentId, $btn);
+            }
+        });
+
+        $(document).on('click', '.sdpi-document-retry', function() {
+            var tempId = $(this).data('tempId');
+            var upload = documentationManager.uploads[tempId];
+            if (!upload) {
+                return;
+            }
+            upload.status = 'uploading';
+            upload.error = '';
+            upload.progress = 0;
+            renderDocumentationList();
+            updateDocumentationContinueState();
+            uploadDocumentationFile(upload);
+        });
+
+        loadDocumentationFiles();
+    }
 
     function sanitizeName(value) {
         return value.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ'\-\.\s]/g, '');
@@ -1267,8 +1785,8 @@ jQuery(document).ready(function($) {
         $('#sdpi-payment-amount-display').text('--');
         $('#sdpi-payment-summary-panel').hide();
         $('#sdpi-review-summary-panel').hide();
-        $('#sdpi-ai-continue').prop('disabled', false).text('Proceder al Checkout');
-        $('#sdpi-maritime-continue').prop('disabled', false).text('Proceder al Checkout');
+        $('#sdpi-ai-continue').prop('disabled', false).text('Proceder al Checkout').removeData('doc-disabled').removeData('doc-original-text');
+        $('#sdpi-maritime-continue').prop('disabled', false).text('Proceder al Checkout').removeData('doc-disabled').removeData('doc-original-text');
     }
 
     function showPaymentPanel(context) {
@@ -2547,8 +3065,8 @@ jQuery(document).ready(function($) {
             ? 'Completa la informacion maritima para continuar.'
             : 'Completa la informacion de recogida y entrega para continuar.';
         updateSummaryFooter('info', summaryFooterMessage);
-        $('#sdpi-ai-continue').prop('disabled', false).text('Proceder al Checkout');
-        $('#sdpi-maritime-continue').prop('disabled', false).text('Proceder al Checkout');
+        $('#sdpi-ai-continue').prop('disabled', false).text('Proceder al Checkout').removeData('doc-disabled').removeData('doc-original-text');
+        $('#sdpi-maritime-continue').prop('disabled', false).text('Proceder al Checkout').removeData('doc-disabled').removeData('doc-original-text');
         if ($('#sdpi-additional-info').length) {
             $('html, body').animate({ scrollTop: $('#sdpi-additional-info').offset().top - 40 }, 300);
         }
@@ -2565,6 +3083,12 @@ jQuery(document).ready(function($) {
             if (additionalValidation.firstInvalid && additionalValidation.firstInvalid.length) {
                 additionalValidation.firstInvalid.focus();
             }
+            return;
+        }
+
+        if (documentationManager.initialized && !documentationCanProceed()) {
+            setDocumentationFeedback('Finaliza las cargas pendientes de documentos para continuar.', 'error');
+            updateDocumentationContinueState();
             return;
         }
 
@@ -2614,6 +3138,7 @@ jQuery(document).ready(function($) {
                     }
                 };
 
+                quoteData = attachDocumentationToQuote(quoteData);
                 quoteData.shipping = shippingDetails;
                 quoteData.transport_type = 'terrestrial';
                 window.currentQuoteData = quoteData;
@@ -2644,6 +3169,12 @@ jQuery(document).ready(function($) {
             if (maritimeValidation.firstInvalid && maritimeValidation.firstInvalid.length) {
                 maritimeValidation.firstInvalid.focus();
             }
+            return;
+        }
+
+        if (documentationManager.initialized && !documentationCanProceed()) {
+            setDocumentationFeedback('Finaliza las cargas pendientes de documentos para continuar.', 'error');
+            updateDocumentationContinueState();
             return;
         }
 
@@ -2710,6 +3241,7 @@ jQuery(document).ready(function($) {
                     return;
                 }
 
+                quoteData = attachDocumentationToQuote(quoteData);
                 quoteData.transport_type = 'maritime';
                 quoteData.maritime_details = resp.data && resp.data.maritime_details ? resp.data.maritime_details : null;
                 quoteData.maritime_direction = resp.data && resp.data.direction ? resp.data.direction : payload.maritime_direction;
@@ -2740,6 +3272,7 @@ jQuery(document).ready(function($) {
             $(this).removeClass('valid error');
         }
     });
+    initDocumentationManager();
     unlockPricingForm();
     setSummaryPrice('');
     toggleContinueButton();

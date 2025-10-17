@@ -11,6 +11,15 @@ class SDPI_Form {
 
     private $api;
     private $summary_icons = array();
+    private $documentation_allowed_mimes = array(
+        'jpg|jpeg' => 'image/jpeg',
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        'pdf' => 'application/pdf'
+    );
+    private $documentation_max_files = 5;
+    private $documentation_max_size = 10485760; // 10 MB
+    private static $documentation_upload_subdir = 'documentos-cotizador';
 
     public function __construct() {
         $this->api = new SDPI_API();
@@ -52,6 +61,14 @@ class SDPI_Form {
         // Add new AJAX handler for finalizing quote with contact info
         add_action('wp_ajax_sdpi_finalize_quote_with_contact', array($this, 'ajax_finalize_quote_with_contact'));
         add_action('wp_ajax_nopriv_sdpi_finalize_quote_with_contact', array($this, 'ajax_finalize_quote_with_contact'));
+
+        // Documentation uploads
+        add_action('wp_ajax_sdpi_upload_document_file', array($this, 'ajax_upload_document_file'));
+        add_action('wp_ajax_nopriv_sdpi_upload_document_file', array($this, 'ajax_upload_document_file'));
+        add_action('wp_ajax_sdpi_delete_document_file', array($this, 'ajax_delete_document_file'));
+        add_action('wp_ajax_nopriv_sdpi_delete_document_file', array($this, 'ajax_delete_document_file'));
+        add_action('wp_ajax_sdpi_list_document_files', array($this, 'ajax_list_document_files'));
+        add_action('wp_ajax_nopriv_sdpi_list_document_files', array($this, 'ajax_list_document_files'));
 
         // Enqueue JavaScript
         add_action('wp_enqueue_scripts', array($this, 'enqueue_scripts'));
@@ -291,6 +308,165 @@ class SDPI_Form {
         return $session_id ? $session_id : $session->get_session_id();
     }
 
+    public static function ensure_documentation_directory() {
+        $uploads = wp_upload_dir();
+        if (!empty($uploads['error']) || empty($uploads['basedir'])) {
+            return;
+        }
+
+        $base_dir = trailingslashit($uploads['basedir']) . self::$documentation_upload_subdir;
+        if (!wp_mkdir_p($base_dir)) {
+            return;
+        }
+
+        $index_file = trailingslashit($base_dir) . 'index.php';
+        if (!file_exists($index_file)) {
+            file_put_contents($index_file, "<?php\n// Silence is golden.\n");
+        }
+
+        $htaccess_file = trailingslashit($base_dir) . '.htaccess';
+        if (!file_exists($htaccess_file)) {
+            $rules = "Options -Indexes\n<FilesMatch \"\\.(php|php[0-9]?|phtml)$\">\n    Require all denied\n</FilesMatch>\n";
+            file_put_contents($htaccess_file, $rules);
+        }
+    }
+
+    public function filter_documentation_upload_dir($dirs) {
+        $subdir = '/' . ltrim(self::$documentation_upload_subdir, '/');
+        $dirs['subdir'] = $subdir;
+        $dirs['path'] = $dirs['basedir'] . $subdir;
+        $dirs['url'] = $dirs['baseurl'] . $subdir;
+        return $dirs;
+    }
+
+    private function normalize_documentation_files($files) {
+        $normalized = array();
+        if (!is_array($files)) {
+            return $normalized;
+        }
+
+        $allowed_mimes = array_values($this->documentation_allowed_mimes);
+
+        foreach ($files as $key => $entry) {
+            $attachment_id = 0;
+            $entry_data = array();
+
+            if (is_array($entry) && isset($entry['id'])) {
+                $attachment_id = absint($entry['id']);
+                $entry_data = $entry;
+            } elseif (is_numeric($key)) {
+                $attachment_id = absint($key);
+                if (is_array($entry)) {
+                    $entry_data = $entry;
+                }
+            }
+
+            if (!$attachment_id) {
+                continue;
+            }
+
+            $attachment = get_post($attachment_id);
+            if (!$attachment || $attachment->post_type !== 'attachment') {
+                continue;
+            }
+
+            $mime_type = get_post_mime_type($attachment_id);
+            if ($mime_type && !in_array($mime_type, $allowed_mimes, true)) {
+                $mime_type = isset($entry_data['type']) ? sanitize_text_field($entry_data['type']) : $mime_type;
+                if (!in_array($mime_type, $allowed_mimes, true)) {
+                    continue;
+                }
+            }
+
+            $url = wp_get_attachment_url($attachment_id);
+            if (empty($url)) {
+                continue;
+            }
+
+            $size = isset($entry_data['size']) ? intval($entry_data['size']) : 0;
+            if (!$size) {
+                $file_path = get_attached_file($attachment_id);
+                if ($file_path && file_exists($file_path)) {
+                    $size = (int) filesize($file_path);
+                }
+            }
+
+            $uploaded_at = isset($entry_data['uploaded_at']) ? sanitize_text_field($entry_data['uploaded_at']) : '';
+            if (empty($uploaded_at)) {
+                $uploaded_at = get_post_meta($attachment_id, '_sdpi_document_uploaded_at', true);
+            }
+            if (empty($uploaded_at)) {
+                $uploaded_at = current_time('mysql');
+            }
+
+            $name = isset($entry_data['name']) ? sanitize_file_name($entry_data['name']) : basename($url);
+
+            $normalized[$attachment_id] = array(
+                'id' => $attachment_id,
+                'url' => esc_url_raw($url),
+                'name' => $name,
+                'type' => sanitize_text_field($mime_type),
+                'size' => $size,
+                'uploaded_at' => $uploaded_at
+            );
+        }
+
+        if (!empty($normalized)) {
+            uasort($normalized, function($a, $b) {
+                if ($a['uploaded_at'] === $b['uploaded_at']) {
+                    return $a['id'] <=> $b['id'];
+                }
+                return strcmp($a['uploaded_at'], $b['uploaded_at']);
+            });
+            if (count($normalized) > $this->documentation_max_files) {
+                $normalized = array_slice($normalized, 0, $this->documentation_max_files, true);
+            }
+        }
+
+        return $normalized;
+    }
+
+    private function documentation_files_to_list($files_map) {
+        if (empty($files_map) || !is_array($files_map)) {
+            return array();
+        }
+        return array_values($files_map);
+    }
+
+    private function merge_documentation_files($sources) {
+        $merged = array();
+        if (!is_array($sources)) {
+            $sources = array($sources);
+        }
+
+        foreach ($sources as $source) {
+            if (empty($source)) {
+                continue;
+            }
+            $normalized = $this->normalize_documentation_files($source);
+            if (empty($normalized)) {
+                continue;
+            }
+            foreach ($normalized as $attachment_id => $item) {
+                $merged[$attachment_id] = $item;
+            }
+        }
+
+        if (!empty($merged)) {
+            uasort($merged, function($a, $b) {
+                if ($a['uploaded_at'] === $b['uploaded_at']) {
+                    return $a['id'] <=> $b['id'];
+                }
+                return strcmp($a['uploaded_at'], $b['uploaded_at']);
+            });
+            if (count($merged) > $this->documentation_max_files) {
+                $merged = array_slice($merged, 0, $this->documentation_max_files, true);
+            }
+        }
+
+        return $merged;
+    }
+
     /**
      * Dispatch an automatic Zapier update respecting the 10 minute session window
      */
@@ -302,6 +478,22 @@ class SDPI_Form {
         $session = new SDPI_Session();
         $session_row = $session->get($session_id);
         $session_data = is_array($session_row) ? ($session_row['data'] ?? array()) : array();
+
+        $extra_data = is_array($extra_data) ? $extra_data : array();
+
+        $documentation_map = $this->merge_documentation_files(array(
+            $session_data['documentation_files'] ?? array(),
+            $quote_data['documentation_files'] ?? array(),
+            $extra_data['documentation_files'] ?? array()
+        ));
+        $documentation_list = $this->documentation_files_to_list($documentation_map);
+
+        $session->update_data($session_id, array(
+            'documentation_files' => $documentation_map,
+            'quote' => array('documentation_files' => $documentation_list)
+        ));
+
+        $extra_data['documentation_files'] = $documentation_list;
 
         $tracking = array();
         if (isset($session_data['zapier_tracking']) && is_array($session_data['zapier_tracking'])) {
@@ -1343,6 +1535,19 @@ class SDPI_Form {
                                     <input type="text" id="sdpi_m_id" placeholder="Optional">
                                 </div>
                             </div>
+                            <div class="sdpi-form-row sdpi-documentation-upload-row">
+                                <div class="sdpi-form-group sdpi-col-6">
+                                    <label for="sdpi_documentation_input">Carga de documentos (hasta <?php echo intval($this->documentation_max_files); ?> archivos)</label>
+                                    <p class="sdpi-field-helper">Formatos permitidos: JPG, JPEG, PNG, WEBP y PDF. L&iacute;mite 10&nbsp;MB por archivo.</p>
+                                    <div class="sdpi-documentation-dropzone" id="sdpi-documentation-dropzone" data-max-files="<?php echo intval($this->documentation_max_files); ?>" data-max-size="<?php echo intval($this->documentation_max_size); ?>" aria-describedby="sdpi_documentation_helper">
+                                        <button type="button" class="sdpi-upload-btn" id="sdpi-documentation-trigger">Seleccionar archivos</button>
+                                        <span id="sdpi_documentation_helper" class="sdpi-upload-subtitle">o arrastra y su&eacute;ltalos aqu&iacute;</span>
+                                    </div>
+                                    <input type="file" id="sdpi_documentation_input" accept=".jpg,.jpeg,.png,.webp,.pdf" multiple hidden>
+                                    <div class="sdpi-documentation-feedback" id="sdpi-documentation-feedback" role="alert" aria-live="polite"></div>
+                                    <ul class="sdpi-documentation-list" id="sdpi-documentation-list" aria-live="polite"></ul>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="sdpi-form-actions">
@@ -1684,6 +1889,22 @@ class SDPI_Form {
         $history = new SDPI_History();
         $history->create_initial_record($session_id, $client_name, $client_email, $client_phone);
 
+        $session_row = $session->get($session_id);
+        $session_data = is_array($session_row) ? ($session_row['data'] ?? array()) : array();
+
+        $documentation_map = $this->merge_documentation_files(array(
+            $session_data['documentation_files'] ?? array(),
+            $quote_data['documentation_files'] ?? array()
+        ));
+        $documentation_list = $this->documentation_files_to_list($documentation_map);
+
+        $quote_data['documentation_files'] = $documentation_list;
+
+        $session->update_data($session_id, array(
+            'documentation_files' => $documentation_map,
+            'quote' => array('documentation_files' => $documentation_list)
+        ));
+
         // Now update to cotizador status with the quote data
         $form_data = array(
             'pickup_zip' => $quote_data['pickup_zip'] ?? '',
@@ -1708,6 +1929,7 @@ class SDPI_Form {
             'transport_type' => $quote_data['transport_type'] ?? (($quote_data['maritime_involved'] ?? false) ? 'maritime' : 'terrestrial'),
             'maritime_details' => $quote_data['maritime_details'] ?? array(),
             'shipping' => $quote_data['shipping'] ?? array(),
+            'documentation_files' => $documentation_list,
             'client_name' => $client_name,
             'client_email' => $client_email,
             'client_phone' => $client_phone,
@@ -1745,7 +1967,8 @@ class SDPI_Form {
                     'captured_at' => $client_captured_at
                 ),
                 'shipping' => $quote_data['shipping'] ?? array(),
-                'transport_type' => $quote_data['transport_type'] ?? (!empty($quote_data['maritime_involved']) ? 'maritime' : 'terrestrial')
+                'transport_type' => $quote_data['transport_type'] ?? (!empty($quote_data['maritime_involved']) ? 'maritime' : 'terrestrial'),
+                'documentation_files' => $documentation_list
             )
         );
 
@@ -1756,9 +1979,235 @@ class SDPI_Form {
         $response_data['client_email'] = $client_email;
         $response_data['client_phone'] = $client_phone;
         $response_data['client_info_captured_at'] = $client_captured_at;
+        $response_data['documentation_files'] = $documentation_list;
         $response_data['show_price'] = true; // Flag to show the price now
 
         wp_send_json_success($response_data);
+        exit;
+    }
+
+    public function ajax_list_document_files() {
+        check_ajax_referer('sdpi_nonce', 'nonce');
+
+        $session = new SDPI_Session();
+        $session_id = $this->ensure_quote_session();
+        $files_list = array();
+
+        if ($session_id) {
+            $session_row = $session->get($session_id);
+            $session_data = is_array($session_row) ? ($session_row['data'] ?? array()) : array();
+            $files_map = $this->normalize_documentation_files($session_data['documentation_files'] ?? array());
+
+            $session->update_data($session_id, array(
+                'documentation_files' => $files_map,
+                'quote' => array('documentation_files' => $this->documentation_files_to_list($files_map))
+            ));
+
+            $files_list = $this->documentation_files_to_list($files_map);
+        }
+
+        wp_send_json_success(array(
+            'files' => $files_list,
+            'total' => count($files_list),
+            'max' => $this->documentation_max_files,
+            'max_size' => $this->documentation_max_size
+        ));
+        exit;
+    }
+
+    public function ajax_upload_document_file() {
+        check_ajax_referer('sdpi_nonce', 'nonce');
+
+        if (empty($_FILES) || empty($_FILES['file'])) {
+            wp_send_json_error('Selecciona un archivo para subir.');
+            exit;
+        }
+
+        $file = $_FILES['file'];
+        if (!isset($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
+            wp_send_json_error('No se pudo procesar el archivo seleccionado.');
+            exit;
+        }
+
+        if (!empty($file['error']) && $file['error'] !== UPLOAD_ERR_OK) {
+            $error_code = intval($file['error']);
+            $message = 'Error al cargar el archivo. Intenta nuevamente.';
+            switch ($error_code) {
+                case UPLOAD_ERR_INI_SIZE:
+                case UPLOAD_ERR_FORM_SIZE:
+                    $message = 'El archivo supera el tamaño máximo permitido de 10 MB.';
+                    break;
+                case UPLOAD_ERR_PARTIAL:
+                    $message = 'La carga se interrumpió. Intenta nuevamente.';
+                    break;
+                case UPLOAD_ERR_NO_FILE:
+                    $message = 'Selecciona un archivo para subir.';
+                    break;
+                case UPLOAD_ERR_NO_TMP_DIR:
+                case UPLOAD_ERR_CANT_WRITE:
+                case UPLOAD_ERR_EXTENSION:
+                    $message = 'El servidor no pudo guardar el archivo. Contacta al administrador.';
+                    break;
+            }
+            wp_send_json_error($message);
+            exit;
+        }
+
+        $session = new SDPI_Session();
+        $session_id = $this->ensure_quote_session();
+        if (!$session_id) {
+            wp_send_json_error('No se pudo asociar la carga con tu sesión. Refresca la página e inténtalo nuevamente.');
+            exit;
+        }
+
+        $session_row = $session->get($session_id);
+        $session_data = is_array($session_row) ? ($session_row['data'] ?? array()) : array();
+        $existing_map = $this->normalize_documentation_files($session_data['documentation_files'] ?? array());
+
+        if (count($existing_map) >= $this->documentation_max_files) {
+            wp_send_json_error('Solo puedes subir hasta ' . $this->documentation_max_files . ' archivos.');
+            exit;
+        }
+
+        $file_size = isset($file['size']) ? intval($file['size']) : 0;
+        if ($file_size <= 0) {
+            wp_send_json_error('El archivo seleccionado está vacío. Verifica el archivo e inténtalo de nuevo.');
+            exit;
+        }
+
+        if ($file_size > $this->documentation_max_size) {
+            wp_send_json_error('Cada archivo debe pesar máximo 10 MB.');
+            exit;
+        }
+
+        $allowed_mimes = $this->documentation_allowed_mimes;
+
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+
+        $filetype = wp_check_filetype_and_ext($file['tmp_name'], $file['name'], $allowed_mimes);
+        if (empty($filetype['ext']) || empty($filetype['type'])) {
+            wp_send_json_error('Formato de archivo no permitido. Usa jpg, jpeg, png, webp o pdf.');
+            exit;
+        }
+
+        self::ensure_documentation_directory();
+        add_filter('upload_dir', array($this, 'filter_documentation_upload_dir'));
+        $upload = wp_handle_upload($file, array(
+            'test_form' => false,
+            'mimes' => $allowed_mimes
+        ));
+        remove_filter('upload_dir', array($this, 'filter_documentation_upload_dir'));
+
+        if (isset($upload['error'])) {
+            wp_send_json_error('No se pudo guardar el archivo: ' . $upload['error']);
+            exit;
+        }
+
+        $attachment = array(
+            'post_mime_type' => $filetype['type'],
+            'post_title' => sanitize_file_name(pathinfo($file['name'], PATHINFO_FILENAME)),
+            'post_content' => '',
+            'post_status' => 'inherit'
+        );
+
+        $attachment_id = wp_insert_attachment($attachment, $upload['file']);
+        if (is_wp_error($attachment_id) || !$attachment_id) {
+            if (!empty($upload['file']) && file_exists($upload['file'])) {
+                @unlink($upload['file']);
+            }
+            wp_send_json_error('No se pudo registrar el archivo en la biblioteca de medios.');
+            exit;
+        }
+
+        if (strpos($filetype['type'], 'image/') === 0) {
+            $metadata = wp_generate_attachment_metadata($attachment_id, $upload['file']);
+            if (!is_wp_error($metadata) && !empty($metadata)) {
+                wp_update_attachment_metadata($attachment_id, $metadata);
+            }
+        }
+
+        $uploaded_at = current_time('mysql');
+        update_post_meta($attachment_id, '_sdpi_session_id', $session_id);
+        update_post_meta($attachment_id, '_sdpi_document_uploaded_at', $uploaded_at);
+
+        $new_entry = array(
+            'id' => $attachment_id,
+            'url' => esc_url_raw(wp_get_attachment_url($attachment_id)),
+            'name' => sanitize_file_name(basename($upload['file'])),
+            'type' => sanitize_text_field($filetype['type']),
+            'size' => $file_size,
+            'uploaded_at' => $uploaded_at
+        );
+
+        $existing_map[$attachment_id] = $new_entry;
+        $existing_map = $this->normalize_documentation_files($existing_map);
+
+        $session->update_data($session_id, array(
+            'documentation_files' => $existing_map,
+            'quote' => array('documentation_files' => $this->documentation_files_to_list($existing_map))
+        ));
+
+        $files_list = $this->documentation_files_to_list($existing_map);
+
+        wp_send_json_success(array(
+            'file' => $existing_map[$attachment_id],
+            'files' => $files_list,
+            'total' => count($files_list),
+            'max' => $this->documentation_max_files
+        ));
+        exit;
+    }
+
+    public function ajax_delete_document_file() {
+        check_ajax_referer('sdpi_nonce', 'nonce');
+
+        $attachment_id = isset($_POST['attachment_id']) ? absint($_POST['attachment_id']) : 0;
+        if (!$attachment_id) {
+            wp_send_json_error('Archivo no válido.');
+            exit;
+        }
+
+        $session = new SDPI_Session();
+        $session_id = $this->ensure_quote_session();
+        if (!$session_id) {
+            wp_send_json_error('No se pudo validar la sesión. Refresca la página e inténtalo nuevamente.');
+            exit;
+        }
+
+        $session_row = $session->get($session_id);
+        $session_data = is_array($session_row) ? ($session_row['data'] ?? array()) : array();
+        $existing_map = $this->normalize_documentation_files($session_data['documentation_files'] ?? array());
+
+        if (empty($existing_map[$attachment_id])) {
+            wp_send_json_error('El archivo ya no está disponible en la sesión.');
+            exit;
+        }
+
+        $stored_session = get_post_meta($attachment_id, '_sdpi_session_id', true);
+        if (!empty($stored_session) && $stored_session !== $session_id) {
+            wp_send_json_error('No tienes permiso para eliminar este archivo.');
+            exit;
+        }
+
+        unset($existing_map[$attachment_id]);
+        wp_delete_attachment($attachment_id, true);
+
+        $existing_map = $this->normalize_documentation_files($existing_map);
+
+        $session->update_data($session_id, array(
+            'documentation_files' => $existing_map,
+            'quote' => array('documentation_files' => $this->documentation_files_to_list($existing_map))
+        ));
+
+        $files_list = $this->documentation_files_to_list($existing_map);
+
+        wp_send_json_success(array(
+            'files' => $files_list,
+            'total' => count($files_list),
+            'max' => $this->documentation_max_files
+        ));
         exit;
     }
 
@@ -3125,6 +3574,10 @@ class SDPI_Form {
             $maritime_details = $_SESSION['sdpi_maritime_info'];
         }
 
+        $documentation_files = $this->documentation_files_to_list(
+            $this->normalize_documentation_files($extra_data['documentation_files'] ?? array())
+        );
+
         $transport_type = isset($extra_data['transport_type']) ? $extra_data['transport_type'] : ($involves_maritime ? 'maritime' : 'terrestrial');
         $session_identifier = isset($extra_data['session_id']) ? $extra_data['session_id'] : '';
 
@@ -3188,6 +3641,14 @@ class SDPI_Form {
 
         if (!empty($maritime_details)) {
             $zapier_data['maritime_details'] = $maritime_details;
+        }
+
+        if (!empty($documentation_files)) {
+            $zapier_data['documentation_files'] = $documentation_files;
+            $zapier_data['documentation_file_urls'] = array_map(function($file) {
+                return isset($file['url']) ? $file['url'] : '';
+            }, $documentation_files);
+            $zapier_data['documentation_files_count'] = count($documentation_files);
         }
 
         // Get Zapier webhook URL from settings

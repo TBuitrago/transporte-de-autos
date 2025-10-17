@@ -78,6 +78,7 @@ class SDPI_History {
             total_maritime_cost decimal(10,2),
             inoperable_fee decimal(10,2) DEFAULT 0,
             maritime_details longtext,
+            documentation_files longtext,
             price_breakdown text,
             error_message text,
             zapier_status varchar(20) DEFAULT 'pending',
@@ -1044,6 +1045,49 @@ class SDPI_History {
         $vehicle_make = sanitize_text_field($form_data['vehicle_make'] ?? '');
         $vehicle_model = sanitize_text_field($form_data['vehicle_model'] ?? '');
         $vehicle_year = sanitize_text_field($form_data['vehicle_year'] ?? '');
+        $vehicle_electric = intval(!empty($form_data['vehicle_electric']));
+
+        $pickup_contact_name = sanitize_text_field($form_data['pickup_contact_name'] ?? '');
+        $pickup_contact_street = sanitize_text_field($form_data['pickup_contact_street'] ?? '');
+        $pickup_contact_type = sanitize_text_field($form_data['pickup_contact_type'] ?? '');
+        $delivery_contact_name = sanitize_text_field($form_data['delivery_contact_name'] ?? '');
+        $delivery_contact_street = sanitize_text_field($form_data['delivery_contact_street'] ?? '');
+
+        $additional_shipping_json = '';
+        if (!empty($form_data['additional_shipping'])) {
+            if (is_array($form_data['additional_shipping'])) {
+                $additional_shipping_json = wp_json_encode($form_data['additional_shipping']);
+            } elseif (is_string($form_data['additional_shipping'])) {
+                $additional_shipping_json = (string) $form_data['additional_shipping'];
+            }
+        }
+
+        $documentation_entries = $this->sanitize_documentation_entries($form_data['documentation_files'] ?? array());
+        if (empty($documentation_entries) && !empty($session_id)) {
+            $documentation_entries = $this->get_documentation_files_from_session($session_id);
+        }
+        $documentation_files_json = !empty($documentation_entries) ? wp_json_encode($documentation_entries) : '';
+        $vehicle_electric = intval(!empty($form_data['vehicle_electric']));
+
+        $pickup_contact_name = sanitize_text_field($form_data['pickup_contact_name'] ?? '');
+        $pickup_contact_street = sanitize_text_field($form_data['pickup_contact_street'] ?? '');
+        $pickup_contact_type = sanitize_text_field($form_data['pickup_contact_type'] ?? '');
+        $delivery_contact_name = sanitize_text_field($form_data['delivery_contact_name'] ?? '');
+        $delivery_contact_street = sanitize_text_field($form_data['delivery_contact_street'] ?? '');
+
+        $additional_shipping_json = '';
+        if (!empty($form_data['additional_shipping'])) {
+            if (is_array($form_data['additional_shipping'])) {
+                $additional_shipping_json = wp_json_encode($form_data['additional_shipping']);
+            } elseif (is_string($form_data['additional_shipping'])) {
+                $additional_shipping_json = (string) $form_data['additional_shipping'];
+            }
+        }
+
+        $documentation_files_json = '';
+        if (!empty($form_data['documentation_files']) && is_array($form_data['documentation_files'])) {
+            $documentation_files_json = wp_json_encode(array_values($form_data['documentation_files']));
+        }
 
         // Client information
         $client_name = sanitize_text_field($form_data['client_name'] ?? '');
@@ -1139,6 +1183,7 @@ class SDPI_History {
             'total_maritime_cost' => $total_maritime_cost,
             'inoperable_fee' => $inoperable_fee,
             'maritime_details' => $maritime_details,
+            'documentation_files' => $documentation_files_json,
             'additional_shipping' => $additional_shipping_json,
             'pickup_contact_name' => $pickup_contact_name,
             'pickup_contact_street' => $pickup_contact_street,
@@ -1151,26 +1196,48 @@ class SDPI_History {
         );
 
         $formats = array(
-            '%s', '%s', '%s', '%s', '%s', '%s', '%s',
-            '%d',
-            '%s', '%s', '%s',
-            '%d',
-            '%s', '%s', '%s', '%s',
-            '%s',
-            '%f', '%f', '%f',
-            '%f', '%f', '%f',
-            '%d',
-            '%s',
-            '%f',
-            '%s', '%s',
-            '%f', '%f', '%f',
-            '%s',
-            '%s',
-            '%s', '%s', '%s',
-            '%s', '%s',
-            '%s',
-            '%s',
-            '%s'
+            '%s', // flow_status
+            '%s', // pickup_zip
+            '%s', // delivery_zip
+            '%s', // pickup_city
+            '%s', // delivery_city
+            '%s', // trailer_type
+            '%s', // vehicle_type
+            '%d', // vehicle_inoperable
+            '%s', // vehicle_make
+            '%s', // vehicle_model
+            '%s', // vehicle_year
+            '%d', // vehicle_electric
+            '%s', // client_name
+            '%s', // client_phone
+            '%s', // client_email
+            '%s', // client_info_captured_at
+            '%s', // api_response
+            '%f', // api_price
+            '%f', // api_confidence
+            '%f', // api_price_per_mile
+            '%f', // final_price
+            '%f', // company_profit
+            '%f', // confidence_adjustment
+            '%d', // maritime_involved
+            '%s', // maritime_direction
+            '%f', // maritime_cost
+            '%s', // us_port_name
+            '%s', // us_port_zip
+            '%f', // total_terrestrial_cost
+            '%f', // total_maritime_cost
+            '%f', // inoperable_fee
+            '%s', // maritime_details
+            '%s', // documentation_files
+            '%s', // additional_shipping
+            '%s', // pickup_contact_name
+            '%s', // pickup_contact_street
+            '%s', // pickup_contact_type
+            '%s', // delivery_contact_name
+            '%s', // delivery_contact_street
+            '%s', // price_breakdown
+            '%s', // error_message
+            '%s'  // status_updated_at
         );
 
         $result = $wpdb->update(
@@ -1408,6 +1475,12 @@ class SDPI_History {
                 $maritime_details = wp_json_encode($form_data['maritime_details']);
             }
         }
+
+        $documentation_entries = $this->sanitize_documentation_entries($form_data['documentation_files'] ?? array());
+        if (empty($documentation_entries) && !empty($form_data['session_id'] ?? '')) {
+            $documentation_entries = $this->get_documentation_files_from_session($form_data['session_id']);
+        }
+        $documentation_files_json = !empty($documentation_entries) ? wp_json_encode($documentation_entries) : '';
         
         // Calculate adjustments
         $company_profit = 200.00;
@@ -1438,6 +1511,7 @@ class SDPI_History {
                 'vehicle_make' => $vehicle_make,
                 'vehicle_model' => $vehicle_model,
                 'vehicle_year' => $vehicle_year,
+                'vehicle_electric' => $vehicle_electric,
                 'client_name' => $client_name,
                 'client_phone' => $client_phone,
                 'client_email' => $client_email,
@@ -1457,14 +1531,21 @@ class SDPI_History {
                 'total_terrestrial_cost' => $total_terrestrial_cost,
                 'total_maritime_cost' => $total_maritime_cost,
                 'maritime_details' => $maritime_details,
+                'documentation_files' => $documentation_files_json,
+                'additional_shipping' => $additional_shipping_json,
+                'pickup_contact_name' => $pickup_contact_name,
+                'pickup_contact_street' => $pickup_contact_street,
+                'pickup_contact_type' => $pickup_contact_type,
+                'delivery_contact_name' => $delivery_contact_name,
+                'delivery_contact_street' => $delivery_contact_street,
                 'price_breakdown' => $price_breakdown,
                 'error_message' => $error_message
             ),
             array(
-                '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s',
+                '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%d',
                 '%s', '%s', '%s', '%s',
                 '%s', '%f', '%f', '%f', '%f', '%f', '%f', '%d', '%s', '%f', '%s', '%s', '%f', '%f',
-                '%s', '%s'
+                '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s'
             )
         );
         
@@ -1599,6 +1680,16 @@ class SDPI_History {
             $decoded_maritime_details = json_decode($quote->maritime_details, true);
             if (is_array($decoded_maritime_details)) {
                 $maritime_details = $decoded_maritime_details;
+            }
+        }
+
+        $documentation_files = array();
+        if (!empty($quote->documentation_files)) {
+            $decoded_docs = json_decode($quote->documentation_files, true);
+            if (is_array($decoded_docs)) {
+                $documentation_files = array_values(array_filter($decoded_docs, function($item) {
+                    return is_array($item);
+                }));
             }
         }
 
@@ -1790,6 +1881,54 @@ class SDPI_History {
                             <span class="sdpi-modal-value"><?php echo $quote->vehicle_electric ? 'S&iacute;' : 'No'; ?></span>
                         </div>
                     </div>
+                </article>
+            </section>
+
+            <section class="sdpi-modal-section">
+                <h3 class="sdpi-modal-section-title">Documentaci&oacute;n Adjunta</h3>
+                <article class="sdpi-modal-card">
+                    <?php if (!empty($documentation_files)) : ?>
+                        <ul class="sdpi-modal-documents">
+                            <?php foreach ($documentation_files as $file_entry) :
+                                $doc_name = isset($file_entry['name']) ? (string) $file_entry['name'] : '';
+                                $doc_url = isset($file_entry['url']) ? (string) $file_entry['url'] : '';
+                                $doc_size = '';
+                                if (!empty($file_entry['size'])) {
+                                    $doc_size = size_format((int) $file_entry['size']);
+                                }
+                                $doc_extension = '';
+                                if ($doc_name && strpos($doc_name, '.') !== false) {
+                                    $doc_extension = strtoupper(pathinfo($doc_name, PATHINFO_EXTENSION));
+                                } elseif (!empty($file_entry['type'])) {
+                                    $doc_extension = strtoupper((string) $file_entry['type']);
+                                }
+                                $doc_uploaded = '';
+                                if (!empty($file_entry['uploaded_at'])) {
+                                    $timestamp = strtotime($file_entry['uploaded_at']);
+                                    if ($timestamp) {
+                                        $doc_uploaded = 'Subido el ' . date('d/m/Y H:i', $timestamp);
+                                    }
+                                }
+                                $meta_parts = array_filter(array($doc_size, $doc_extension, $doc_uploaded));
+                            ?>
+                                <li class="sdpi-modal-documents-item">
+                                    <div class="sdpi-modal-documents-main">
+                                        <span class="sdpi-modal-documents-name"><?php echo esc_html($doc_name); ?></span>
+                                        <?php if (!empty($meta_parts)) : ?>
+                                            <span class="sdpi-modal-documents-meta"><?php echo esc_html(implode(' · ', $meta_parts)); ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="sdpi-modal-documents-actions">
+                                        <?php if (!empty($doc_url)) : ?>
+                                            <a href="<?php echo esc_url($doc_url); ?>" target="_blank" rel="noopener">Ver</a>
+                                        <?php endif; ?>
+                                    </div>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php else : ?>
+                        <p class="sdpi-modal-empty">Sin documentos adjuntos.</p>
+                    <?php endif; ?>
                 </article>
             </section>
 
@@ -2267,7 +2406,8 @@ class SDPI_History {
             'delivery_contact_name' => "ALTER TABLE {$this->table_name} ADD COLUMN delivery_contact_name VARCHAR(100) AFTER pickup_contact_type",
             'delivery_contact_street' => "ALTER TABLE {$this->table_name} ADD COLUMN delivery_contact_street VARCHAR(255) AFTER delivery_contact_name",
             'additional_shipping' => "ALTER TABLE {$this->table_name} ADD COLUMN additional_shipping LONGTEXT AFTER delivery_contact_street",
-            'inoperable_fee' => "ALTER TABLE {$this->table_name} ADD COLUMN inoperable_fee DECIMAL(10,2) DEFAULT 0 AFTER total_maritime_cost"
+            'inoperable_fee' => "ALTER TABLE {$this->table_name} ADD COLUMN inoperable_fee DECIMAL(10,2) DEFAULT 0 AFTER total_maritime_cost",
+            'documentation_files' => "ALTER TABLE {$this->table_name} ADD COLUMN documentation_files LONGTEXT AFTER maritime_details"
         );
 
         foreach ($target_columns as $column => $ddl) {
@@ -2279,6 +2419,109 @@ class SDPI_History {
         foreach ($missing as $ddl) {
             $wpdb->query($ddl);
         }
+    }
+
+    /**
+     * Normalize and sanitize documentation entries coming from various sources
+     */
+    private function sanitize_documentation_entries($entries) {
+        if (empty($entries)) {
+            return array();
+        }
+
+        if (is_string($entries)) {
+            $decoded = json_decode($entries, true);
+            $entries = is_array($decoded) ? $decoded : array();
+        }
+
+        if (!is_array($entries)) {
+            return array();
+        }
+
+        $sanitized = array();
+        foreach ($entries as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+
+            $attachment_id = isset($entry['id']) ? intval($entry['id']) : 0;
+            if (!$attachment_id) {
+                continue;
+            }
+
+            $url = isset($entry['url']) ? esc_url_raw($entry['url']) : '';
+            if (empty($url)) {
+                $url = esc_url_raw(wp_get_attachment_url($attachment_id));
+            }
+            if (empty($url)) {
+                continue;
+            }
+
+            $size = isset($entry['size']) ? intval($entry['size']) : 0;
+            if (!$size) {
+                $file_path = get_attached_file($attachment_id);
+                if ($file_path && file_exists($file_path)) {
+                    $size = (int) filesize($file_path);
+                }
+            }
+
+            $uploaded_at = isset($entry['uploaded_at']) ? sanitize_text_field($entry['uploaded_at']) : '';
+            if (empty($uploaded_at)) {
+                $meta_uploaded = get_post_meta($attachment_id, '_sdpi_document_uploaded_at', true);
+                if (!empty($meta_uploaded)) {
+                    $uploaded_at = sanitize_text_field($meta_uploaded);
+                }
+            }
+
+            $sanitized[$attachment_id] = array(
+                'id' => $attachment_id,
+                'url' => $url,
+                'name' => isset($entry['name']) ? sanitize_text_field($entry['name']) : ('document-' . $attachment_id),
+                'type' => isset($entry['type']) ? sanitize_text_field($entry['type']) : '',
+                'size' => $size,
+                'uploaded_at' => $uploaded_at
+            );
+        }
+
+        return array_values($sanitized);
+    }
+
+    /**
+     * Retrieve documentation references stored in the session table when needed
+     */
+    private function get_documentation_files_from_session($session_id) {
+        if (empty($session_id)) {
+            return array();
+        }
+
+        $session = new SDPI_Session();
+        $session_row = $session->get($session_id);
+        if (!$session_row || empty($session_row['data'])) {
+            return array();
+        }
+
+        $data = is_array($session_row['data']) ? $session_row['data'] : array();
+        $sources = array();
+
+        if (!empty($data['documentation_files'])) {
+            $sources[] = $data['documentation_files'];
+        }
+        if (!empty($data['quote']['documentation_files'])) {
+            $sources[] = $data['quote']['documentation_files'];
+        }
+
+        if (empty($sources)) {
+            return array();
+        }
+
+        $merged = array();
+        foreach ($sources as $source) {
+            foreach ($this->sanitize_documentation_entries($source) as $entry) {
+                $merged[$entry['id']] = $entry;
+            }
+        }
+
+        return array_values($merged);
     }
 }
 

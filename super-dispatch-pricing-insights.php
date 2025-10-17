@@ -130,6 +130,9 @@ function sdpi_activate() {
     // Create consolidated session table
     $session = new SDPI_Session();
     $session->create_table();
+
+    // Ensure documentation upload directory exists
+    SDPI_Form::ensure_documentation_directory();
     
     // Flush rewrite rules
     flush_rewrite_rules();

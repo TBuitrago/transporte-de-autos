@@ -1699,13 +1699,220 @@
     color: rgba(23, 32, 95, 0.45);
 }
 
+.sdpi-documentation-dropzone {
+    border: 1px dashed #ccd0d4;
+    border-radius: 6px;
+    padding: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+    background-color: #f9fafb;
+}
+
+.sdpi-documentation-dropzone:hover,
+.sdpi-documentation-dropzone.is-dragover {
+    border-color: #0073aa;
+    background-color: rgba(0, 115, 170, 0.08);
+}
+
+.sdpi-upload-btn {
+    background-color: #0073aa;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.sdpi-upload-btn:hover {
+    background-color: #005a87;
+}
+
+.sdpi-upload-subtitle {
+    font-size: 0.875rem;
+    color: #4a5568;
+}
+
+.sdpi-documentation-feedback {
+    margin-top: 10px;
+    font-size: 0.875rem;
+    display: block;
+}
+
+.sdpi-documentation-feedback.is-error {
+    color: #b71c1c;
+}
+
+.sdpi-documentation-feedback.is-success {
+    color: #1b5e20;
+}
+
+.sdpi-documentation-feedback.is-info {
+    color: #0a558c;
+}
+
+.sdpi-documentation-list {
+    list-style: none;
+    margin: 14px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sdpi-document-item {
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    padding: 12px 14px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    background-color: #fff;
+}
+
+.sdpi-document-item.is-uploading {
+    border-style: dashed;
+}
+
+.sdpi-document-item.has-error {
+    border-color: #e53935;
+    background-color: #fff5f5;
+}
+
+.sdpi-document-item.is-empty {
+    justify-content: center;
+    color: #6b7280;
+    font-size: 0.875rem;
+    font-style: italic;
+    border-style: dashed;
+    background-color: #fafafa;
+}
+
+.sdpi-document-item__info {
+    flex: 1 1 220px;
+    min-width: 0;
+}
+
+.sdpi-document-item__name {
+    font-weight: 600;
+    display: block;
+    color: #1f2933;
+    word-break: break-word;
+}
+
+.sdpi-document-item__meta {
+    font-size: 0.8125rem;
+    color: #4b5563;
+    margin-top: 4px;
+}
+
+.sdpi-document-item__actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.sdpi-document-item__actions a,
+.sdpi-document-item__actions button {
+    font-size: 0.875rem;
+    border: none;
+    background: none;
+    color: #0073aa;
+    cursor: pointer;
+    padding: 0;
+    transition: color 0.2s ease;
+}
+
+.sdpi-document-item__actions a:hover,
+.sdpi-document-item__actions button:hover {
+    text-decoration: underline;
+}
+
+.sdpi-document-item__actions .sdpi-document-remove {
+    color: #b71c1c;
+}
+
+.sdpi-document-item__actions .sdpi-document-retry {
+    color: #0073aa;
+}
+
+.sdpi-document-progress {
+    position: relative;
+    width: 100%;
+    height: 6px;
+    background-color: #edf2f7;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.sdpi-document-progress span {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, #0073aa, #00a8e8);
+    transition: width 0.2s ease;
+}
+
+.sdpi-modal-documents {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.sdpi-modal-documents-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    padding: 10px 12px;
+    background-color: #fff;
+}
+
+.sdpi-modal-documents-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.sdpi-modal-documents-name {
+    display: block;
+    font-weight: 600;
+    color: #1f2933;
+    word-break: break-word;
+}
+
+.sdpi-modal-documents-meta {
+    display: block;
+    font-size: 0.8125rem;
+    color: #4b5563;
+    margin-top: 4px;
+}
+
+.sdpi-modal-documents-actions a {
+    color: #0073aa;
+    text-decoration: none;
+    font-size: 0.875rem;
+    transition: color 0.2s ease;
+}
+
+.sdpi-modal-documents-actions a:hover {
+    text-decoration: underline;
+}
 
 .sdpi-form-card.sdpi-form-section {
     margin-bottom: 0;
     border-bottom: none;
     padding-bottom: 2.25rem;
 }
-
 
 .sdpi-form-card + .sdpi-form-card {
     margin-top: 2rem;

@@ -736,7 +736,7 @@ class SDPI_History {
         
         $items = $wpdb->get_results($query);
         
-        $server_now = current_time('timestamp');
+        $server_now = current_time('timestamp', true);
         $wp_timezone = wp_timezone();
         
         // Pagination

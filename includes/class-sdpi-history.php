@@ -83,6 +83,9 @@ class SDPI_History {
             error_message text,
             zapier_status varchar(20) DEFAULT 'pending',
             zapier_last_sent_at datetime DEFAULT NULL,
+            zapier_scheduled_at datetime DEFAULT NULL,
+            zapier_trigger_reason varchar(20) DEFAULT NULL,
+            zapier_last_error text,
             status_updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
@@ -1326,7 +1329,38 @@ class SDPI_History {
 
         return $result !== false;
     }
-    
+
+    /**
+     * Persist the documentation list associated to a session
+     */
+    public function update_documentation_files($session_id, $documents = array()) {
+        global $wpdb;
+
+        if (empty($session_id)) {
+            return false;
+        }
+
+        $entries = $this->sanitize_documentation_entries($documents);
+        $json = wp_json_encode($entries);
+
+        $data = array(
+            'documentation_files' => $json,
+            'status_updated_at' => current_time('mysql')
+        );
+
+        $formats = array_fill(0, count($data), '%s');
+
+        $result = $wpdb->update(
+            $this->table_name,
+            $data,
+            array('session_id' => sanitize_text_field($session_id)),
+            $formats,
+            array('%s')
+        );
+
+        return $result !== false;
+    }
+
     /**
      * Update history record to 'completado' status
      */
@@ -1350,7 +1384,7 @@ class SDPI_History {
     /**
      * Mark Zapier status for a given session
      */
-    public function mark_zapier_status($session_id, $status) {
+    public function mark_zapier_status($session_id, $status, $args = array()) {
         global $wpdb;
 
         if (empty($session_id) || empty($status)) {
@@ -1358,16 +1392,33 @@ class SDPI_History {
         }
 
         $status = sanitize_text_field($status);
+        $now_mysql = current_time('mysql');
+
         $data = array(
             'zapier_status' => $status,
-            'status_updated_at' => current_time('mysql')
+            'status_updated_at' => $now_mysql
         );
-        $formats = array('%s', '%s');
 
         if ($status === 'sent') {
-            $data['zapier_last_sent_at'] = current_time('mysql');
-            $formats[] = '%s';
+            $data['zapier_last_sent_at'] = $now_mysql;
         }
+
+        if (!empty($args['trigger_reason'])) {
+            $data['zapier_trigger_reason'] = sanitize_text_field($args['trigger_reason']);
+        }
+
+        if (isset($args['scheduled_at'])) {
+            $timestamp = is_numeric($args['scheduled_at']) ? intval($args['scheduled_at']) : strtotime((string) $args['scheduled_at']);
+            if ($timestamp) {
+                $data['zapier_scheduled_at'] = wp_date('Y-m-d H:i:s', $timestamp);
+            }
+        }
+
+        if (array_key_exists('last_error', $args)) {
+            $data['zapier_last_error'] = sanitize_textarea_field((string) $args['last_error']);
+        }
+
+        $formats = array_fill(0, count($data), '%s');
 
         $result = $wpdb->update(
             $this->table_name,
@@ -1379,7 +1430,27 @@ class SDPI_History {
 
         return $result !== false;
     }
-    
+
+    /**
+     * Log when a Zapier send has been scheduled for later execution
+     */
+    public function log_zapier_schedule($session_id, $timestamp) {
+        if (empty($session_id) || empty($timestamp)) {
+            return false;
+        }
+
+        $scheduled_at = is_numeric($timestamp) ? intval($timestamp) : strtotime((string) $timestamp);
+        if (!$scheduled_at) {
+            return false;
+        }
+
+        return $this->mark_zapier_status($session_id, 'scheduled', array(
+            'scheduled_at' => $scheduled_at,
+            'trigger_reason' => 'delay',
+            'last_error' => ''
+        ));
+    }
+
     /**
      * Get history record by session ID
      */
@@ -2307,6 +2378,8 @@ class SDPI_History {
                 }
             }
 
+            $documentation_files = $this->sanitize_documentation_entries($row->documentation_files ?? array());
+
             $final = array(
                 'final_price' => floatval($row->final_price),
                 'base_price' => floatval($row->api_price),
@@ -2320,7 +2393,7 @@ class SDPI_History {
             );
 
             try {
-                $m->invoke($form,
+                $result = $m->invoke($form,
                     $row->pickup_zip,
                     $row->delivery_zip,
                     $row->trailer_type,
@@ -2342,19 +2415,34 @@ class SDPI_History {
                             'captured_at' => $row->client_info_captured_at
                         ),
                         'transport_type' => intval($row->maritime_involved) === 1 ? 'maritime' : 'terrestrial',
+                        'documentation_files' => $documentation_files,
                         'session_id' => $row->session_id
                     )
                 );
+                if (is_wp_error($result)) {
+                    $wpdb->update($this->table_name, array(
+                        'zapier_status' => 'error',
+                        'zapier_trigger_reason' => 'manual',
+                        'zapier_last_error' => sanitize_text_field($result->get_error_message())
+                    ), array('id' => $id), array('%s','%s','%s'), array('%d'));
+                    $failed++;
+                    continue;
+                }
+
                 // mark as sent
                 $wpdb->update($this->table_name, array(
                     'zapier_status' => 'sent',
-                    'zapier_last_sent_at' => current_time('mysql')
-                ), array('id' => $id), array('%s','%s'), array('%d'));
+                    'zapier_last_sent_at' => current_time('mysql'),
+                    'zapier_trigger_reason' => 'manual',
+                    'zapier_last_error' => ''
+                ), array('id' => $id), array('%s','%s','%s','%s'), array('%d'));
                 $sent++;
             } catch (Exception $e) {
                 $wpdb->update($this->table_name, array(
-                    'zapier_status' => 'error'
-                ), array('id' => $id), array('%s'), array('%d'));
+                    'zapier_status' => 'error',
+                    'zapier_trigger_reason' => 'manual',
+                    'zapier_last_error' => sanitize_text_field($e->getMessage())
+                ), array('id' => $id), array('%s','%s','%s'), array('%d'));
                 $failed++;
             }
         }
@@ -2384,7 +2472,10 @@ class SDPI_History {
             'delivery_contact_street' => "ALTER TABLE {$this->table_name} ADD COLUMN delivery_contact_street VARCHAR(255) AFTER delivery_contact_name",
             'additional_shipping' => "ALTER TABLE {$this->table_name} ADD COLUMN additional_shipping LONGTEXT AFTER delivery_contact_street",
             'inoperable_fee' => "ALTER TABLE {$this->table_name} ADD COLUMN inoperable_fee DECIMAL(10,2) DEFAULT 0 AFTER total_maritime_cost",
-            'documentation_files' => "ALTER TABLE {$this->table_name} ADD COLUMN documentation_files LONGTEXT AFTER maritime_details"
+            'documentation_files' => "ALTER TABLE {$this->table_name} ADD COLUMN documentation_files LONGTEXT AFTER maritime_details",
+            'zapier_scheduled_at' => "ALTER TABLE {$this->table_name} ADD COLUMN zapier_scheduled_at DATETIME DEFAULT NULL AFTER zapier_last_sent_at",
+            'zapier_trigger_reason' => "ALTER TABLE {$this->table_name} ADD COLUMN zapier_trigger_reason VARCHAR(20) DEFAULT NULL AFTER zapier_scheduled_at",
+            'zapier_last_error' => "ALTER TABLE {$this->table_name} ADD COLUMN zapier_last_error TEXT AFTER zapier_trigger_reason"
         );
 
         foreach ($target_columns as $column => $ddl) {

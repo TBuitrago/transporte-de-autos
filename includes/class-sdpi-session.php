@@ -111,18 +111,67 @@ class SDPI_Session {
 	/**
 	 * Store session id in PHP session
 	 */
-	private function set_session_id($session_id) {
-		if (!session_id()) {
-			session_start();
-		}
-		$_SESSION['sdpi_quote_session_id'] = $session_id;
-	}
+        private function set_session_id($session_id) {
+                if (!session_id()) {
+                        session_start();
+                }
+                $_SESSION['sdpi_quote_session_id'] = $session_id;
+        }
 
-	/**
-	 * Helper para obtener el session_id actual para histórico
-	 */
-	public function get_current_session_id() {
-		return $this->get_session_id();
+        /**
+         * Clear the active session identifier and related cached data
+         */
+        public function clear_session($session_id = '') {
+                if (!session_id()) {
+                        session_start();
+                }
+
+                if (empty($session_id)) {
+                        $session_id = isset($_SESSION['sdpi_quote_session_id'])
+                                ? sanitize_text_field($_SESSION['sdpi_quote_session_id'])
+                                : '';
+                }
+
+                if (!empty($_SESSION['sdpi_quote_session_id']) && (empty($session_id) || $_SESSION['sdpi_quote_session_id'] === $session_id)) {
+                        unset($_SESSION['sdpi_quote_session_id']);
+                }
+
+                unset(
+                        $_SESSION['sdpi_client_info'],
+                        $_SESSION['sdpi_additional_info'],
+                        $_SESSION['sdpi_maritime_info']
+                );
+
+                if (!empty($session_id)) {
+                        $this->delete_session_record($session_id);
+                }
+
+                return $session_id;
+        }
+
+        /**
+         * Remove the persisted session row once the Zapier push is complete
+         */
+        private function delete_session_record($session_id) {
+                global $wpdb;
+
+                $session_id = sanitize_text_field($session_id);
+                if (empty($session_id)) {
+                        return;
+                }
+
+                $wpdb->delete(
+                        $this->table_name,
+                        array('session_id' => $session_id),
+                        array('%s')
+                );
+        }
+
+        /**
+         * Helper para obtener el session_id actual para histórico
+         */
+        public function get_current_session_id() {
+                return $this->get_session_id();
 	}
 
 	/**

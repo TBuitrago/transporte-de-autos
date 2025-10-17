@@ -20,6 +20,7 @@ class SDPI_Form {
     private $documentation_max_files = 5;
     private $documentation_max_size = 10485760; // 10 MB
     private static $documentation_upload_subdir = 'documentos-cotizador';
+    private $zapier_delay_seconds = 600;
 
     public function __construct() {
         $this->api = new SDPI_API();
@@ -72,6 +73,9 @@ class SDPI_Form {
 
         // Enqueue JavaScript
         add_action('wp_enqueue_scripts', array($this, 'enqueue_scripts'));
+
+        // Delayed Zapier push handler
+        add_action('sdpi_zapier_delayed_push', array($this, 'handle_delayed_zapier_push'), 10, 2);
     }
 
     public function enqueue_styles() {
@@ -477,127 +481,416 @@ class SDPI_Form {
         return $merged;
     }
 
-    /**
-     * Dispatch an automatic Zapier update respecting the 10 minute session window
-     */
-    private function dispatch_zapier_update($session_id, $quote_data, $extra_data = array(), $close_session = false) {
-        if (empty($session_id) || empty($quote_data) || !is_array($quote_data) || !isset($quote_data['final_price'])) {
+    private function is_sequential_array($value) {
+        if (!is_array($value)) {
+            return false;
+        }
+
+        return array_keys($value) === range(0, count($value) - 1);
+    }
+
+    private function array_merge_recursive_distinct($base, $insert) {
+        if (!is_array($base)) {
+            $base = array();
+        }
+
+        foreach ((array) $insert as $key => $value) {
+            if (is_array($value) && isset($base[$key]) && is_array($base[$key])) {
+                if ($this->is_sequential_array($value) || $this->is_sequential_array($base[$key])) {
+                    $base[$key] = $value;
+                } else {
+                    $base[$key] = $this->array_merge_recursive_distinct($base[$key], $value);
+                }
+            } else {
+                $base[$key] = $value;
+            }
+        }
+
+        return $base;
+    }
+
+    private function register_zapier_snapshot($session_id, $quote_data, $extra_data = array()) {
+        $empty = array(
+            'quote' => array(),
+            'extra' => array(),
+            'documentation_map' => array(),
+            'documentation_list' => array()
+        );
+
+        if (empty($session_id) || empty($quote_data) || !is_array($quote_data)) {
+            return $empty;
+        }
+
+        $session = new SDPI_Session();
+        $session_row = $session->get($session_id);
+        $session_data = is_array($session_row) ? ($session_row['data'] ?? array()) : array();
+        $stored_quote = isset($session_data['quote']) && is_array($session_data['quote']) ? $session_data['quote'] : array();
+
+        $documentation_map = $this->merge_documentation_files(array(
+            $session_data['documentation_files'] ?? array(),
+            $stored_quote['documentation_files'] ?? array(),
+            $quote_data['documentation_files'] ?? array(),
+            $extra_data['documentation_files'] ?? array()
+        ));
+        $documentation_list = $this->documentation_files_to_list($documentation_map);
+
+        $quote_snapshot = $this->array_merge_recursive_distinct(
+            $stored_quote,
+            $this->array_merge_recursive_distinct($quote_data, array('documentation_files' => $documentation_list))
+        );
+
+        $payload_extra = array(
+            'client' => isset($session_data['client_info']) ? $session_data['client_info'] : array(),
+            'shipping' => isset($session_data['shipping']) ? $session_data['shipping'] : array(),
+            'maritime_details' => isset($session_data['maritime'])
+                ? $session_data['maritime']
+                : ($session_data['maritime_details'] ?? array()),
+            'transport_type' => isset($session_data['transport_type'])
+                ? $session_data['transport_type']
+                : (!empty($quote_snapshot['maritime_involved']) ? 'maritime' : 'terrestrial'),
+            'payment' => isset($session_data['payment']) ? $session_data['payment'] : array(),
+            'documentation_files' => $documentation_list,
+            'session_id' => $session_id
+        );
+
+        if (!empty($extra_data)) {
+            $payload_extra = $this->array_merge_recursive_distinct($payload_extra, $extra_data);
+        }
+
+        $payload_extra['documentation_files'] = $documentation_list;
+        $payload_extra['documentation_file_urls'] = array_map(function($file) {
+            return isset($file['url']) ? $file['url'] : '';
+        }, $documentation_list);
+
+        $session->update_data($session_id, array(
+            'documentation_files' => $documentation_map,
+            'quote' => $quote_snapshot,
+            'zapier_snapshot' => array(
+                'quote' => $quote_snapshot,
+                'extra' => $payload_extra
+            )
+        ));
+
+        $history = new SDPI_History();
+        $history->update_documentation_files($session_id, $documentation_list);
+
+        return array(
+            'quote' => $quote_snapshot,
+            'extra' => $payload_extra,
+            'documentation_map' => $documentation_map,
+            'documentation_list' => $documentation_list
+        );
+    }
+
+    private function schedule_zapier_push($session_id) {
+        if (empty($session_id)) {
+            return;
+        }
+
+        $scheduled = wp_next_scheduled('sdpi_zapier_delayed_push', array($session_id, 'delay'));
+        if ($scheduled) {
             return;
         }
 
         $session = new SDPI_Session();
         $session_row = $session->get($session_id);
         $session_data = is_array($session_row) ? ($session_row['data'] ?? array()) : array();
+        $push_state = isset($session_data['zapier_push']) && is_array($session_data['zapier_push']) ? $session_data['zapier_push'] : array();
 
-        $extra_data = is_array($extra_data) ? $extra_data : array();
-
-        $documentation_map = $this->merge_documentation_files(array(
-            $session_data['documentation_files'] ?? array(),
-            $quote_data['documentation_files'] ?? array(),
-            $extra_data['documentation_files'] ?? array()
-        ));
-        $documentation_list = $this->documentation_files_to_list($documentation_map);
-
-        $session->update_data($session_id, array(
-            'documentation_files' => $documentation_map,
-            'quote' => array('documentation_files' => $documentation_list)
-        ));
-
-        $extra_data['documentation_files'] = $documentation_list;
-
-        $tracking = array();
-        if (isset($session_data['zapier_tracking']) && is_array($session_data['zapier_tracking'])) {
-            $tracking = $session_data['zapier_tracking'];
-        }
-
-        if (!empty($tracking['closed'])) {
+        if (!empty($push_state['status']) && $push_state['status'] === 'sent') {
             return;
         }
 
         $now = current_time('timestamp');
-        $window = (defined('MINUTE_IN_SECONDS') ? MINUTE_IN_SECONDS : 60) * 10;
-        $first_sent = isset($tracking['first_sent_at']) ? intval($tracking['first_sent_at']) : 0;
-        $expires_at = isset($tracking['expires_at']) ? intval($tracking['expires_at']) : ($first_sent ? ($first_sent + $window) : 0);
+        $run_at = $now + $this->zapier_delay_seconds;
 
-        if ($first_sent && $now > ($expires_at ?: ($first_sent + $window))) {
-            $tracking['closed'] = true;
-            $tracking['closed_reason'] = 'expired';
-            $tracking['closed_at'] = $now;
-            $session->update_data($session_id, array('zapier_tracking' => $tracking));
+        wp_schedule_single_event($run_at, 'sdpi_zapier_delayed_push', array($session_id, 'delay'));
+
+        $push_state = $this->array_merge_recursive_distinct($push_state, array(
+            'status' => 'scheduled',
+            'scheduled_at' => $now,
+            'run_at' => $run_at,
+            'last_reason' => 'delay'
+        ));
+
+        $session->update_data($session_id, array('zapier_push' => $push_state));
+
+        $history = new SDPI_History();
+        $history->log_zapier_schedule($session_id, $run_at);
+    }
+
+    private function cancel_zapier_schedule($session_id) {
+        if (empty($session_id)) {
             return;
         }
 
-        if (!$first_sent) {
-            $tracking['first_sent_at'] = $now;
-            $tracking['expires_at'] = $now + $window;
-        }
-
-        $tracking['last_sent_at'] = $now;
-
-        if ($close_session) {
-            $tracking['closed'] = true;
-            $tracking['closed_reason'] = 'payment';
-            $tracking['closed_at'] = $now;
-        }
-
-        $session->update_data($session_id, array('zapier_tracking' => $tracking));
-
-        $payload_extra = is_array($extra_data) ? $extra_data : array();
-
-        if (empty($payload_extra['client']) && isset($session_data['client_info'])) {
-            $payload_extra['client'] = $session_data['client_info'];
-        }
-
-        if (empty($payload_extra['shipping']) && isset($session_data['shipping'])) {
-            $payload_extra['shipping'] = $session_data['shipping'];
-        }
-
-        if (empty($payload_extra['maritime_details'])) {
-            if (isset($session_data['maritime']) && is_array($session_data['maritime'])) {
-                $payload_extra['maritime_details'] = $session_data['maritime'];
-            } elseif (isset($quote_data['maritime_details'])) {
-                $payload_extra['maritime_details'] = $quote_data['maritime_details'];
-            }
-        }
-
-        if (empty($payload_extra['transport_type'])) {
-            if (isset($session_data['transport_type'])) {
-                $payload_extra['transport_type'] = $session_data['transport_type'];
-            } elseif (!empty($quote_data['transport_type'])) {
-                $payload_extra['transport_type'] = $quote_data['transport_type'];
-            } elseif (!empty($quote_data['maritime_involved'])) {
-                $payload_extra['transport_type'] = 'maritime';
-            } else {
-                $payload_extra['transport_type'] = 'terrestrial';
-            }
-        }
-
-        if (empty($payload_extra['payment']) && isset($session_data['payment'])) {
-            $payload_extra['payment'] = $session_data['payment'];
-        }
-
-        $payload_extra['session_id'] = $session_id;
-
-        $this->send_to_zapier(
-            $quote_data['pickup_zip'] ?? '',
-            $quote_data['delivery_zip'] ?? '',
-            $quote_data['trailer_type'] ?? '',
-            $quote_data['vehicle_type'] ?? '',
-            !empty($quote_data['vehicle_inoperable']),
-            !empty($quote_data['vehicle_electric']),
-            $quote_data['vehicle_make'] ?? '',
-            $quote_data['vehicle_model'] ?? '',
-            $quote_data['vehicle_year'] ?? '',
-            $quote_data,
-            !empty($quote_data['maritime_involved']),
-            $payload_extra
-        );
-
-        $history = new SDPI_History();
-        if (method_exists($history, 'mark_zapier_status')) {
-            $history->mark_zapier_status($session_id, 'sent');
+        $timestamp = wp_next_scheduled('sdpi_zapier_delayed_push', array($session_id, 'delay'));
+        if ($timestamp) {
+            wp_unschedule_event($timestamp, 'sdpi_zapier_delayed_push', array($session_id, 'delay'));
         }
     }
+
+    public function handle_delayed_zapier_push($session_id, $reason = 'delay') {
+        if (empty($session_id)) {
+            return;
+        }
+
+        $this->trigger_zapier_push($session_id, empty($reason) ? 'delay' : $reason);
+    }
+
+    private function trigger_zapier_push($session_id, $reason = 'delay') {
+        if (empty($session_id)) {
+            return false;
+        }
+
+        $session = new SDPI_Session();
+        $session_row = $session->get($session_id);
+        $session_data = is_array($session_row) ? ($session_row['data'] ?? array()) : array();
+        $quote_data = isset($session_data['quote']) && is_array($session_data['quote']) ? $session_data['quote'] : array();
+        $snapshot_extra = isset($session_data['zapier_snapshot']['extra']) && is_array($session_data['zapier_snapshot']['extra'])
+            ? $session_data['zapier_snapshot']['extra']
+            : array();
+
+        $snapshot = $this->register_zapier_snapshot($session_id, $quote_data, $snapshot_extra);
+        $quote_snapshot = $snapshot['quote'];
+        $extra_snapshot = $snapshot['extra'];
+
+        if (empty($quote_snapshot) || !isset($quote_snapshot['final_price'])) {
+            return false;
+        }
+
+        $payload = $this->build_zapier_payload_array(
+            $quote_snapshot['pickup_zip'] ?? '',
+            $quote_snapshot['delivery_zip'] ?? '',
+            $quote_snapshot['trailer_type'] ?? '',
+            $quote_snapshot['vehicle_type'] ?? '',
+            !empty($quote_snapshot['vehicle_inoperable']),
+            !empty($quote_snapshot['vehicle_electric']),
+            $quote_snapshot['vehicle_make'] ?? '',
+            $quote_snapshot['vehicle_model'] ?? '',
+            $quote_snapshot['vehicle_year'] ?? '',
+            $quote_snapshot,
+            !empty($quote_snapshot['maritime_involved']),
+            $extra_snapshot
+        );
+
+        $payload_hash = md5(wp_json_encode($payload));
+
+        $session_row = $session->get($session_id);
+        $session_data = is_array($session_row) ? ($session_row['data'] ?? array()) : array();
+        $push_state = isset($session_data['zapier_push']) && is_array($session_data['zapier_push']) ? $session_data['zapier_push'] : array();
+
+        if (!empty($push_state['status']) && $push_state['status'] === 'sent' && !empty($push_state['payload_hash']) && $push_state['payload_hash'] === $payload_hash) {
+            $this->cancel_zapier_schedule($session_id);
+            $session->clear_session($session_id);
+            return true;
+        }
+
+        $result = $this->push_zapier_payload($payload);
+        $now = current_time('timestamp');
+
+        $push_state = $this->array_merge_recursive_distinct($push_state, array(
+            'last_attempt_at' => $now,
+            'payload_hash' => $payload_hash,
+            'last_reason' => $reason
+        ));
+
+        $history = new SDPI_History();
+
+        if (is_wp_error($result)) {
+            $push_state['status'] = 'error';
+            $push_state['last_error'] = $result->get_error_message();
+            $session->update_data($session_id, array('zapier_push' => $push_state));
+            $history->mark_zapier_status($session_id, 'error', array(
+                'trigger_reason' => $reason,
+                'last_error' => $push_state['last_error']
+            ));
+        } else {
+            $push_state['status'] = 'sent';
+            $push_state['completed_at'] = $now;
+            $push_state['last_error'] = '';
+            $session->update_data($session_id, array('zapier_push' => $push_state));
+            $history->mark_zapier_status($session_id, 'sent', array(
+                'trigger_reason' => $reason,
+                'last_error' => ''
+            ));
+        }
+
+        $this->cancel_zapier_schedule($session_id);
+        $session->set_status($session_id, 'closed');
+        $session->clear_session($session_id);
+
+        return !is_wp_error($result);
+    }
+
+    private function build_zapier_payload_array($pickup_zip, $delivery_zip, $trailer_type, $vehicle_type, $vehicle_inoperable, $vehicle_electric, $vehicle_make, $vehicle_model, $vehicle_year, $final_price_data, $involves_maritime, $extra_data = array()) {
+        if (!session_id()) {
+            session_start();
+        }
+
+        $extra_data = is_array($extra_data) ? $extra_data : array();
+
+        $client_info = isset($extra_data['client']) && is_array($extra_data['client']) ? $extra_data['client'] : array();
+        if (empty($client_info) && isset($_SESSION['sdpi_client_info'])) {
+            $client_info = $_SESSION['sdpi_client_info'];
+        }
+
+        $shipping_details = array();
+        if (!empty($extra_data['shipping']) && is_array($extra_data['shipping'])) {
+            $shipping_details = $extra_data['shipping'];
+        } elseif (isset($_SESSION['sdpi_additional_info']) && is_array($_SESSION['sdpi_additional_info'])) {
+            $shipping_details = array(
+                'pickup' => array(
+                    'name' => $_SESSION['sdpi_additional_info']['p_name'] ?? '',
+                    'street' => $_SESSION['sdpi_additional_info']['p_street'] ?? '',
+                    'city' => $_SESSION['sdpi_additional_info']['p_city'] ?? '',
+                    'zip' => $_SESSION['sdpi_additional_info']['p_zip'] ?? '',
+                    'type' => $_SESSION['sdpi_additional_info']['pickup_type'] ?? ''
+                ),
+                'delivery' => array(
+                    'name' => $_SESSION['sdpi_additional_info']['d_name'] ?? '',
+                    'street' => $_SESSION['sdpi_additional_info']['d_street'] ?? '',
+                    'city' => $_SESSION['sdpi_additional_info']['d_city'] ?? '',
+                    'zip' => $_SESSION['sdpi_additional_info']['d_zip'] ?? ''
+                )
+            );
+            if (!empty($_SESSION['sdpi_additional_info']['saved_at'])) {
+                $shipping_details['saved_at'] = $_SESSION['sdpi_additional_info']['saved_at'];
+            }
+        }
+
+        $maritime_details = array();
+        if (!empty($extra_data['maritime_details']) && is_array($extra_data['maritime_details'])) {
+            $maritime_details = $extra_data['maritime_details'];
+        } elseif (isset($_SESSION['sdpi_maritime_info']) && is_array($_SESSION['sdpi_maritime_info'])) {
+            $maritime_details = $_SESSION['sdpi_maritime_info'];
+        }
+
+        $documentation_files = array();
+        if (!empty($extra_data['documentation_files']) && is_array($extra_data['documentation_files'])) {
+            $documentation_files = $extra_data['documentation_files'];
+        }
+
+        $transport_type = $extra_data['transport_type'] ?? ($involves_maritime ? 'maritime' : 'terrestrial');
+
+        $session_identifier = isset($extra_data['session_id']) ? $extra_data['session_id'] : '';
+
+        $pickup_city = $this->get_city_from_zip($pickup_zip);
+        $delivery_city = $this->get_city_from_zip($delivery_zip);
+        if (!$pickup_city && isset($shipping_details['pickup']['city'])) {
+            $pickup_city = $shipping_details['pickup']['city'];
+        }
+        if (!$delivery_city && isset($shipping_details['delivery']['city'])) {
+            $delivery_city = $shipping_details['delivery']['city'];
+        }
+
+        $zapier_data = array(
+            'client_name' => $client_info['name'] ?? '',
+            'client_email' => $client_info['email'] ?? '',
+            'client_phone' => $client_info['phone'] ?? '',
+            'client_info_captured_at' => $client_info['captured_at'] ?? null,
+            'pickup_city' => $pickup_city,
+            'pickup_zip' => $pickup_zip,
+            'delivery_city' => $delivery_city,
+            'delivery_zip' => $delivery_zip,
+            'trailer_type' => $trailer_type,
+            'vehicle_type' => $vehicle_type,
+            'vehicle_inoperable' => $vehicle_inoperable,
+            'vehicle_electric' => $vehicle_electric,
+            'vehicle_make' => $vehicle_make,
+            'vehicle_model' => $vehicle_model,
+            'vehicle_year' => $vehicle_year,
+            'final_price' => floatval($final_price_data['final_price']),
+            'base_price' => isset($final_price_data['base_price']) ? floatval($final_price_data['base_price']) : 0,
+            'confidence_percentage' => isset($final_price_data['confidence_percentage']) ? floatval($final_price_data['confidence_percentage']) : 0,
+            'company_profit' => isset($final_price_data['company_profit']) ? floatval($final_price_data['company_profit']) : 0,
+            'confidence_adjustment' => isset($final_price_data['confidence_adjustment']) ? floatval($final_price_data['confidence_adjustment']) : 0,
+            'maritime_involved' => $involves_maritime,
+            'maritime_cost' => isset($final_price_data['maritime_cost']) ? floatval($final_price_data['maritime_cost']) : 0,
+            'terrestrial_cost' => isset($final_price_data['terrestrial_cost']) ? floatval($final_price_data['terrestrial_cost']) : 0,
+            'us_port' => $final_price_data['us_port'] ?? null,
+            'transport_type' => $transport_type,
+            'session_id' => $session_identifier,
+            'quote_date' => current_time('mysql'),
+            'quote_timestamp' => current_time('timestamp'),
+            'payment_available' => $this->is_authorize_ready()
+        );
+
+        if (!empty($shipping_details)) {
+            $zapier_data['shipping_details'] = $shipping_details;
+            $zapier_data['pickup_contact_name'] = $shipping_details['pickup']['name'] ?? '';
+            $zapier_data['pickup_contact_street'] = $shipping_details['pickup']['street'] ?? '';
+            $zapier_data['pickup_contact_city'] = $shipping_details['pickup']['city'] ?? '';
+            $zapier_data['pickup_contact_zip'] = $shipping_details['pickup']['zip'] ?? '';
+            $zapier_data['pickup_contact_type'] = $shipping_details['pickup']['type'] ?? '';
+            $zapier_data['delivery_contact_name'] = $shipping_details['delivery']['name'] ?? '';
+            $zapier_data['delivery_contact_street'] = $shipping_details['delivery']['street'] ?? '';
+            $zapier_data['delivery_contact_city'] = $shipping_details['delivery']['city'] ?? '';
+            $zapier_data['delivery_contact_zip'] = $shipping_details['delivery']['zip'] ?? '';
+            if (isset($shipping_details['saved_at'])) {
+                $zapier_data['shipping_saved_at'] = $shipping_details['saved_at'];
+            }
+        }
+
+        if (!empty($maritime_details)) {
+            $zapier_data['maritime_details'] = $maritime_details;
+        }
+
+        if (!empty($documentation_files)) {
+            $zapier_data['documentation_files'] = $documentation_files;
+            $zapier_data['documentation_file_urls'] = array_map(function($file) {
+                return isset($file['url']) ? $file['url'] : '';
+            }, $documentation_files);
+            $zapier_data['documentation_files_count'] = count($documentation_files);
+        }
+
+        if (!empty($extra_data['payment'])) {
+            $zapier_data['payment'] = $extra_data['payment'];
+        }
+
+        return $zapier_data;
+    }
+
+    private function push_zapier_payload($payload) {
+        $zapier_webhook_url = get_option('sdpi_zapier_webhook_url');
+
+        if (empty($zapier_webhook_url)) {
+            return new WP_Error('zapier_disabled', __('Zapier integration is not configured.', 'transporte-de-autos'));
+        }
+
+        $response = wp_remote_post($zapier_webhook_url, array(
+            'body' => wp_json_encode($payload),
+            'headers' => array(
+                'Content-Type' => 'application/json',
+                'User-Agent' => 'SDPI Plugin/1.0'
+            ),
+            'timeout' => 10,
+            'blocking' => true
+        ));
+
+        if (is_wp_error($response)) {
+            if (WP_DEBUG) {
+                error_log('SDPI Zapier Error: ' . $response->get_error_message());
+            }
+            return $response;
+        }
+
+        $code = wp_remote_retrieve_response_code($response);
+        if ($code < 200 || $code >= 300) {
+            $message = sprintf('Zapier responded with HTTP %d', $code);
+            if (WP_DEBUG) {
+                error_log('SDPI Zapier Error: ' . $message);
+            }
+            return new WP_Error('zapier_http_error', $message, array('response' => $response));
+        }
+
+        if (WP_DEBUG) {
+            error_log('SDPI Zapier Success: Data sent to webhook');
+        }
+
+        return $response;
+    }
+
 
     /**
      * Render the pricing form
@@ -1966,7 +2259,7 @@ class SDPI_Form {
             )
         ));
 
-        $this->dispatch_zapier_update(
+        $this->register_zapier_snapshot(
             $session_id,
             $quote_data,
             array(
@@ -1981,6 +2274,8 @@ class SDPI_Form {
                 'documentation_files' => $documentation_list
             )
         );
+
+        $this->schedule_zapier_push($session_id);
 
         // Return the quote data with success flag
         $response_data = $quote_data;
@@ -2342,7 +2637,7 @@ class SDPI_Form {
             $session_data = is_array($session_row) ? ($session_row['data'] ?? array()) : array();
             $quote_data = isset($session_data['quote']) && is_array($session_data['quote']) ? $session_data['quote'] : array();
             if (!empty($quote_data)) {
-                $this->dispatch_zapier_update($session_id, $quote_data, array('shipping' => $shipping_details));
+                $this->register_zapier_snapshot($session_id, $quote_data, array('shipping' => $shipping_details));
             }
         }
 
@@ -2619,7 +2914,7 @@ class SDPI_Form {
             ));
             $documentation_list = $this->documentation_files_to_list($documentation_map);
 
-            $this->dispatch_zapier_update(
+            $this->register_zapier_snapshot(
                 $session_id,
                 $quote_data,
                 array(
@@ -3256,6 +3551,26 @@ class SDPI_Form {
             $client_info = $_SESSION['sdpi_client_info'];
         }
 
+        $session_row = $session->get($session_id);
+        $session_data = is_array($session_row) ? ($session_row['data'] ?? array()) : array();
+
+        $documentation_list = $this->documentation_files_to_list($this->merge_documentation_files(array(
+            $session_data['documentation_files'] ?? array(),
+            $stored_quote['documentation_files'] ?? array()
+        )));
+
+        $snapshot_extra = array(
+            'client' => $client_info,
+            'shipping' => $session_data['shipping'] ?? array(),
+            'maritime_details' => isset($session_data['maritime']) ? $session_data['maritime'] : ($session_data['maritime_details'] ?? array()),
+            'transport_type' => $session_data['transport_type'] ?? (!empty($stored_quote['maritime_involved']) ? 'maritime' : 'terrestrial'),
+            'documentation_files' => $documentation_list
+        );
+
+        $this->register_zapier_snapshot($session_id, $stored_quote, $snapshot_extra);
+        $this->cancel_zapier_schedule($session_id);
+        $this->trigger_zapier_push($session_id, 'checkout');
+
         $response = array(
             'session_id' => $session_id,
             'amount' => number_format($amount, 2, '.', ''),
@@ -3518,7 +3833,7 @@ class SDPI_Form {
             )
         );
 
-        $this->dispatch_zapier_update($session_id, $quote_data, $extra_data, true);
+        $this->register_zapier_snapshot($session_id, $quote_data, $extra_data);
 
         $success_url = get_option('sdpi_payment_success_url');
 
@@ -3534,165 +3849,22 @@ class SDPI_Form {
      * Send quote data to Zapier webhook
      */
     private function send_to_zapier($pickup_zip, $delivery_zip, $trailer_type, $vehicle_type, $vehicle_inoperable, $vehicle_electric, $vehicle_make, $vehicle_model, $vehicle_year, $final_price_data, $involves_maritime, $extra_data = array()) {
-        if (!session_id()) {
-            session_start();
-        }
-
-        $extra_data = is_array($extra_data) ? $extra_data : array();
-
-        $client_info = isset($extra_data['client']) && is_array($extra_data['client']) ? $extra_data['client'] : array();
-        if (empty($client_info) && isset($_SESSION['sdpi_client_info'])) {
-            $client_info = $_SESSION['sdpi_client_info'];
-        }
-
-        $shipping_details = array();
-        if (!empty($extra_data['shipping']) && is_array($extra_data['shipping'])) {
-            $shipping_details = $extra_data['shipping'];
-        } elseif (isset($_SESSION['sdpi_additional_info']) && is_array($_SESSION['sdpi_additional_info'])) {
-            $shipping_details = array(
-                'pickup' => array(
-                    'name' => isset($_SESSION['sdpi_additional_info']['p_name']) ? $_SESSION['sdpi_additional_info']['p_name'] : '',
-                    'street' => isset($_SESSION['sdpi_additional_info']['p_street']) ? $_SESSION['sdpi_additional_info']['p_street'] : '',
-                    'city' => isset($_SESSION['sdpi_additional_info']['p_city']) ? $_SESSION['sdpi_additional_info']['p_city'] : '',
-                    'zip' => isset($_SESSION['sdpi_additional_info']['p_zip']) ? $_SESSION['sdpi_additional_info']['p_zip'] : '',
-                    'type' => isset($_SESSION['sdpi_additional_info']['pickup_type']) ? $_SESSION['sdpi_additional_info']['pickup_type'] : ''
-                ),
-                'delivery' => array(
-                    'name' => isset($_SESSION['sdpi_additional_info']['d_name']) ? $_SESSION['sdpi_additional_info']['d_name'] : '',
-                    'street' => isset($_SESSION['sdpi_additional_info']['d_street']) ? $_SESSION['sdpi_additional_info']['d_street'] : '',
-                    'city' => isset($_SESSION['sdpi_additional_info']['d_city']) ? $_SESSION['sdpi_additional_info']['d_city'] : '',
-                    'zip' => isset($_SESSION['sdpi_additional_info']['d_zip']) ? $_SESSION['sdpi_additional_info']['d_zip'] : ''
-                )
-            );
-        } elseif (isset($_SESSION['sdpi_maritime_info']) && is_array($_SESSION['sdpi_maritime_info'])) {
-            $maritime_info = $_SESSION['sdpi_maritime_info'];
-            $shipping_details = array(
-                'pickup' => array(
-                    'name' => isset($maritime_info['shipper']['name']) ? $maritime_info['shipper']['name'] : '',
-                    'street' => isset($maritime_info['shipper']['street']) ? $maritime_info['shipper']['street'] : '',
-                    'city' => isset($maritime_info['shipper']['city']) ? $maritime_info['shipper']['city'] : '',
-                    'zip' => isset($maritime_info['shipper']['zip']) ? $maritime_info['shipper']['zip'] : '',
-                    'type' => isset($maritime_info['direction']) ? ucwords(str_replace('_', ' ', $maritime_info['direction'])) : 'Maritimo'
-                ),
-                'delivery' => array(
-                    'name' => isset($maritime_info['consignee']['name']) ? $maritime_info['consignee']['name'] : '',
-                    'street' => isset($maritime_info['consignee']['street']) ? $maritime_info['consignee']['street'] : '',
-                    'city' => isset($maritime_info['consignee']['city']) ? $maritime_info['consignee']['city'] : '',
-                    'zip' => isset($maritime_info['consignee']['zip']) ? $maritime_info['consignee']['zip'] : ''
-                ),
-                'saved_at' => isset($maritime_info['saved_at']) ? $maritime_info['saved_at'] : current_time('mysql')
-            );
-        }
-
-        $maritime_details = array();
-        if (!empty($extra_data['maritime_details']) && is_array($extra_data['maritime_details'])) {
-            $maritime_details = $extra_data['maritime_details'];
-        } elseif (isset($_SESSION['sdpi_maritime_info']) && is_array($_SESSION['sdpi_maritime_info'])) {
-            $maritime_details = $_SESSION['sdpi_maritime_info'];
-        }
-
-        $documentation_files = $this->documentation_files_to_list(
-            $this->normalize_documentation_files($extra_data['documentation_files'] ?? array())
+        $payload = $this->build_zapier_payload_array(
+            $pickup_zip,
+            $delivery_zip,
+            $trailer_type,
+            $vehicle_type,
+            $vehicle_inoperable,
+            $vehicle_electric,
+            $vehicle_make,
+            $vehicle_model,
+            $vehicle_year,
+            $final_price_data,
+            $involves_maritime,
+            $extra_data
         );
 
-        $transport_type = isset($extra_data['transport_type']) ? $extra_data['transport_type'] : ($involves_maritime ? 'maritime' : 'terrestrial');
-        $session_identifier = isset($extra_data['session_id']) ? $extra_data['session_id'] : '';
-
-        // Get cities from ZIPs
-        $pickup_city = $this->get_city_from_zip($pickup_zip);
-        $delivery_city = $this->get_city_from_zip($delivery_zip);
-        if (!$pickup_city && isset($shipping_details['pickup']['city'])) {
-            $pickup_city = $shipping_details['pickup']['city'];
-        }
-        if (!$delivery_city && isset($shipping_details['delivery']['city'])) {
-            $delivery_city = $shipping_details['delivery']['city'];
-        }
-
-        $zapier_data = array(
-            'client_name' => isset($client_info['name']) ? $client_info['name'] : '',
-            'client_email' => isset($client_info['email']) ? $client_info['email'] : '',
-            'client_phone' => isset($client_info['phone']) ? $client_info['phone'] : '',
-            'client_info_captured_at' => isset($client_info['captured_at']) ? $client_info['captured_at'] : null,
-            'pickup_city' => $pickup_city,
-            'pickup_zip' => $pickup_zip,
-            'delivery_city' => $delivery_city,
-            'delivery_zip' => $delivery_zip,
-            'trailer_type' => $trailer_type,
-            'vehicle_type' => $vehicle_type,
-            'vehicle_inoperable' => $vehicle_inoperable,
-            'vehicle_electric' => $vehicle_electric,
-            'vehicle_make' => $vehicle_make,
-            'vehicle_model' => $vehicle_model,
-            'vehicle_year' => $vehicle_year,
-            'final_price' => floatval($final_price_data['final_price']),
-            'base_price' => isset($final_price_data['base_price']) ? floatval($final_price_data['base_price']) : 0,
-            'confidence_percentage' => isset($final_price_data['confidence_percentage']) ? floatval($final_price_data['confidence_percentage']) : 0,
-            'company_profit' => isset($final_price_data['company_profit']) ? floatval($final_price_data['company_profit']) : 0,
-            'confidence_adjustment' => isset($final_price_data['confidence_adjustment']) ? floatval($final_price_data['confidence_adjustment']) : 0,
-            'maritime_involved' => $involves_maritime,
-            'maritime_cost' => isset($final_price_data['maritime_cost']) ? floatval($final_price_data['maritime_cost']) : 0,
-            'terrestrial_cost' => isset($final_price_data['terrestrial_cost']) ? floatval($final_price_data['terrestrial_cost']) : 0,
-            'us_port' => isset($final_price_data['us_port']) ? $final_price_data['us_port'] : null,
-            'transport_type' => $transport_type,
-            'session_id' => $session_identifier,
-            'quote_date' => current_time('mysql'),
-            'quote_timestamp' => current_time('timestamp'),
-            'payment_available' => $this->is_authorize_ready()
-        );
-
-        if (!empty($shipping_details)) {
-            $zapier_data['shipping_details'] = $shipping_details;
-            $zapier_data['pickup_contact_name'] = isset($shipping_details['pickup']['name']) ? $shipping_details['pickup']['name'] : '';
-            $zapier_data['pickup_contact_street'] = isset($shipping_details['pickup']['street']) ? $shipping_details['pickup']['street'] : '';
-            $zapier_data['pickup_contact_city'] = isset($shipping_details['pickup']['city']) ? $shipping_details['pickup']['city'] : '';
-            $zapier_data['pickup_contact_zip'] = isset($shipping_details['pickup']['zip']) ? $shipping_details['pickup']['zip'] : '';
-            $zapier_data['pickup_contact_type'] = isset($shipping_details['pickup']['type']) ? $shipping_details['pickup']['type'] : '';
-            $zapier_data['delivery_contact_name'] = isset($shipping_details['delivery']['name']) ? $shipping_details['delivery']['name'] : '';
-            $zapier_data['delivery_contact_street'] = isset($shipping_details['delivery']['street']) ? $shipping_details['delivery']['street'] : '';
-            $zapier_data['delivery_contact_city'] = isset($shipping_details['delivery']['city']) ? $shipping_details['delivery']['city'] : '';
-            $zapier_data['delivery_contact_zip'] = isset($shipping_details['delivery']['zip']) ? $shipping_details['delivery']['zip'] : '';
-            if (isset($shipping_details['saved_at'])) {
-                $zapier_data['shipping_saved_at'] = $shipping_details['saved_at'];
-            }
-        }
-
-        if (!empty($maritime_details)) {
-            $zapier_data['maritime_details'] = $maritime_details;
-        }
-
-        if (!empty($documentation_files)) {
-            $zapier_data['documentation_files'] = $documentation_files;
-            $zapier_data['documentation_file_urls'] = array_map(function($file) {
-                return isset($file['url']) ? $file['url'] : '';
-            }, $documentation_files);
-            $zapier_data['documentation_files_count'] = count($documentation_files);
-        }
-
-        // Get Zapier webhook URL from settings
-        $zapier_webhook_url = get_option('sdpi_zapier_webhook_url');
-
-        // Skip if Zapier integration is not configured
-        if (empty($zapier_webhook_url)) {
-            return;
-        }
-
-        // Send data to Zapier (non-blocking)
-        $response = wp_remote_post($zapier_webhook_url, array(
-            'body' => json_encode($zapier_data),
-            'headers' => array(
-                'Content-Type' => 'application/json',
-                'User-Agent' => 'SDPI Plugin/1.0'
-            ),
-            'timeout' => 5, // 5 second timeout
-            'blocking' => false // Non-blocking request
-        ));
-
-        // Log any errors (only in debug mode)
-        if (is_wp_error($response) && WP_DEBUG) {
-            error_log('SDPI Zapier Error: ' . $response->get_error_message());
-        } elseif (WP_DEBUG) {
-            error_log('SDPI Zapier Success: Data sent to webhook');
-        }
+        return $this->push_zapier_payload($payload);
     }
 
 }

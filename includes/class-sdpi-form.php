@@ -2603,13 +2603,20 @@ class SDPI_Form {
         $session_data = is_array($session_row) ? ($session_row['data'] ?? array()) : array();
         $quote_data = isset($session_data['quote']) && is_array($session_data['quote']) ? $session_data['quote'] : array();
         if (!empty($quote_data)) {
+            $documentation_map = $this->merge_documentation_files(array(
+                $session_data['documentation_files'] ?? array(),
+                $quote_data['documentation_files'] ?? array()
+            ));
+            $documentation_list = $this->documentation_files_to_list($documentation_map);
+
             $this->dispatch_zapier_update(
                 $session_id,
                 $quote_data,
                 array(
                     'maritime_details' => $maritime_details,
                     'shipping' => $maritime_shipping_summary,
-                    'transport_type' => 'maritime'
+                    'transport_type' => 'maritime',
+                    'documentation_files' => $documentation_list
                 )
             );
         }

@@ -1067,27 +1067,6 @@ class SDPI_History {
             $documentation_entries = $this->get_documentation_files_from_session($session_id);
         }
         $documentation_files_json = !empty($documentation_entries) ? wp_json_encode($documentation_entries) : '';
-        $vehicle_electric = intval(!empty($form_data['vehicle_electric']));
-
-        $pickup_contact_name = sanitize_text_field($form_data['pickup_contact_name'] ?? '');
-        $pickup_contact_street = sanitize_text_field($form_data['pickup_contact_street'] ?? '');
-        $pickup_contact_type = sanitize_text_field($form_data['pickup_contact_type'] ?? '');
-        $delivery_contact_name = sanitize_text_field($form_data['delivery_contact_name'] ?? '');
-        $delivery_contact_street = sanitize_text_field($form_data['delivery_contact_street'] ?? '');
-
-        $additional_shipping_json = '';
-        if (!empty($form_data['additional_shipping'])) {
-            if (is_array($form_data['additional_shipping'])) {
-                $additional_shipping_json = wp_json_encode($form_data['additional_shipping']);
-            } elseif (is_string($form_data['additional_shipping'])) {
-                $additional_shipping_json = (string) $form_data['additional_shipping'];
-            }
-        }
-
-        $documentation_files_json = '';
-        if (!empty($form_data['documentation_files']) && is_array($form_data['documentation_files'])) {
-            $documentation_files_json = wp_json_encode(array_values($form_data['documentation_files']));
-        }
 
         // Client information
         $client_name = sanitize_text_field($form_data['client_name'] ?? '');
@@ -1131,8 +1110,6 @@ class SDPI_History {
                 $maritime_details = wp_json_encode($form_data['maritime_details']);
             }
         }
-
-        $inoperable_fee = floatval($form_data['inoperable_fee'] ?? 0);
 
         $inoperable_fee = floatval($form_data['inoperable_fee'] ?? 0);
         

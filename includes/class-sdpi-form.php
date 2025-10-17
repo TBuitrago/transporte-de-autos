@@ -447,14 +447,15 @@ class SDPI_Form {
                             <input type="checkbox" id="sdpi_vehicle_inoperable" name="vehicle_inoperable" value="1">
                             El vehiculo no funciona
                         </label>
+                        <small class="sdpi-field-help">Se agregarán $500 USD adicionales al precio final si tu terrestre + marítimo es para un vehículo inoperable.</small>
                     </div>
-                    
+
                     <div class="sdpi-form-group sdpi-option-group">
                         <label class="sdpi-checkbox">
                             <input type="checkbox" id="sdpi_vehicle_electric" name="vehicle_electric" value="1">
                             Vehiculo electrico
                         </label>
-                        <small class="sdpi-field-help">Se agregaran $600 USD adicionales al precio final.</small>
+                        <small class="sdpi-field-help">Se agregarán $600 USD adicionales al precio final si tu terrestre + marítimo es para un vehículo eléctrico.</small>
                     </div>
                     
                     <div class="sdpi-form-grid">
@@ -1084,7 +1085,7 @@ class SDPI_Form {
                                     <input type="text" id="sdpi_m_color" placeholder="e.g., Red, Blue, Black" required>
                                 </div>
                                 <div class="sdpi-form-group sdpi-col-3">
-                                    <label for="sdpi_m_dimensions">Dimensions LxWxH (Optional)</label>
+                                    <label for="sdpi_m_dimensions">Dimensions LxWxH *</label>
                                     <input type="text" id="sdpi_m_dimensions" placeholder="e.g., 15x6x5 ft">
                                 </div>
                             </div>
@@ -1092,6 +1093,7 @@ class SDPI_Form {
 
                         <div class="sdpi-form-card sdpi-review-card sdpi-maritime-shipper-section">
                             <h3>Shipper Information</h3>
+                            <small class="sdpi-field-help">Este formulario debe llenarse con la información del dueño del vehículo.</small>
                             <div class="sdpi-form-row">
                                 <div class="sdpi-form-group sdpi-col-2">
                                     <label for="sdpi_s_name">Shipper Name *</label>
@@ -1113,7 +1115,11 @@ class SDPI_Form {
                                 </div>
                                 <div class="sdpi-form-group sdpi-col-3">
                                     <label for="sdpi_s_country">Shipper Country *</label>
-                                    <input type="text" id="sdpi_s_country" required>
+                                    <select id="sdpi_s_country" required>
+                                        <option value="">Seleccione...</option>
+                                        <option value="USA">Estados Unidos</option>
+                                        <option value="Puerto Rico">Puerto Rico</option>
+                                    </select>
                                 </div>
                             </div>
                             <div class="sdpi-form-row">
@@ -1155,7 +1161,11 @@ class SDPI_Form {
                                 </div>
                                 <div class="sdpi-form-group sdpi-col-3">
                                     <label for="sdpi_c_country">Consignee Country *</label>
-                                    <input type="text" id="sdpi_c_country" required>
+                                    <select id="sdpi_c_country" required>
+                                        <option value="">Seleccione...</option>
+                                        <option value="USA">Estados Unidos</option>
+                                        <option value="Puerto Rico">Puerto Rico</option>
+                                    </select>
                                 </div>
                             </div>
                             <div class="sdpi-form-row">
@@ -1259,7 +1269,7 @@ class SDPI_Form {
                         </div>
 
                         <div class="sdpi-form-card sdpi-review-card">
-                            <h3>Others (Optional)</h3>
+                            <h3>Documentación</h3>
                             <div class="sdpi-form-row">
                                 <div class="sdpi-form-group sdpi-col-3">
                                     <label for="sdpi_m_title">Title</label>

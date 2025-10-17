@@ -126,6 +126,28 @@
         return type;
     }
 
+    function requiresMaritimeDimensions(vehicleType) {
+        if (!vehicleType) { return false; }
+        var normalized = vehicleType.toString().toLowerCase();
+        return normalized.indexOf('van') !== -1 || normalized.indexOf('pickup') !== -1;
+    }
+
+    function toggleMaritimeDimensionsField(vehicleType) {
+        var $input = $('#sdpi_m_dimensions');
+        if (!$input.length) { return; }
+        var $group = $input.closest('.sdpi-form-group');
+        if (!$group.length) { return; }
+
+        var shouldDisplay = requiresMaritimeDimensions(vehicleType);
+        if (shouldDisplay) {
+            $group.show();
+            $input.prop('required', true);
+        } else {
+            $group.hide();
+            $input.prop('required', false).val('');
+        }
+    }
+
     function formatCurrency(amount) {
         var number = parseFloat(amount);
         if (isNaN(number)) {
@@ -1427,6 +1449,8 @@
                     }
                 }
                 $('#sdpi_maritime_direction').val(direction);
+
+                toggleMaritimeDimensionsField(quoteData.vehicle_type || vehicleTypeLabel);
 
                 if (direction === 'usa_to_pr') {
                     $('#sdpi_s_country').val('USA');

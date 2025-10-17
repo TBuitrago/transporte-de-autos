@@ -46,12 +46,26 @@ class SDPI_Maritime {
     ];
     
     /**
-     * Check if a ZIP code is in San Juan, PR
-     * San Juan ZIPs start with 009 (00901-00999)
+     * Check if a ZIP code belongs to Puerto Rico.
+     * Any ZIP in the 00600-00999 range should be treated as San Juan (00901) for maritime routing.
      */
     public static function is_san_juan_zip($zip) {
-        // Check if ZIP starts with 009 (San Juan, PR range)
-        return (strpos($zip, '009') === 0) || ($zip === self::SAN_JUAN_ZIP);
+        if ($zip === null) {
+            return false;
+        }
+
+        // Extract the first 5 digits from the provided value
+        $zip_digits = preg_replace('/\D/', '', (string) $zip);
+        if (strlen($zip_digits) < 5) {
+            $zip_digits = str_pad($zip_digits, 5, '0', STR_PAD_LEFT);
+        }
+        $zip5 = substr($zip_digits, 0, 5);
+        if (strlen($zip5) !== 5) {
+            return false;
+        }
+
+        $prefix = substr($zip5, 0, 3);
+        return in_array($prefix, array('006', '007', '008', '009'), true);
     }
     
     /**

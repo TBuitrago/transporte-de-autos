@@ -1,4 +1,4 @@
-﻿jQuery(document).ready(function($) {
+jQuery(document).ready(function($) {
     $("#sdpi_trailer_type, #sdpi_vehicle_type").on("change", updateLiveSummary);
     $("#sdpi_vehicle_make, #sdpi_vehicle_model, #sdpi_vehicle_year").on("input change", updateLiveSummary);
     $('#sdpi_vehicle_inoperable, #sdpi_vehicle_electric').on('change', updateLiveSummary);
@@ -31,6 +31,1051 @@
     var paymentContext = null;
     var paymentEnabled = typeof sdpi_payment !== 'undefined' && !!sdpi_payment.enabled;
     var paymentBlockedMessage = (typeof sdpi_payment !== 'undefined' && sdpi_payment.message) ? sdpi_payment.message : '';
+
+    var validationPatterns = {
+        city: /^[A-Za-zÀ-ÖØ-öø-ÿ\s\-\.\',]+$/,
+        name: /^[A-Za-zÀ-ÖØ-öø-ÿ\s\-\.\']+$/,
+        alphanumeric: /^[A-Za-z0-9À-ÖØ-öø-ÿ\s\-\.\']+$/,
+        address: /^[A-Za-z0-9À-ÖØ-öø-ÿ\s\-\.\'#&,]+$/,
+        state: /^[A-Za-z]{2}$/,
+        email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+        phone: /^\d{10}$/,
+        zip: /^\d{5}$/,
+        dimensions: /^\d+(\.\d+)?x\d+(\.\d+)?x\d+(\.\d+)?(\s?(ft|feet|'|"|in|cm|m))?$/i
+    };
+    var currentYear = new Date().getFullYear();
+    var trailerTypes = ['open', 'enclosed'];
+    var vehicleTypes = ['sedan', 'suv', 'van', 'coupe_2_doors', 'pickup_2_doors', 'pickup_4_doors'];
+    var pickupTypes = ['Subasta', 'Residencia', 'Dealer o negocio'];
+    var allowedCountries = ['USA', 'Puerto Rico'];
+    var fieldRuleMap = {};
+
+    function sanitizeName(value) {
+        return value.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ'\-\.\s]/g, '');
+    }
+
+    function sanitizeAlphanumeric(value) {
+        return value.replace(/[^A-Za-z0-9À-ÖØ-öø-ÿ'\-\.\s]/g, '');
+    }
+
+    function sanitizeAddress(value) {
+        return value.replace(/[^A-Za-z0-9À-ÖØ-öø-ÿ'\-\.\s#&,]/g, '');
+    }
+
+    function sanitizeState(value) {
+        return value.replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 2);
+    }
+
+    function sanitizePhone(value) {
+        return value.replace(/\D+/g, '').slice(0, 10);
+    }
+
+    function sanitizeZip(value) {
+        return value.replace(/\D+/g, '').slice(0, 5);
+    }
+
+    function sanitizeCurrency(value) {
+        var normalized = value.replace(/[^0-9\.]/g, '');
+        var parts = normalized.split('.');
+        if (parts.length > 2) {
+            normalized = parts.shift() + '.' + parts.join('');
+        }
+        return normalized;
+    }
+
+    function isValidVehicleYear(value) {
+        if (!value) { return false; }
+        var digits = value.replace(/\D+/g, '');
+        if (digits.length !== 4) { return false; }
+        var year = parseInt(digits, 10);
+        return year > 1800 && year <= currentYear + 1;
+    }
+
+    function getFieldGroup($field) {
+        var $group = $field.closest('.sdpi-form-group');
+        if ($group.length) {
+            return $group;
+        }
+        return $field.parent();
+    }
+
+    function ensureErrorElement($group) {
+        var $message = $group.find('.sdpi-field-error').first();
+        if (!$message.length) {
+            $message = $('<p class="sdpi-field-error" aria-live="polite"></p>');
+            $group.append($message);
+        }
+        return $message;
+    }
+
+    function showFieldError($field, message) {
+        var $group = getFieldGroup($field);
+        if (!$group.length) { return; }
+        $group.removeClass('success').addClass('error');
+        $field.removeClass('valid').addClass('invalid').attr('aria-invalid', 'true');
+        var $message = ensureErrorElement($group);
+        $message.text(message || 'Por favor corrija este campo.').show();
+    }
+
+    function markFieldValid($field) {
+        var $group = getFieldGroup($field);
+        if (!$group.length) { return; }
+        $group.removeClass('error');
+        var value = ($field.val() || '').trim();
+        if (value !== '') {
+            $group.addClass('success');
+            $field.addClass('valid');
+        } else {
+            $group.removeClass('success');
+            $field.removeClass('valid');
+        }
+        $field.removeClass('invalid').attr('aria-invalid', 'false');
+        var $message = $group.find('.sdpi-field-error');
+        if ($message.length) {
+            $message.hide().text('');
+        }
+    }
+
+    function clearFieldState($field) {
+        var $group = getFieldGroup($field);
+        if (!$group.length) { return; }
+        $group.removeClass('error success');
+        $field.removeClass('invalid valid').attr('aria-invalid', 'false');
+        var $message = $group.find('.sdpi-field-error');
+        if ($message.length) {
+            $message.hide().text('');
+        }
+    }
+
+    function validateField($field, rule) {
+        if (!$field || !$field.length) { return true; }
+        if (!$field.is(':visible') && !rule.validateHidden) {
+            clearFieldState($field);
+            return true;
+        }
+
+        var shouldValidate = typeof rule.shouldValidate === 'function' ? rule.shouldValidate($field) : true;
+        if (!shouldValidate) {
+            clearFieldState($field);
+            return true;
+        }
+
+        var rawValue = typeof rule.getValue === 'function' ? rule.getValue($field) : $field.val();
+        if (rawValue === null || typeof rawValue === 'undefined') {
+            rawValue = '';
+        }
+        if (typeof rawValue !== 'string') {
+            rawValue = String(rawValue);
+        }
+
+        if (typeof rule.sanitize === 'function') {
+            var sanitized = rule.sanitize(rawValue, $field, rule);
+            if (typeof sanitized === 'string') {
+                rawValue = sanitized;
+                if ($field.val() !== sanitized) {
+                    $field.val(sanitized);
+                }
+            } else if (sanitized !== undefined && sanitized !== null) {
+                rawValue = sanitized;
+            }
+        }
+
+        var value = rawValue.trim();
+
+        if (rule.optional && value === '') {
+            clearFieldState($field);
+            return true;
+        }
+
+        var result = rule.validator ? rule.validator(value, $field, rule) : { valid: true };
+        if (typeof result === 'boolean') {
+            result = { valid: result };
+        }
+
+        if (result.valid) {
+            if (rule.showSuccess === false) {
+                clearFieldState($field);
+            } else {
+                markFieldValid($field);
+            }
+            return true;
+        }
+
+        showFieldError($field, result.message || rule.message || 'Este campo contiene un valor inválido.');
+        return false;
+    }
+
+    function attachFieldValidation(rule) {
+        var events = rule.events || 'input blur change';
+        $(document).on(events, rule.selector, function() {
+            validateField($(this), rule);
+        });
+    }
+
+    function validateFieldBySelector(selector) {
+        var rule = fieldRuleMap[selector];
+        if (!rule) { return true; }
+        var $field = $(selector);
+        if (!$field.length) { return true; }
+        return validateField($field, rule);
+    }
+
+    var validationRules = {};
+
+    validationRules['#sdpi-pricing-form'] = [
+        {
+            selector: '#sdpi_pickup_city',
+            events: 'blur change',
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Ingresa la ciudad de origen.' };
+                }
+                if (!validationPatterns.city.test(value)) {
+                    return { valid: false, message: 'La ciudad de origen solo puede incluir letras y comas.' };
+                }
+                var zip = ($('#sdpi_pickup_zip').val() || '').trim();
+                if (!validationPatterns.zip.test(zip)) {
+                    return { valid: false, message: 'Selecciona una ciudad de origen válida de EE. UU. con un ZIP de 5 dígitos.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_delivery_city',
+            events: 'blur change',
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Ingresa la ciudad de destino.' };
+                }
+                if (!validationPatterns.city.test(value)) {
+                    return { valid: false, message: 'La ciudad de destino solo puede incluir letras y comas.' };
+                }
+                var zip = ($('#sdpi_delivery_zip').val() || '').trim();
+                if (!validationPatterns.zip.test(zip)) {
+                    return { valid: false, message: 'Selecciona una ciudad de destino válida de EE. UU. con un ZIP de 5 dígitos.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_trailer_type',
+            events: 'change blur',
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Selecciona el tipo de tráiler.' };
+                }
+                if (trailerTypes.indexOf(value) === -1) {
+                    return { valid: false, message: 'Selecciona un tipo de tráiler válido.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_vehicle_type',
+            events: 'change blur',
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Selecciona el tipo de vehículo.' };
+                }
+                if (vehicleTypes.indexOf(value) === -1) {
+                    return { valid: false, message: 'Selecciona un tipo de vehículo válido.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_vehicle_make',
+            sanitize: sanitizeAlphanumeric,
+            validator: function(value) {
+                if (!value) { return { valid: true }; }
+                if (!validationPatterns.alphanumeric.test(value)) {
+                    return { valid: false, message: 'La marca del vehículo solo puede incluir letras, números, espacios y guiones.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_vehicle_model',
+            sanitize: sanitizeAlphanumeric,
+            validator: function(value) {
+                if (!value) { return { valid: true }; }
+                if (!validationPatterns.alphanumeric.test(value)) {
+                    return { valid: false, message: 'El modelo del vehículo solo puede incluir letras, números, espacios y guiones.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_vehicle_year',
+            sanitize: sanitizeZip,
+            validator: function(value) {
+                if (!value) { return { valid: true }; }
+                if (!isValidVehicleYear(value)) {
+                    return { valid: false, message: 'Ingresa un año de vehículo válido (4 dígitos mayores a 1800).' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        }
+    ];
+
+    validationRules['#sdpi-contact-form'] = [
+        {
+            selector: '#sdpi_contact_name',
+            sanitize: sanitizeName,
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Ingresa tu nombre completo.' };
+                }
+                if (!validationPatterns.name.test(value)) {
+                    return { valid: false, message: 'El nombre solo puede incluir letras, espacios, guiones y apóstrofes.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_contact_phone',
+            sanitize: sanitizePhone,
+            validator: function(value) {
+                if (!validationPatterns.phone.test(value)) {
+                    return { valid: false, message: 'Ingresa un número de teléfono de EE. UU. válido de 10 dígitos con código de área.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_contact_email',
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Ingresa tu correo electrónico.' };
+                }
+                if (!validationPatterns.email.test(value)) {
+                    return { valid: false, message: 'Ingresa un correo electrónico válido.' };
+                }
+                return { valid: true };
+            }
+        }
+    ];
+
+    validationRules['#sdpi-additional-info-form'] = [
+        {
+            selector: '#sdpi_ai_p_name',
+            sanitize: sanitizeName,
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Ingresa el nombre de la persona que entrega el vehículo.' };
+                }
+                if (!validationPatterns.name.test(value)) {
+                    return { valid: false, message: 'El nombre de quien entrega solo puede incluir letras y espacios.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_ai_p_street',
+            sanitize: sanitizeAddress,
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Ingresa la dirección de recogida.' };
+                }
+                if (!validationPatterns.address.test(value)) {
+                    return { valid: false, message: 'La dirección de recogida contiene caracteres no permitidos.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_ai_p_city',
+            sanitize: sanitizeName,
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Ingresa la ciudad de recogida.' };
+                }
+                if (!validationPatterns.city.test(value)) {
+                    return { valid: false, message: 'La ciudad de recogida solo puede incluir letras y comas.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_ai_p_zip',
+            sanitize: sanitizeZip,
+            validator: function(value) {
+                if (!validationPatterns.zip.test(value)) {
+                    return { valid: false, message: 'Ingresa un ZIP de recogida válido de 5 dígitos en EE. UU.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_ai_d_name',
+            sanitize: sanitizeName,
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Ingresa el nombre de la persona que recibe el vehículo.' };
+                }
+                if (!validationPatterns.name.test(value)) {
+                    return { valid: false, message: 'El nombre de quien recibe solo puede incluir letras y espacios.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_ai_d_street',
+            sanitize: sanitizeAddress,
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Ingresa la dirección de entrega.' };
+                }
+                if (!validationPatterns.address.test(value)) {
+                    return { valid: false, message: 'La dirección de entrega contiene caracteres no permitidos.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_ai_d_city',
+            sanitize: sanitizeName,
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Ingresa la ciudad de entrega.' };
+                }
+                if (!validationPatterns.city.test(value)) {
+                    return { valid: false, message: 'La ciudad de entrega solo puede incluir letras y comas.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_ai_d_zip',
+            sanitize: sanitizeZip,
+            validator: function(value) {
+                if (!validationPatterns.zip.test(value)) {
+                    return { valid: false, message: 'Ingresa un ZIP de entrega válido de 5 dígitos en EE. UU.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_ai_pickup_type',
+            events: 'change blur',
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Selecciona el tipo de punto de recogida.' };
+                }
+                if (pickupTypes.indexOf(value) === -1) {
+                    return { valid: false, message: 'Selecciona un tipo de recogida válido.' };
+                }
+                return { valid: true };
+            }
+        }
+    ];
+
+    validationRules['#sdpi-maritime-info-form'] = [
+        {
+            selector: '#sdpi_m_unit_value',
+            sanitize: sanitizeCurrency,
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Ingresa el valor del vehículo en dólares estadounidenses.' };
+                }
+                var amount = parseFloat(value);
+                if (isNaN(amount) || amount <= 0) {
+                    return { valid: false, message: 'El valor del vehículo debe ser un número positivo.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_m_color',
+            sanitize: sanitizeName,
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Indica el color del vehículo.' };
+                }
+                if (!validationPatterns.name.test(value)) {
+                    return { valid: false, message: 'El color solo puede incluir letras y espacios.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_m_dimensions',
+            validator: function(value, $field) {
+                if (!$field.is(':visible') || !$field.prop('required')) {
+                    clearFieldState($field);
+                    return { valid: true };
+                }
+                if (!value) {
+                    return { valid: false, message: 'Indica las dimensiones en formato Largo x Ancho x Alto.' };
+                }
+                if (!validationPatterns.dimensions.test(value)) {
+                    return { valid: false, message: 'Las dimensiones deben seguir el formato 15x6x5 con unidades opcionales.' };
+                }
+                return { valid: true };
+            },
+            optional: true,
+            showSuccess: true
+        },
+        {
+            selector: '#sdpi_s_name',
+            sanitize: sanitizeName,
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Ingresa el nombre del shipper.' };
+                }
+                if (!validationPatterns.name.test(value)) {
+                    return { valid: false, message: 'El nombre del shipper solo puede incluir letras y espacios.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_s_street',
+            sanitize: sanitizeAddress,
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Ingresa la dirección del shipper.' };
+                }
+                if (!validationPatterns.address.test(value)) {
+                    return { valid: false, message: 'La dirección del shipper contiene caracteres no permitidos.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_s_city',
+            sanitize: sanitizeName,
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Ingresa la ciudad del shipper.' };
+                }
+                if (!validationPatterns.city.test(value)) {
+                    return { valid: false, message: 'La ciudad del shipper solo puede incluir letras y comas.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_s_state',
+            sanitize: sanitizeState,
+            validator: function(value) {
+                if (!validationPatterns.state.test(value)) {
+                    return { valid: false, message: 'Ingresa el estado del shipper usando el código de dos letras.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_s_country',
+            events: 'change blur',
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Selecciona el país del shipper.' };
+                }
+                if (allowedCountries.indexOf(value) === -1) {
+                    return { valid: false, message: 'Selecciona un país válido (USA o Puerto Rico).' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_s_zip',
+            sanitize: sanitizeZip,
+            validator: function(value) {
+                if (!validationPatterns.zip.test(value)) {
+                    return { valid: false, message: 'Ingresa un ZIP del shipper válido de 5 dígitos en EE. UU.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_s_phone1',
+            sanitize: sanitizePhone,
+            validator: function(value) {
+                if (!validationPatterns.phone.test(value)) {
+                    return { valid: false, message: 'Ingresa un teléfono principal del shipper con 10 dígitos válidos.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_s_phone2',
+            sanitize: sanitizePhone,
+            validator: function(value) {
+                if (!value) { return { valid: true }; }
+                if (!validationPatterns.phone.test(value)) {
+                    return { valid: false, message: 'El teléfono secundario del shipper debe tener 10 dígitos válidos.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_c_name',
+            sanitize: sanitizeName,
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Ingresa el nombre del consignatario.' };
+                }
+                if (!validationPatterns.name.test(value)) {
+                    return { valid: false, message: 'El nombre del consignatario solo puede incluir letras y espacios.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_c_street',
+            sanitize: sanitizeAddress,
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Ingresa la dirección del consignatario.' };
+                }
+                if (!validationPatterns.address.test(value)) {
+                    return { valid: false, message: 'La dirección del consignatario contiene caracteres no permitidos.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_c_city',
+            sanitize: sanitizeName,
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Ingresa la ciudad del consignatario.' };
+                }
+                if (!validationPatterns.city.test(value)) {
+                    return { valid: false, message: 'La ciudad del consignatario solo puede incluir letras y comas.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_c_state',
+            sanitize: sanitizeState,
+            validator: function(value) {
+                if (!validationPatterns.state.test(value)) {
+                    return { valid: false, message: 'Ingresa el estado del consignatario con dos letras.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_c_country',
+            events: 'change blur',
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Selecciona el país del consignatario.' };
+                }
+                if (allowedCountries.indexOf(value) === -1) {
+                    return { valid: false, message: 'Selecciona un país válido (USA o Puerto Rico).' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_c_zip',
+            sanitize: sanitizeZip,
+            validator: function(value) {
+                if (!validationPatterns.zip.test(value)) {
+                    return { valid: false, message: 'Ingresa un ZIP del consignatario válido de 5 dígitos en EE. UU.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_c_phone1',
+            sanitize: sanitizePhone,
+            validator: function(value) {
+                if (!validationPatterns.phone.test(value)) {
+                    return { valid: false, message: 'Ingresa un teléfono principal del consignatario con 10 dígitos válidos.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_c_phone2',
+            sanitize: sanitizePhone,
+            validator: function(value) {
+                if (!value) { return { valid: true }; }
+                if (!validationPatterns.phone.test(value)) {
+                    return { valid: false, message: 'El teléfono secundario del consignatario debe tener 10 dígitos válidos.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_p_name',
+            sanitize: sanitizeName,
+            shouldValidate: function() {
+                return $('#sdpi-pickup-section').is(':visible') || ($('#sdpi_p_name').val() || '').trim() !== '';
+            },
+            validator: function(value, $field, rule) {
+                if (!rule.shouldValidate($field)) {
+                    clearFieldState($field);
+                    return { valid: true };
+                }
+                if (!value) {
+                    return { valid: false, message: 'Ingresa el nombre del contacto de recogida.' };
+                }
+                if (!validationPatterns.name.test(value)) {
+                    return { valid: false, message: 'El nombre de recogida solo puede incluir letras y espacios.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_p_street',
+            sanitize: sanitizeAddress,
+            shouldValidate: function() {
+                return $('#sdpi-pickup-section').is(':visible') || ($('#sdpi_p_street').val() || '').trim() !== '';
+            },
+            validator: function(value, $field, rule) {
+                if (!rule.shouldValidate($field)) {
+                    clearFieldState($field);
+                    return { valid: true };
+                }
+                if (!value) {
+                    return { valid: false, message: 'Ingresa la dirección de recogida.' };
+                }
+                if (!validationPatterns.address.test(value)) {
+                    return { valid: false, message: 'La dirección de recogida contiene caracteres no permitidos.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_p_city',
+            sanitize: sanitizeName,
+            shouldValidate: function() {
+                return $('#sdpi-pickup-section').is(':visible') || ($('#sdpi_p_city').val() || '').trim() !== '';
+            },
+            validator: function(value, $field, rule) {
+                if (!rule.shouldValidate($field)) {
+                    clearFieldState($field);
+                    return { valid: true };
+                }
+                if (!value) {
+                    return { valid: false, message: 'Ingresa la ciudad de recogida.' };
+                }
+                if (!validationPatterns.city.test(value)) {
+                    return { valid: false, message: 'La ciudad de recogida solo puede incluir letras y comas.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_p_state',
+            sanitize: sanitizeState,
+            shouldValidate: function() {
+                return $('#sdpi-pickup-section').is(':visible') || ($('#sdpi_p_state').val() || '').trim() !== '';
+            },
+            validator: function(value, $field, rule) {
+                if (!rule.shouldValidate($field)) {
+                    clearFieldState($field);
+                    return { valid: true };
+                }
+                if (!validationPatterns.state.test(value)) {
+                    return { valid: false, message: 'Ingresa el estado de recogida con dos letras.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_p_zip_code',
+            sanitize: sanitizeZip,
+            shouldValidate: function() {
+                return $('#sdpi-pickup-section').is(':visible') || ($('#sdpi_p_zip_code').val() || '').trim() !== '';
+            },
+            validator: function(value, $field, rule) {
+                if (!rule.shouldValidate($field)) {
+                    clearFieldState($field);
+                    return { valid: true };
+                }
+                if (!validationPatterns.zip.test(value)) {
+                    return { valid: false, message: 'Ingresa un ZIP de recogida válido de 5 dígitos.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_p_phone1',
+            sanitize: sanitizePhone,
+            shouldValidate: function() {
+                return $('#sdpi-pickup-section').is(':visible') || ($('#sdpi_p_phone1').val() || '').trim() !== '';
+            },
+            validator: function(value, $field, rule) {
+                if (!rule.shouldValidate($field)) {
+                    clearFieldState($field);
+                    return { valid: true };
+                }
+                if (!validationPatterns.phone.test(value)) {
+                    return { valid: false, message: 'Ingresa un teléfono principal de recogida con 10 dígitos válidos.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_p_phone2',
+            sanitize: sanitizePhone,
+            validator: function(value) {
+                if (!value) { return { valid: true }; }
+                if (!validationPatterns.phone.test(value)) {
+                    return { valid: false, message: 'El teléfono secundario de recogida debe tener 10 dígitos válidos.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_d_name',
+            sanitize: sanitizeName,
+            shouldValidate: function() {
+                return $('#sdpi-dropoff-section').is(':visible') || ($('#sdpi_d_name').val() || '').trim() !== '';
+            },
+            validator: function(value, $field, rule) {
+                if (!rule.shouldValidate($field)) {
+                    clearFieldState($field);
+                    return { valid: true };
+                }
+                if (!value) {
+                    return { valid: false, message: 'Ingresa el nombre del contacto de entrega.' };
+                }
+                if (!validationPatterns.name.test(value)) {
+                    return { valid: false, message: 'El nombre de entrega solo puede incluir letras y espacios.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_d_street',
+            sanitize: sanitizeAddress,
+            shouldValidate: function() {
+                return $('#sdpi-dropoff-section').is(':visible') || ($('#sdpi_d_street').val() || '').trim() !== '';
+            },
+            validator: function(value, $field, rule) {
+                if (!rule.shouldValidate($field)) {
+                    clearFieldState($field);
+                    return { valid: true };
+                }
+                if (!value) {
+                    return { valid: false, message: 'Ingresa la dirección de entrega.' };
+                }
+                if (!validationPatterns.address.test(value)) {
+                    return { valid: false, message: 'La dirección de entrega contiene caracteres no permitidos.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_d_city',
+            sanitize: sanitizeName,
+            shouldValidate: function() {
+                return $('#sdpi-dropoff-section').is(':visible') || ($('#sdpi_d_city').val() || '').trim() !== '';
+            },
+            validator: function(value, $field, rule) {
+                if (!rule.shouldValidate($field)) {
+                    clearFieldState($field);
+                    return { valid: true };
+                }
+                if (!value) {
+                    return { valid: false, message: 'Ingresa la ciudad de entrega.' };
+                }
+                if (!validationPatterns.city.test(value)) {
+                    return { valid: false, message: 'La ciudad de entrega solo puede incluir letras y comas.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_d_state',
+            sanitize: sanitizeState,
+            shouldValidate: function() {
+                return $('#sdpi-dropoff-section').is(':visible') || ($('#sdpi_d_state').val() || '').trim() !== '';
+            },
+            validator: function(value, $field, rule) {
+                if (!rule.shouldValidate($field)) {
+                    clearFieldState($field);
+                    return { valid: true };
+                }
+                if (!validationPatterns.state.test(value)) {
+                    return { valid: false, message: 'Ingresa el estado de entrega con dos letras.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_d_zip_code',
+            sanitize: sanitizeZip,
+            shouldValidate: function() {
+                return $('#sdpi-dropoff-section').is(':visible') || ($('#sdpi_d_zip_code').val() || '').trim() !== '';
+            },
+            validator: function(value, $field, rule) {
+                if (!rule.shouldValidate($field)) {
+                    clearFieldState($field);
+                    return { valid: true };
+                }
+                if (!validationPatterns.zip.test(value)) {
+                    return { valid: false, message: 'Ingresa un ZIP de entrega válido de 5 dígitos.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_d_phone1',
+            sanitize: sanitizePhone,
+            shouldValidate: function() {
+                return $('#sdpi-dropoff-section').is(':visible') || ($('#sdpi_d_phone1').val() || '').trim() !== '';
+            },
+            validator: function(value, $field, rule) {
+                if (!rule.shouldValidate($field)) {
+                    clearFieldState($field);
+                    return { valid: true };
+                }
+                if (!validationPatterns.phone.test(value)) {
+                    return { valid: false, message: 'Ingresa un teléfono principal de entrega con 10 dígitos válidos.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_d_phone2',
+            sanitize: sanitizePhone,
+            validator: function(value) {
+                if (!value) { return { valid: true }; }
+                if (!validationPatterns.phone.test(value)) {
+                    return { valid: false, message: 'El teléfono secundario de entrega debe tener 10 dígitos válidos.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_m_title',
+            sanitize: sanitizeAlphanumeric,
+            validator: function(value) {
+                if (!value) { return { valid: true }; }
+                if (!validationPatterns.alphanumeric.test(value)) {
+                    return { valid: false, message: 'El título solo puede incluir letras, números y espacios.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_m_registration',
+            sanitize: sanitizeAlphanumeric,
+            validator: function(value) {
+                if (!value) { return { valid: true }; }
+                if (!validationPatterns.alphanumeric.test(value)) {
+                    return { valid: false, message: 'El número de registro solo puede incluir letras, números y espacios.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        },
+        {
+            selector: '#sdpi_m_id',
+            sanitize: sanitizeAlphanumeric,
+            validator: function(value) {
+                if (!value) { return { valid: true }; }
+                if (!validationPatterns.alphanumeric.test(value)) {
+                    return { valid: false, message: 'El identificador solo puede incluir letras, números y espacios.' };
+                }
+                return { valid: true };
+            },
+            optional: true
+        }
+    ];
+
+    validationRules['#sdpi-registration-form'] = [
+        {
+            selector: '#sdpi_user_name',
+            sanitize: sanitizeName,
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Ingresa tu nombre completo.' };
+                }
+                if (!validationPatterns.name.test(value)) {
+                    return { valid: false, message: 'El nombre solo puede incluir letras, espacios, guiones y apóstrofes.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_user_phone',
+            sanitize: sanitizePhone,
+            validator: function(value) {
+                if (!validationPatterns.phone.test(value)) {
+                    return { valid: false, message: 'Ingresa un número de teléfono de EE. UU. válido de 10 dígitos con código de área.' };
+                }
+                return { valid: true };
+            }
+        },
+        {
+            selector: '#sdpi_user_email',
+            validator: function(value) {
+                if (!value) {
+                    return { valid: false, message: 'Ingresa tu correo electrónico.' };
+                }
+                if (!validationPatterns.email.test(value)) {
+                    return { valid: false, message: 'Ingresa un correo electrónico válido.' };
+                }
+                return { valid: true };
+            }
+        }
+    ];
+
+    Object.keys(validationRules).forEach(function(formSelector) {
+        var rules = validationRules[formSelector];
+        if (!Array.isArray(rules)) { return; }
+        rules.forEach(function(rule) {
+            fieldRuleMap[rule.selector] = rule;
+            attachFieldValidation(rule);
+        });
+    });
+
+    function runFormValidation(formSelector) {
+        var rules = validationRules[formSelector] || [];
+        var isValid = true;
+        var firstInvalid = null;
+
+        rules.forEach(function(rule) {
+            var $fields = $(rule.selector);
+            if (!$fields.length) { return; }
+            $fields.each(function() {
+                var $field = $(this);
+                if (!validateField($field, rule)) {
+                    if (isValid) {
+                        isValid = false;
+                        firstInvalid = $field;
+                    }
+                }
+            });
+        });
+
+        return { valid: isValid, firstInvalid: firstInvalid };
+    }
+
+    window.SDPIValidation = window.SDPIValidation || {};
+    window.SDPIValidation.validateForm = runFormValidation;
+    window.SDPIValidation.validateField = validateFieldBySelector;
+    window.SDPIValidation.clearFieldState = clearFieldState;
 
     function setProgressStep(step) {
         currentProgressStep = step;
@@ -782,10 +1827,11 @@
         // Set the selected city
         $('#' + fieldId).val(cityData.text);
         $('#' + fieldId.replace('_city', '_zip')).val(cityData.zips ? cityData.zips.split(' ')[0] : '');
-        
+
         // Hide results
         $('#' + resultsId).empty().hide();
 
+        validateFieldBySelector('#' + fieldId);
         updateLiveSummary();
     });
     
@@ -850,7 +1896,16 @@
     // MODIFICADO: Handle form submission - Nuevo flujo con captura de contacto despuÃƒÆ’Ã‚Â©s
     $('#sdpi-pricing-form').on('submit', function(e) {
         e.preventDefault();
-        
+
+        var validationResult = runFormValidation('#sdpi-pricing-form');
+        if (!validationResult.valid) {
+            if (validationResult.firstInvalid && validationResult.firstInvalid.length) {
+                validationResult.firstInvalid.focus();
+            }
+            updateSummaryFooter('error', 'Corrige los campos marcados en rojo para continuar.');
+            return;
+        }
+
         // Get form data
         var formData = {
             action: 'sdpi_get_quote',
@@ -870,12 +1925,6 @@
         
         // Debug logging
         console.log('SDPI FRONTEND DEBUG - Form Data:', formData);
-        
-        // Validate required fields
-        if (!formData.pickup_zip || !formData.delivery_zip || !formData.trailer_type || !formData.vehicle_type) {
-            alert('Por favor complete todos los campos requeridos.');
-            return;
-        }
         
         // Show loading
         $('#sdpi-loading').show();
@@ -1030,6 +2079,14 @@
             return;
         }
 
+        var contactValidation = runFormValidation('#sdpi-contact-form');
+        if (!contactValidation.valid) {
+            if (contactValidation.firstInvalid && contactValidation.firstInvalid.length) {
+                contactValidation.firstInvalid.focus();
+            }
+            return;
+        }
+
         var contactData = {
             action: 'sdpi_finalize_quote_with_contact',
             nonce: sdpi_ajax.nonce,
@@ -1039,19 +2096,6 @@
             quote_data: JSON.stringify(window.currentQuoteData)
         };
 
-        // ValidaciON BASICA
-        if (!contactData.client_name || !contactData.client_phone || !contactData.client_email) {
-            alert('Todos los campos de contacto son requeridos.');
-            return;
-        }
-
-        // vALIDACION de email
-        var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(contactData.client_email)) {
-            alert('Por favor ingrese un correo eletrónico válido.');
-            return;
-        }
-        
         // Mostrar loading
         $('#sdpi-contact-submit-btn').prop('disabled', true).text('Procesando...');
         $('#sdpi-loading').show();
@@ -1548,6 +2592,14 @@
         var container = $('#sdpi-additional-info');
         var quoteData = container.data('quote') || {};
 
+        var additionalValidation = runFormValidation('#sdpi-additional-info-form');
+        if (!additionalValidation.valid) {
+            if (additionalValidation.firstInvalid && additionalValidation.firstInvalid.length) {
+                additionalValidation.firstInvalid.focus();
+            }
+            return;
+        }
+
         var payload = {
             action: 'sdpi_save_additional_info',
             nonce: sdpi_ajax.nonce,
@@ -1561,13 +2613,6 @@
             d_zip: $('#sdpi_ai_d_zip').val().trim(),
             pickup_type: $('#sdpi_ai_pickup_type').val().trim()
         };
-
-        if (!payload.p_name || !payload.p_street || !payload.p_city || !/^\d{5}$/.test(payload.p_zip) ||
-            !payload.d_name || !payload.d_street || !payload.d_city || !/^\d{5}$/.test(payload.d_zip) ||
-            !payload.pickup_type) {
-            alert('Por favor complete todos los campos obligatorios con Informacion válida.');
-            return;
-        }
 
         var originalText = btn.data('original-text') || btn.text();
         btn.data('original-text', originalText);
@@ -1626,10 +2671,11 @@
 
     $(document).on('click', '#sdpi-maritime-continue', function() {
         var btn = $(this);
-        var form = $('#sdpi-maritime-info-form')[0];
-
-        if (form && !form.checkValidity()) {
-            form.reportValidity();
+        var maritimeValidation = runFormValidation('#sdpi-maritime-info-form');
+        if (!maritimeValidation.valid) {
+            if (maritimeValidation.firstInvalid && maritimeValidation.firstInvalid.length) {
+                maritimeValidation.firstInvalid.focus();
+            }
             return;
         }
 

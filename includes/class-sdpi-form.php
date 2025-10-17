@@ -205,6 +205,65 @@ class SDPI_Form {
         return false;
     }
 
+    private function normalize_digits($value, $length = null) {
+        $digits = preg_replace('/\D+/', '', (string) $value);
+        if ($length !== null) {
+            $digits = substr($digits, 0, (int) $length);
+        }
+        return $digits;
+    }
+
+    private function validate_us_zip($zip) {
+        return (bool) preg_match('/^\d{5}$/', (string) $zip);
+    }
+
+    private function validate_us_phone($phone) {
+        return strlen($this->normalize_digits($phone)) === 10;
+    }
+
+    private function validate_state_code($state) {
+        return (bool) preg_match('/^[A-Za-z]{2}$/', (string) $state);
+    }
+
+    private function normalize_state_code($state) {
+        $letters = preg_replace('/[^A-Za-z]/', '', (string) $state);
+        return strtoupper(substr($letters, 0, 2));
+    }
+
+    private function validate_person_name($value) {
+        return (bool) preg_match("/^[\p{L}\s'\-\.,]+$/u", (string) $value);
+    }
+
+    private function validate_city_name($value) {
+        return (bool) preg_match("/^[\p{L}\s'\-\.,]+$/u", (string) $value);
+    }
+
+    private function validate_address_line($value) {
+        return (bool) preg_match("/^[\p{L}0-9\s'\-#\.,&]+$/u", (string) $value);
+    }
+
+    private function validate_generic_text($value) {
+        return (bool) preg_match("/^[\p{L}0-9\s'\-\.,]+$/u", (string) $value);
+    }
+
+    private function validate_vehicle_year_value($year) {
+        $year = (int) $year;
+        $current = (int) date('Y') + 1;
+        return $year > 1800 && $year <= $current;
+    }
+
+    private function validate_dimensions_value($value) {
+        if ($value === '' || $value === null) {
+            return true;
+        }
+        return (bool) preg_match("/^\d+(?:\.\d+)?x\d+(?:\.\d+)?x\d+(?:\.\d+)?(?:\s?(?:ft|feet|'|\"|in|cm|m))?$/i", (string) $value);
+    }
+
+    private function validate_allowed_country($country) {
+        $normalized = strtoupper(trim((string) $country));
+        return in_array($normalized, array('USA', 'PUERTO RICO'), true);
+    }
+
     /**
      * Check if client contact info has been captured
      */
@@ -1429,6 +1488,16 @@ class SDPI_Form {
             $('#sdpi-registration-form').on('submit', function(e) {
                 e.preventDefault();
 
+                var validator = (window.SDPIValidation && typeof window.SDPIValidation.validateForm === 'function')
+                    ? window.SDPIValidation.validateForm('#sdpi-registration-form')
+                    : { valid: true };
+                if (!validator.valid) {
+                    if (validator.firstInvalid && validator.firstInvalid.length) {
+                        validator.firstInvalid.focus();
+                    }
+                    return;
+                }
+
                 var formData = {
                     action: 'sdpi_save_client_info',
                     nonce: $('input[name="sdpi_nonce"]').val(),
@@ -1436,23 +1505,6 @@ class SDPI_Form {
                     client_phone: $('#sdpi_user_phone').val().trim(),
                     client_email: $('#sdpi_user_email').val().trim()
                 };
-
-                // Basic validation
-                if (!formData.client_name || !formData.client_phone || !formData.client_email) {
-                    $('#sdpi-client-info-title').text('Error');
-                    $('#sdpi-client-info-message').text('Todos los campos son requeridos.');
-                    $('#sdpi-client-info-results').removeClass('success').addClass('error').show();
-                    return;
-                }
-
-                // Email validation
-                var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                if (!emailRegex.test(formData.client_email)) {
-                    $('#sdpi-client-info-title').text('Error');
-                    $('#sdpi-client-info-message').text('Por favor ingrese un correo electrÃƒÂ³nico vÃƒÂ¡lido.');
-                    $('#sdpi-client-info-results').removeClass('success').addClass('error').show();
-                    return;
-                }
 
                 // Show loading
                 $('#sdpi-client-info-btn').prop('disabled', true).text('Guardando...');
@@ -1522,8 +1574,19 @@ class SDPI_Form {
             exit;
         }
 
+        if (!$this->validate_person_name($client_name)) {
+            wp_send_json_error('Ingresa un nombre válido utilizando letras y espacios.');
+            exit;
+        }
+
+        if (!$this->validate_us_phone($client_phone)) {
+            wp_send_json_error('Ingresa un número de teléfono de EE. UU. válido con 10 dígitos.');
+            exit;
+        }
+        $client_phone = $this->normalize_digits($client_phone, 10);
+
         if (!is_email($client_email)) {
-            wp_send_json_error('Por favor ingrese un correo electrÃƒÂ³nico vÃƒÂ¡lido.');
+            wp_send_json_error('Por favor ingresa un correo electrónico válido.');
             exit;
         }
 
@@ -1577,8 +1640,19 @@ class SDPI_Form {
             exit;
         }
 
+        if (!$this->validate_person_name($client_name)) {
+            wp_send_json_error('Ingresa un nombre de contacto válido utilizando letras y espacios.');
+            exit;
+        }
+
+        if (!$this->validate_us_phone($client_phone)) {
+            wp_send_json_error('Ingresa un número de teléfono de EE. UU. válido con 10 dígitos.');
+            exit;
+        }
+        $client_phone = $this->normalize_digits($client_phone, 10);
+
         if (!is_email($client_email)) {
-            wp_send_json_error('Por favor ingrese un correo electrÃƒÂ³nico vÃƒÂ¡lido.');
+            wp_send_json_error('Por favor ingresa un correo electrónico válido.');
             exit;
         }
 
@@ -1712,15 +1786,32 @@ class SDPI_Form {
             exit;
         }
 
-        // Validate ZIP codes
-        if (!preg_match('/^\d{5}$/', $p_zip) || !preg_match('/^\d{5}$/', $d_zip)) {
-            wp_send_json_error('Los cÃƒÂ³digos postales deben tener 5 dÃƒÂ­gitos.');
+        if (!$this->validate_person_name($p_name) || !$this->validate_person_name($d_name)) {
+            wp_send_json_error('Los nombres de recogida y entrega deben contener únicamente letras y espacios.');
             exit;
         }
 
-        // Validate pickup type
+        if (!$this->validate_address_line($p_street) || !$this->validate_address_line($d_street)) {
+            wp_send_json_error('Las direcciones de recogida y entrega contienen caracteres no permitidos.');
+            exit;
+        }
+
+        if (!$this->validate_city_name($p_city) || !$this->validate_city_name($d_city)) {
+            wp_send_json_error('Las ciudades de recogida y entrega deben contener únicamente letras y espacios.');
+            exit;
+        }
+
+        if (!$this->validate_us_zip($p_zip) || !$this->validate_us_zip($d_zip)) {
+            wp_send_json_error('Los códigos postales deben tener exactamente 5 dígitos de EE. UU.');
+            exit;
+        }
+
+        $p_zip = $this->normalize_digits($p_zip, 5);
+        $d_zip = $this->normalize_digits($d_zip, 5);
+
+        // Validate ZIP codes
         $valid_pickup_types = array('Subasta', 'Residencia', 'Dealer o negocio');
-        if (!in_array($pickup_type, $valid_pickup_types)) {
+        if (!in_array($pickup_type, $valid_pickup_types, true)) {
             wp_send_json_error('Tipo de recogida invÃƒÂ¡lido.');
             exit;
         }
@@ -1844,6 +1935,16 @@ class SDPI_Form {
             exit;
         }
 
+        if (!$this->validate_person_name($color)) {
+            wp_send_json_error('Ingresa un color del vehículo válido.');
+            exit;
+        }
+
+        if (!$this->validate_dimensions_value($dimensions)) {
+            wp_send_json_error('Las dimensiones deben tener el formato Largo x Ancho x Alto con unidades opcionales.');
+            exit;
+        }
+
         $shipper = array(
             'name' => sanitize_text_field($_POST['shipper_name'] ?? ''),
             'street' => sanitize_text_field($_POST['shipper_street'] ?? ''),
@@ -1855,13 +1956,6 @@ class SDPI_Form {
             'phone2' => sanitize_text_field($_POST['shipper_phone2'] ?? '')
         );
 
-        foreach (array('name', 'street', 'city', 'state', 'country', 'zip', 'phone1') as $field) {
-            if (empty($shipper[$field])) {
-                wp_send_json_error('Complete toda la Informacion del shipper.');
-                exit;
-            }
-        }
-
         $consignee = array(
             'name' => sanitize_text_field($_POST['consignee_name'] ?? ''),
             'street' => sanitize_text_field($_POST['consignee_street'] ?? ''),
@@ -1872,13 +1966,6 @@ class SDPI_Form {
             'phone1' => sanitize_text_field($_POST['consignee_phone1'] ?? ''),
             'phone2' => sanitize_text_field($_POST['consignee_phone2'] ?? '')
         );
-
-        foreach (array('name', 'street', 'city', 'state', 'country', 'zip', 'phone1') as $field) {
-            if (empty($consignee[$field])) {
-                wp_send_json_error('Complete toda la Informacion del consignee.');
-                exit;
-            }
-        }
 
         $pickup_required = in_array($direction, array('usa_to_pr', 'pr_pr'), true);
         $pickup = array(
@@ -1892,15 +1979,6 @@ class SDPI_Form {
             'phone2' => sanitize_text_field($_POST['pickup_phone2'] ?? '')
         );
 
-        if ($pickup_required) {
-            foreach (array('name', 'street', 'city', 'state', 'country', 'zip', 'phone1') as $field) {
-                if (empty($pickup[$field])) {
-                    wp_send_json_error('Complete la Informacion de recogida.');
-                    exit;
-                }
-            }
-        }
-
         $dropoff_required = in_array($direction, array('pr_to_usa', 'pr_pr'), true);
         $dropoff = array(
             'name' => sanitize_text_field($_POST['dropoff_name'] ?? ''),
@@ -1913,26 +1991,113 @@ class SDPI_Form {
             'phone2' => sanitize_text_field($_POST['dropoff_phone2'] ?? '')
         );
 
-        if ($dropoff_required) {
-            foreach (array('name', 'street', 'city', 'state', 'country', 'zip', 'phone1') as $field) {
-                if (empty($dropoff[$field])) {
-                    wp_send_json_error('Complete la Informacion de entrega.');
-                    exit;
-                }
-            }
-        }
-
         $others = array(
             'title' => sanitize_text_field($_POST['title'] ?? ''),
             'registration' => sanitize_text_field($_POST['registration'] ?? ''),
             'id' => sanitize_text_field($_POST['other_id'] ?? '')
         );
 
-        foreach (array($shipper['zip'], $consignee['zip'], $pickup['zip'], $dropoff['zip']) as $zip_value) {
-            if (!empty($zip_value) && !preg_match('/^[0-9A-Za-z\\- ]{4,10}$/', $zip_value)) {
-                wp_send_json_error('Use un formato de codigo postal vAÃ¯Â¿Â½lido.');
+        $validate_contact = function (&$details, $label, $required) {
+            $fields = array('name', 'street', 'city', 'state', 'zip', 'phone1');
+            $has_country = array_key_exists('country', $details);
+            if ($has_country) {
+                $fields[] = 'country';
+            }
+
+            $value_fields = array('name', 'street', 'city', 'zip', 'phone1');
+            $has_values = false;
+            foreach ($value_fields as $field_name) {
+                if (!empty($details[$field_name])) {
+                    $has_values = true;
+                    break;
+                }
+            }
+
+            if (!$required && !$has_values) {
+                foreach ($details as $key => $value) {
+                    $details[$key] = '';
+                }
+                return;
+            }
+
+            foreach ($fields as $field) {
+                if ($required && empty($details[$field])) {
+                    wp_send_json_error('Completa toda la información ' . $label . '.');
+                    exit;
+                }
+            }
+
+            if (!$this->validate_person_name($details['name'])) {
+                wp_send_json_error('El nombre ' . $label . ' solo puede incluir letras y espacios.');
                 exit;
             }
+
+            if (!$this->validate_address_line($details['street'])) {
+                wp_send_json_error('La dirección ' . $label . ' contiene caracteres no permitidos.');
+                exit;
+            }
+
+            if (!$this->validate_city_name($details['city'])) {
+                wp_send_json_error('La ciudad ' . $label . ' solo puede incluir letras y espacios.');
+                exit;
+            }
+
+            $details['state'] = $this->normalize_state_code($details['state']);
+            if (!$this->validate_state_code($details['state'])) {
+                wp_send_json_error('Ingresa el estado ' . $label . ' con el código de dos letras.');
+                exit;
+            }
+
+            if ($has_country) {
+                if (!$this->validate_allowed_country($details['country'])) {
+                    wp_send_json_error('Selecciona un país válido para la sección ' . $label . '.');
+                    exit;
+                }
+                $normalized_country = strtoupper(trim($details['country'])) === 'PUERTO RICO' ? 'Puerto Rico' : 'USA';
+                $details['country'] = $normalized_country;
+            }
+
+            if (!$this->validate_us_zip($details['zip'])) {
+                wp_send_json_error('Ingresa un código postal válido de 5 dígitos para la sección ' . $label . '.');
+                exit;
+            }
+            $details['zip'] = $this->normalize_digits($details['zip'], 5);
+
+            if (!$this->validate_us_phone($details['phone1'])) {
+                wp_send_json_error('Ingresa un teléfono válido de 10 dígitos para la sección ' . $label . '.');
+                exit;
+            }
+            $details['phone1'] = $this->normalize_digits($details['phone1'], 10);
+
+            if (!empty($details['phone2'])) {
+                if (!$this->validate_us_phone($details['phone2'])) {
+                    wp_send_json_error('El teléfono secundario ' . $label . ' debe tener 10 dígitos válidos.');
+                    exit;
+                }
+                $details['phone2'] = $this->normalize_digits($details['phone2'], 10);
+            } else {
+                $details['phone2'] = '';
+            }
+        };
+
+        $validate_contact($shipper, 'del shipper', true);
+        $validate_contact($consignee, 'del consignatario', true);
+        $validate_contact($pickup, 'de recogida', $pickup_required);
+        $validate_contact($dropoff, 'de entrega', $dropoff_required);
+
+        if (!empty($others['title']) && !$this->validate_generic_text($others['title'])) {
+            wp_send_json_error('El campo Title solo puede contener letras y números.');
+            exit;
+        }
+
+        if (!empty($others['registration']) && !$this->validate_generic_text($others['registration'])) {
+            wp_send_json_error('El campo Registration solo puede contener letras y números.');
+            exit;
+        }
+
+        if (!empty($others['id']) && !$this->validate_generic_text($others['id'])) {
+            wp_send_json_error('El identificador adicional solo puede contener letras y números.');
+            exit;
         }
 
         $maritime_details = array(
@@ -2025,7 +2190,50 @@ class SDPI_Form {
         $vehicle_electric = !empty($_POST['vehicle_electric']);
         $vehicle_make = sanitize_text_field($_POST['vehicle_make']);
         $vehicle_model = sanitize_text_field($_POST['vehicle_model']);
-        $vehicle_year = intval($_POST['vehicle_year']);
+        $vehicle_year_input = isset($_POST['vehicle_year']) ? trim((string) $_POST['vehicle_year']) : '';
+
+        if (!$this->validate_us_zip($pickup_zip) || !$this->validate_us_zip($delivery_zip)) {
+            wp_send_json_error('Proporciona códigos postales válidos de 5 dígitos en EE. UU. para origen y destino.');
+            exit;
+        }
+
+        $valid_trailers = array('open', 'enclosed');
+        if (!in_array($trailer_type, $valid_trailers, true)) {
+            wp_send_json_error('Selecciona un tipo de tráiler válido.');
+            exit;
+        }
+
+        $valid_vehicle_types = array('sedan', 'suv', 'van', 'coupe_2_doors', 'pickup_2_doors', 'pickup_4_doors');
+        if (!in_array($vehicle_type, $valid_vehicle_types, true)) {
+            wp_send_json_error('Selecciona un tipo de vehículo válido.');
+            exit;
+        }
+
+        if (!empty($pickup_city) && !$this->validate_city_name($pickup_city)) {
+            wp_send_json_error('Ingresa una ciudad de origen válida utilizando letras y espacios.');
+            exit;
+        }
+
+        if (!empty($delivery_city) && !$this->validate_city_name($delivery_city)) {
+            wp_send_json_error('Ingresa una ciudad de destino válida utilizando letras y espacios.');
+            exit;
+        }
+
+        if (!empty($vehicle_make) && !$this->validate_generic_text($vehicle_make)) {
+            wp_send_json_error('La marca del vehículo solo puede incluir letras, números y espacios.');
+            exit;
+        }
+
+        if (!empty($vehicle_model) && !$this->validate_generic_text($vehicle_model)) {
+            wp_send_json_error('El modelo del vehículo solo puede incluir letras, números y espacios.');
+            exit;
+        }
+
+        if ($vehicle_year_input !== '' && !$this->validate_vehicle_year_value($vehicle_year_input)) {
+            wp_send_json_error('Ingresa un año de vehículo válido mayor a 1800.');
+            exit;
+        }
+        $vehicle_year = $vehicle_year_input === '' ? 0 : (int) $vehicle_year_input;
 
         // Check if maritime transport is involved (San Juan, PR)
         $involves_maritime = SDPI_Maritime::involves_maritime($pickup_zip, $delivery_zip);

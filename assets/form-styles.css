@@ -1,4 +1,4 @@
-﻿/* Transporte de Autos Form Styles */
+/* Transporte de Autos Form Styles */
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
 
 .sdpi-pricing-form {
@@ -619,6 +619,29 @@
     font-size: 1rem;
     transition: all 0.3s ease;
     background: #ffffff;
+}
+
+.sdpi-form-group.error input,
+.sdpi-form-group.error select,
+.sdpi-form-group.error textarea {
+    border-color: #dc3232;
+}
+
+.sdpi-form-group.success input,
+.sdpi-form-group.success select,
+.sdpi-form-group.success textarea {
+    border-color: #46b450;
+}
+
+.sdpi-field-error {
+    display: none;
+    color: #dc3232;
+    font-size: 0.875rem;
+    margin-top: 6px;
+}
+
+.sdpi-form-group.error .sdpi-field-error {
+    display: block;
 }
 
 .sdpi-form-group select:focus {

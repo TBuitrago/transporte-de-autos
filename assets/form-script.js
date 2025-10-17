@@ -120,16 +120,8 @@ jQuery(document).ready(function($) {
     function markFieldValid($field) {
         var $group = getFieldGroup($field);
         if (!$group.length) { return; }
-        $group.removeClass('error');
-        var value = ($field.val() || '').trim();
-        if (value !== '') {
-            $group.addClass('success');
-            $field.addClass('valid');
-        } else {
-            $group.removeClass('success');
-            $field.removeClass('valid');
-        }
-        $field.removeClass('invalid').attr('aria-invalid', 'false');
+        $group.removeClass('error success');
+        $field.removeClass('invalid valid').attr('aria-invalid', 'false');
         var $message = $group.find('.sdpi-field-error');
         if ($message.length) {
             $message.hide().text('');
@@ -223,40 +215,6 @@ jQuery(document).ready(function($) {
     var validationRules = {};
 
     validationRules['#sdpi-pricing-form'] = [
-        {
-            selector: '#sdpi_pickup_city',
-            events: 'blur change',
-            validator: function(value) {
-                if (!value) {
-                    return { valid: false, message: 'Ingresa la ciudad de origen.' };
-                }
-                if (!validationPatterns.city.test(value)) {
-                    return { valid: false, message: 'La ciudad de origen solo puede incluir letras y comas.' };
-                }
-                var zip = ($('#sdpi_pickup_zip').val() || '').trim();
-                if (!validationPatterns.zip.test(zip)) {
-                    return { valid: false, message: 'Selecciona una ciudad de origen válida de EE. UU. con un ZIP de 5 dígitos.' };
-                }
-                return { valid: true };
-            }
-        },
-        {
-            selector: '#sdpi_delivery_city',
-            events: 'blur change',
-            validator: function(value) {
-                if (!value) {
-                    return { valid: false, message: 'Ingresa la ciudad de destino.' };
-                }
-                if (!validationPatterns.city.test(value)) {
-                    return { valid: false, message: 'La ciudad de destino solo puede incluir letras y comas.' };
-                }
-                var zip = ($('#sdpi_delivery_zip').val() || '').trim();
-                if (!validationPatterns.zip.test(zip)) {
-                    return { valid: false, message: 'Selecciona una ciudad de destino válida de EE. UU. con un ZIP de 5 dígitos.' };
-                }
-                return { valid: true };
-            }
-        },
         {
             selector: '#sdpi_trailer_type',
             events: 'change blur',
@@ -1662,6 +1620,12 @@ jQuery(document).ready(function($) {
             .not(':hidden')
             .prop('readonly', true);
 
+        $('#sdpi_pickup_city, #sdpi_delivery_city')
+            .prop('readonly', true)
+            .attr('aria-readonly', 'true');
+
+        $('.sdpi-search-results').empty().hide();
+
         $form.find('select, input[type="checkbox"], input[type="radio"]').prop('disabled', true);
 
         $('#sdpi-submit-btn').hide();
@@ -1692,6 +1656,10 @@ jQuery(document).ready(function($) {
 
         $form.find('input[type="text"], input[type="number"], input[type="tel"], input[type="email"], textarea')
             .prop('readonly', false);
+
+        $('#sdpi_pickup_city, #sdpi_delivery_city')
+            .prop('readonly', false)
+            .removeAttr('aria-readonly');
 
         $form.find('select, input[type="checkbox"], input[type="radio"]').prop('disabled', false);
 
@@ -2765,7 +2733,7 @@ jQuery(document).ready(function($) {
     $('#sdpi_pickup_zip, #sdpi_delivery_zip').on('input', function() {
         var zip = $(this).val();
         if (zip.length === 5 && /^\d{5}$/.test(zip)) {
-            $(this).removeClass('error').addClass('valid');
+            $(this).removeClass('error valid');
         } else if (zip.length > 0) {
             $(this).removeClass('valid').addClass('error');
         } else {

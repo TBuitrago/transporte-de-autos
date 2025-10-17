@@ -2209,16 +2209,6 @@ class SDPI_Form {
             exit;
         }
 
-        if (!empty($pickup_city) && !$this->validate_city_name($pickup_city)) {
-            wp_send_json_error('Ingresa una ciudad de origen válida utilizando letras y espacios.');
-            exit;
-        }
-
-        if (!empty($delivery_city) && !$this->validate_city_name($delivery_city)) {
-            wp_send_json_error('Ingresa una ciudad de destino válida utilizando letras y espacios.');
-            exit;
-        }
-
         if (!empty($vehicle_make) && !$this->validate_generic_text($vehicle_make)) {
             wp_send_json_error('La marca del vehículo solo puede incluir letras, números y espacios.');
             exit;

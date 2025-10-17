@@ -736,6 +736,9 @@ class SDPI_History {
         
         $items = $wpdb->get_results($query);
         
+        $server_now = current_time('timestamp');
+        $wp_timezone = wp_timezone();
+        
         // Pagination
         $total_pages = ceil($total_items / $per_page);
         
@@ -875,6 +878,39 @@ class SDPI_History {
                         <?php endif; ?>
                     </td>
                     <td>
+                        <?php
+                        $scheduled_timestamp = null;
+                        $countdown_label = '';
+                        $countdown_diff = null;
+
+                        if (!empty($item->zapier_scheduled_at)) {
+                            $date_obj = date_create_from_format('Y-m-d H:i:s', $item->zapier_scheduled_at, $wp_timezone);
+                            if ($date_obj instanceof DateTimeInterface) {
+                                $scheduled_timestamp = $date_obj->getTimestamp();
+                            } else {
+                                $fallback_timestamp = strtotime($item->zapier_scheduled_at);
+                                if ($fallback_timestamp) {
+                                    $scheduled_timestamp = $fallback_timestamp;
+                                }
+                            }
+                        }
+
+                        if ($scheduled_timestamp) {
+                            $countdown_diff = $scheduled_timestamp - $server_now;
+                            $display_seconds = $countdown_diff > 0 ? $countdown_diff : 0;
+                            if ($display_seconds >= 3600) {
+                                $hours = floor($display_seconds / 3600);
+                                $minutes = floor(($display_seconds % 3600) / 60);
+                                $countdown_label = sprintf('En %dh %02dm', $hours, $minutes);
+                            } elseif ($display_seconds > 0) {
+                                $minutes = floor($display_seconds / 60);
+                                $seconds = $display_seconds % 60;
+                                $countdown_label = sprintf('En %02dm %02ds', $minutes, $seconds);
+                            } else {
+                                $countdown_label = 'En breve';
+                            }
+                        }
+                        ?>
                         <?php if ($item->zapier_status === 'sent'): ?>
                             <span class="sdpi-terrestrial-badge">Enviado</span>
                             <?php if (!empty($item->zapier_last_sent_at)): ?>
@@ -882,8 +918,21 @@ class SDPI_History {
                             <?php endif; ?>
                         <?php elseif ($item->zapier_status === 'error'): ?>
                             <span class="sdpi-maritime-badge" style="background:#d63638;">Error</span>
+                        <?php elseif ($item->zapier_status === 'scheduled' || ($item->zapier_status === 'pending' && $scheduled_timestamp)): ?>
+                            <?php
+                            $badge_label = $item->zapier_status === 'scheduled' ? 'Programado' : 'Pendiente';
+                            $badge_color = $item->zapier_status === 'scheduled' ? '#2271b1' : '#777';
+                            ?>
+                            <span class="sdpi-maritime-badge" style="background:<?php echo esc_attr($badge_color); ?>;"><?php echo esc_html($badge_label); ?></span>
+                            <?php if ($scheduled_timestamp): ?>
+                                <br><small><?php echo esc_html(wp_date('Y-m-d H:i', $scheduled_timestamp)); ?></small>
+                            <?php endif; ?>
+                            <?php if ($countdown_diff !== null && $countdown_label !== ''): ?>
+                                <br><small class="sdpi-zapier-countdown" data-scheduled="<?php echo esc_attr($scheduled_timestamp); ?>"><?php echo esc_html($countdown_label); ?></small>
+                            <?php endif; ?>
                         <?php else: ?>
                             <span class="sdpi-maritime-badge" style="background:#777;">Pendiente</span>
+                            <br><small>En espera de programación</small>
                         <?php endif; ?>
                     </td>
                     <td>
@@ -975,6 +1024,46 @@ class SDPI_History {
                     alert('Error de red.');
                 });
             });
+
+            var $zapierCountdowns = $('.sdpi-zapier-countdown');
+            if ($zapierCountdowns.length) {
+                var serverNow = <?php echo (int) $server_now; ?>;
+                var clientStart = Math.floor(Date.now() / 1000);
+
+                function currentServerTime() {
+                    var clientNow = Math.floor(Date.now() / 1000);
+                    return serverNow + (clientNow - clientStart);
+                }
+
+                function formatZapierCountdown(seconds) {
+                    if (seconds <= 0) {
+                        return 'En breve';
+                    }
+                    var hours = Math.floor(seconds / 3600);
+                    var minutes = Math.floor((seconds % 3600) / 60);
+                    var secs = seconds % 60;
+                    if (hours > 0) {
+                        return 'En ' + hours + 'h ' + (minutes < 10 ? '0' : '') + minutes + 'm';
+                    }
+                    return 'En ' + (minutes < 10 ? '0' : '') + minutes + 'm ' + (secs < 10 ? '0' : '') + secs + 's';
+                }
+
+                function refreshZapierCountdowns() {
+                    var now = currentServerTime();
+                    $zapierCountdowns.each(function(){
+                        var $el = $(this);
+                        var scheduled = parseInt($el.data('scheduled'), 10);
+                        if (isNaN(scheduled)) {
+                            return;
+                        }
+                        var remaining = scheduled - now;
+                        $el.text(formatZapierCountdown(remaining));
+                    });
+                }
+
+                refreshZapierCountdowns();
+                setInterval(refreshZapierCountdowns, 1000);
+            }
         });
         </script>
         <?php

@@ -37,7 +37,7 @@ jQuery(document).ready(function($) {
         name: /^[A-Za-zÀ-ÖØ-öø-ÿ\s\-\.\']+$/,
         alphanumeric: /^[A-Za-z0-9À-ÖØ-öø-ÿ\s\-\.\']+$/,
         address: /^[A-Za-z0-9À-ÖØ-öø-ÿ\s\-\.\'#&,]+$/,
-        state: /^[A-Za-z]{2}$/,
+        state: /^[A-Za-zÀ-ÖØ-öø-ÿ\s-]{2,50}$/,
         email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
         phone: /^\d{10}$/,
         zip: /^\d{5}$/,
@@ -1043,7 +1043,7 @@ jQuery(document).ready(function($) {
             sanitize: sanitizeState,
             validator: function(value) {
                 if (!validationPatterns.state.test(value)) {
-                    return { valid: false, message: 'Ingresa el estado del shipper usando el código de dos letras.' };
+                    return { valid: false, message: 'Ingresa el estado del shipper (abreviatura o nombre completo).' };
                 }
                 return { valid: true };
             }
@@ -1137,7 +1137,7 @@ jQuery(document).ready(function($) {
             sanitize: sanitizeState,
             validator: function(value) {
                 if (!validationPatterns.state.test(value)) {
-                    return { valid: false, message: 'Ingresa el estado del consignatario con dos letras.' };
+                    return { valid: false, message: 'Ingresa el estado del consignatario (abreviatura o nombre completo).' };
                 }
                 return { valid: true };
             }
@@ -1262,7 +1262,7 @@ jQuery(document).ready(function($) {
                     return { valid: true };
                 }
                 if (!validationPatterns.state.test(value)) {
-                    return { valid: false, message: 'Ingresa el estado de recogida con dos letras.' };
+                    return { valid: false, message: 'Ingresa el estado de recogida (abreviatura o nombre completo).' };
                 }
                 return { valid: true };
             },
@@ -1391,7 +1391,7 @@ jQuery(document).ready(function($) {
                     return { valid: true };
                 }
                 if (!validationPatterns.state.test(value)) {
-                    return { valid: false, message: 'Ingresa el estado de entrega con dos letras.' };
+                    return { valid: false, message: 'Ingresa el estado de entrega (abreviatura o nombre completo).' };
                 }
                 return { valid: true };
             },

@@ -581,7 +581,11 @@ jQuery(document).ready(function($) {
     }
 
     function sanitizeState(value) {
-        return value.replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 2);
+        var sanitized = value
+            .replace(/[^A-Za-zÀ-ÖØ-öø-ÿ\s-]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+        return sanitized;
     }
 
     function sanitizePhone(value) {

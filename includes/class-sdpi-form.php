@@ -239,12 +239,22 @@ class SDPI_Form {
     }
 
     private function validate_state_code($state) {
-        return (bool) preg_match('/^[A-Za-z]{2}$/', (string) $state);
+        if (!preg_match("/^[\p{L}\s'-]+$/u", (string) $state)) {
+            return false;
+        }
+
+        $letter_count = preg_match_all('/\p{L}/u', (string) $state);
+        if ($letter_count === false) {
+            return false;
+        }
+
+        return $letter_count >= 2;
     }
 
     private function normalize_state_code($state) {
-        $letters = preg_replace('/[^A-Za-z]/', '', (string) $state);
-        return strtoupper(substr($letters, 0, 2));
+        $cleaned = preg_replace("/[^\p{L}\s'-]/u", '', (string) $state);
+        $cleaned = preg_replace('/\s+/u', ' ', $cleaned);
+        return trim($cleaned);
     }
 
     private function validate_person_name($value) {
@@ -2493,7 +2503,7 @@ class SDPI_Form {
 
             $details['state'] = $this->normalize_state_code($details['state']);
             if (!$this->validate_state_code($details['state'])) {
-                wp_send_json_error('Ingresa el estado ' . $label . ' con el código de dos letras.');
+                wp_send_json_error('Ingresa el estado ' . $label . ' usando solo letras, espacios o guiones.');
                 exit;
             }
 

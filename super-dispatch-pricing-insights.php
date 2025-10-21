@@ -68,7 +68,7 @@ add_action('plugins_loaded', 'tda_load_textdomain');
 function sdpi_init() {
     new SDPI_Settings();
     new SDPI_Cities();
-    new SDPI_Form();
+    SDPI_Form::get_instance();
     new SDPI_History();
 }
 add_action('plugins_loaded', 'sdpi_init');

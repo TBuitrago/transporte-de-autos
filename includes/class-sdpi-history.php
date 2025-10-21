@@ -363,53 +363,91 @@ class SDPI_History {
      */
     public function send_zapier_page() {
         if (!current_user_can('manage_options')) { return; }
+
         $message = '';
+        $notice_type = 'info';
+
         if (isset($_POST['sdpi_manual_send'])) {
             check_admin_referer('sdpi_manual_send_action', 'sdpi_manual_send_nonce');
             $session_id = sanitize_text_field($_POST['session_id'] ?? '');
+
             if (!empty($session_id)) {
-                $session = new SDPI_Session();
-                $row = $session->get($session_id);
+                global $wpdb;
+                $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$this->table_name} WHERE session_id = %s", $session_id));
+
                 if ($row) {
-                    // Build minimal payload and reuse existing sender
-                    $data = is_array($row['data']) ? $row['data'] : array();
-                    $quote = isset($data['quote']) ? $data['quote'] : array();
-                    $final = isset($quote['final']) ? $quote['final'] : array();
-                    $pickup_zip = isset($quote['pickup_zip']) ? $quote['pickup_zip'] : '';
-                    $delivery_zip = isset($quote['delivery_zip']) ? $quote['delivery_zip'] : '';
-                    $trailer_type = isset($quote['trailer_type']) ? $quote['trailer_type'] : '';
-                    $vehicle = isset($quote['vehicle']) ? $quote['vehicle'] : array();
-                    $form = new SDPI_Form();
-                    $ref = new ReflectionClass($form);
-                    $m = $ref->getMethod('send_to_zapier');
-                    $m->setAccessible(true);
-                    $m->invoke($form,
-                        $pickup_zip,
-                        $delivery_zip,
-                        $trailer_type,
-                        isset($vehicle['type']) ? $vehicle['type'] : '',
-                        isset($vehicle['inoperable']) ? $vehicle['inoperable'] : false,
-                        isset($vehicle['electric']) ? $vehicle['electric'] : false,
-                        isset($vehicle['make']) ? $vehicle['make'] : '',
-                        isset($vehicle['model']) ? $vehicle['model'] : '',
-                        isset($vehicle['year']) ? $vehicle['year'] : '',
-                        $final,
-                        isset($final['maritime_involved']) ? $final['maritime_involved'] : false
-                    );
-                    $message = 'Datos enviados a Zapier.';
+                    $zapier_args = $this->build_zapier_arguments_from_history_row($row);
+
+                    if ($zapier_args) {
+                        $form = SDPI_Form::get_instance();
+
+                        try {
+                            $result = $form->send_to_zapier(
+                                $zapier_args['pickup_zip'],
+                                $zapier_args['delivery_zip'],
+                                $zapier_args['trailer_type'],
+                                $zapier_args['vehicle_type'],
+                                $zapier_args['vehicle_inoperable'],
+                                $zapier_args['vehicle_electric'],
+                                $zapier_args['vehicle_make'],
+                                $zapier_args['vehicle_model'],
+                                $zapier_args['vehicle_year'],
+                                $zapier_args['final'],
+                                $zapier_args['involves_maritime'],
+                                $zapier_args['extra']
+                            );
+
+                            if (is_wp_error($result)) {
+                                $error_message = $result->get_error_message();
+                                $this->mark_zapier_status($row->session_id, 'error', array(
+                                    'trigger_reason' => 'manual',
+                                    'last_error' => $error_message
+                                ));
+                                $message = sprintf('Error al enviar a Zapier: %s', $error_message);
+                                $notice_type = 'error';
+                            } else {
+                                $this->mark_zapier_status($row->session_id, 'sent', array(
+                                    'trigger_reason' => 'manual',
+                                    'last_error' => ''
+                                ));
+                                $message = 'Datos enviados a Zapier.';
+                                $notice_type = 'success';
+                            }
+                        } catch (Exception $e) {
+                            $error_message = $e->getMessage();
+                            $this->mark_zapier_status($row->session_id, 'error', array(
+                                'trigger_reason' => 'manual',
+                                'last_error' => $error_message
+                            ));
+                            $message = sprintf('Error al enviar a Zapier: %s', $error_message);
+                            $notice_type = 'error';
+                        }
+                    } else {
+                        $message = 'No se pudo reconstruir el payload para Zapier.';
+                        $notice_type = 'error';
+                    }
                 } else {
                     $message = 'Sesión no encontrada.';
+                    $notice_type = 'error';
                 }
             } else {
                 $message = 'Ingrese un Session ID válido.';
+                $notice_type = 'error';
             }
+        }
+
+        $notice_class = 'notice-info';
+        if ($notice_type === 'success') {
+            $notice_class = 'notice-success';
+        } elseif ($notice_type === 'error') {
+            $notice_class = 'notice-error';
         }
 
         ?>
         <div class="wrap">
             <h1>Enviar a Zapier (manual)</h1>
             <?php if (!empty($message)): ?>
-                <div class="notice notice-info"><p><?php echo esc_html($message); ?></p></div>
+                <div class="notice <?php echo esc_attr($notice_class); ?>"><p><?php echo esc_html($message); ?></p></div>
             <?php endif; ?>
             <form method="post">
                 <?php wp_nonce_field('sdpi_manual_send_action', 'sdpi_manual_send_nonce'); ?>
@@ -423,6 +461,91 @@ class SDPI_History {
             </form>
         </div>
         <?php
+    }
+
+    private function build_zapier_arguments_from_history_row($row) {
+        if (!$row) {
+            return null;
+        }
+
+        $shipping_details = array();
+        if (!empty($row->additional_shipping)) {
+            $decoded_shipping = json_decode($row->additional_shipping, true);
+            if (is_array($decoded_shipping)) {
+                $shipping_details = $decoded_shipping;
+            }
+        }
+
+        if (empty($shipping_details)) {
+            $shipping_details = array(
+                'pickup' => array(
+                    'name' => $row->pickup_contact_name,
+                    'street' => $row->pickup_contact_street,
+                    'city' => $row->pickup_city,
+                    'zip' => $row->pickup_zip,
+                    'type' => $row->pickup_contact_type
+                ),
+                'delivery' => array(
+                    'name' => $row->delivery_contact_name,
+                    'street' => $row->delivery_contact_street,
+                    'city' => $row->delivery_city,
+                    'zip' => $row->delivery_zip
+                )
+            );
+        }
+
+        if (empty($shipping_details['saved_at']) && !empty($row->status_updated_at)) {
+            $shipping_details['saved_at'] = $row->status_updated_at;
+        }
+
+        $maritime_details = array();
+        if (!empty($row->maritime_details)) {
+            $decoded_maritime = json_decode($row->maritime_details, true);
+            if (is_array($decoded_maritime)) {
+                $maritime_details = $decoded_maritime;
+            }
+        }
+
+        $documentation_files = $this->sanitize_documentation_entries($row->documentation_files ?? array());
+
+        $final = array(
+            'final_price' => floatval($row->final_price),
+            'base_price' => floatval($row->api_price),
+            'confidence_percentage' => floatval($row->api_confidence),
+            'company_profit' => floatval($row->company_profit),
+            'confidence_adjustment' => floatval($row->confidence_adjustment),
+            'maritime_involved' => intval($row->maritime_involved) === 1,
+            'maritime_cost' => floatval($row->maritime_cost),
+            'terrestrial_cost' => floatval($row->total_terrestrial_cost),
+            'us_port' => !empty($row->us_port_name) ? array('port' => $row->us_port_name, 'zip' => $row->us_port_zip) : null
+        );
+
+        return array(
+            'pickup_zip' => $row->pickup_zip,
+            'delivery_zip' => $row->delivery_zip,
+            'trailer_type' => $row->trailer_type,
+            'vehicle_type' => $row->vehicle_type,
+            'vehicle_inoperable' => intval($row->vehicle_inoperable) === 1,
+            'vehicle_electric' => intval($row->vehicle_electric) === 1,
+            'vehicle_make' => $row->vehicle_make,
+            'vehicle_model' => $row->vehicle_model,
+            'vehicle_year' => $row->vehicle_year,
+            'final' => $final,
+            'involves_maritime' => intval($row->maritime_involved) === 1,
+            'extra' => array(
+                'shipping' => $shipping_details,
+                'maritime_details' => $maritime_details,
+                'client' => array(
+                    'name' => $row->client_name,
+                    'email' => $row->client_email,
+                    'phone' => $row->client_phone,
+                    'captured_at' => $row->client_info_captured_at
+                ),
+                'transport_type' => intval($row->maritime_involved) === 1 ? 'maritime' : 'terrestrial',
+                'documentation_files' => $documentation_files,
+                'session_id' => $row->session_id
+            )
+        );
     }
     
     /**
@@ -2422,116 +2545,50 @@ class SDPI_History {
 
         global $wpdb;
         $sent = 0; $failed = 0;
-        $form = new SDPI_Form();
-        $ref = new ReflectionClass($form);
-        $m = $ref->getMethod('send_to_zapier');
-        $m->setAccessible(true);
+        $form = SDPI_Form::get_instance();
 
         foreach ($ids as $id) {
             $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$this->table_name} WHERE id = %d", $id));
             if (!$row) { $failed++; continue; }
-            $api_response = json_decode($row->api_response, true);
-            $shipping_details = array();
-            if (!empty($row->additional_shipping)) {
-                $decoded_shipping = json_decode($row->additional_shipping, true);
-                if (is_array($decoded_shipping)) {
-                    $shipping_details = $decoded_shipping;
-                }
-            }
-            if (empty($shipping_details)) {
-                $shipping_details = array(
-                    'pickup' => array(
-                        'name' => $row->pickup_contact_name,
-                        'street' => $row->pickup_contact_street,
-                        'city' => $row->pickup_city,
-                        'zip' => $row->pickup_zip,
-                        'type' => $row->pickup_contact_type
-                    ),
-                    'delivery' => array(
-                        'name' => $row->delivery_contact_name,
-                        'street' => $row->delivery_contact_street,
-                        'city' => $row->delivery_city,
-                        'zip' => $row->delivery_zip
-                    )
-                );
-            }
-            if (empty($shipping_details['saved_at'])) {
-                $shipping_details['saved_at'] = $row->status_updated_at;
-            }
 
-            $maritime_details = array();
-            if (!empty($row->maritime_details)) {
-                $decoded_maritime = json_decode($row->maritime_details, true);
-                if (is_array($decoded_maritime)) {
-                    $maritime_details = $decoded_maritime;
-                }
-            }
-
-            $documentation_files = $this->sanitize_documentation_entries($row->documentation_files ?? array());
-
-            $final = array(
-                'final_price' => floatval($row->final_price),
-                'base_price' => floatval($row->api_price),
-                'confidence_percentage' => floatval($row->api_confidence),
-                'company_profit' => floatval($row->company_profit),
-                'confidence_adjustment' => floatval($row->confidence_adjustment),
-                'maritime_involved' => intval($row->maritime_involved) === 1,
-                'maritime_cost' => floatval($row->maritime_cost),
-                'terrestrial_cost' => floatval($row->total_terrestrial_cost),
-                'us_port' => !empty($row->us_port_name) ? array('port' => $row->us_port_name, 'zip' => $row->us_port_zip) : null
-            );
+            $zapier_args = $this->build_zapier_arguments_from_history_row($row);
+            if (!$zapier_args) { $failed++; continue; }
 
             try {
-                $result = $m->invoke($form,
-                    $row->pickup_zip,
-                    $row->delivery_zip,
-                    $row->trailer_type,
-                    $row->vehicle_type,
-                    intval($row->vehicle_inoperable) === 1,
-                    intval($row->vehicle_electric) === 1,
-                    $row->vehicle_make,
-                    $row->vehicle_model,
-                    $row->vehicle_year,
-                    $final,
-                    intval($row->maritime_involved) === 1,
-                    array(
-                        'shipping' => $shipping_details,
-                        'maritime_details' => $maritime_details,
-                        'client' => array(
-                            'name' => $row->client_name,
-                            'email' => $row->client_email,
-                            'phone' => $row->client_phone,
-                            'captured_at' => $row->client_info_captured_at
-                        ),
-                        'transport_type' => intval($row->maritime_involved) === 1 ? 'maritime' : 'terrestrial',
-                        'documentation_files' => $documentation_files,
-                        'session_id' => $row->session_id
-                    )
+                $result = $form->send_to_zapier(
+                    $zapier_args['pickup_zip'],
+                    $zapier_args['delivery_zip'],
+                    $zapier_args['trailer_type'],
+                    $zapier_args['vehicle_type'],
+                    $zapier_args['vehicle_inoperable'],
+                    $zapier_args['vehicle_electric'],
+                    $zapier_args['vehicle_make'],
+                    $zapier_args['vehicle_model'],
+                    $zapier_args['vehicle_year'],
+                    $zapier_args['final'],
+                    $zapier_args['involves_maritime'],
+                    $zapier_args['extra']
                 );
+
                 if (is_wp_error($result)) {
-                    $wpdb->update($this->table_name, array(
-                        'zapier_status' => 'error',
-                        'zapier_trigger_reason' => 'manual',
-                        'zapier_last_error' => sanitize_text_field($result->get_error_message())
-                    ), array('id' => $id), array('%s','%s','%s'), array('%d'));
+                    $this->mark_zapier_status($row->session_id, 'error', array(
+                        'trigger_reason' => 'manual',
+                        'last_error' => $result->get_error_message()
+                    ));
                     $failed++;
                     continue;
                 }
 
-                // mark as sent
-                $wpdb->update($this->table_name, array(
-                    'zapier_status' => 'sent',
-                    'zapier_last_sent_at' => current_time('mysql'),
-                    'zapier_trigger_reason' => 'manual',
-                    'zapier_last_error' => ''
-                ), array('id' => $id), array('%s','%s','%s','%s'), array('%d'));
+                $this->mark_zapier_status($row->session_id, 'sent', array(
+                    'trigger_reason' => 'manual',
+                    'last_error' => ''
+                ));
                 $sent++;
             } catch (Exception $e) {
-                $wpdb->update($this->table_name, array(
-                    'zapier_status' => 'error',
-                    'zapier_trigger_reason' => 'manual',
-                    'zapier_last_error' => sanitize_text_field($e->getMessage())
-                ), array('id' => $id), array('%s','%s','%s'), array('%d'));
+                $this->mark_zapier_status($row->session_id, 'error', array(
+                    'trigger_reason' => 'manual',
+                    'last_error' => $e->getMessage()
+                ));
                 $failed++;
             }
         }

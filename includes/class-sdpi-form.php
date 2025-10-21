@@ -21,10 +21,30 @@ class SDPI_Form {
     private $documentation_max_size = 10485760; // 10 MB
     private static $documentation_upload_subdir = 'documentos-cotizador';
     private $zapier_delay_seconds = 600;
+    private static $instance = null;
 
     public function __construct() {
+        if (self::$instance instanceof self) {
+            return;
+        }
+
+        self::$instance = $this;
+
         $this->api = new SDPI_API();
         $this->init_hooks();
+    }
+
+    /**
+     * Retrieve the shared SDPI_Form instance.
+     *
+     * @return SDPI_Form
+     */
+    public static function get_instance() {
+        if (!(self::$instance instanceof self)) {
+            new self();
+        }
+
+        return self::$instance;
     }
 
     public function init_hooks() {
@@ -3849,7 +3869,7 @@ class SDPI_Form {
     /**
      * Send quote data to Zapier webhook
      */
-    private function send_to_zapier($pickup_zip, $delivery_zip, $trailer_type, $vehicle_type, $vehicle_inoperable, $vehicle_electric, $vehicle_make, $vehicle_model, $vehicle_year, $final_price_data, $involves_maritime, $extra_data = array()) {
+    public function send_to_zapier($pickup_zip, $delivery_zip, $trailer_type, $vehicle_type, $vehicle_inoperable, $vehicle_electric, $vehicle_make, $vehicle_model, $vehicle_year, $final_price_data, $involves_maritime, $extra_data = array()) {
         $payload = $this->build_zapier_payload_array(
             $pickup_zip,
             $delivery_zip,

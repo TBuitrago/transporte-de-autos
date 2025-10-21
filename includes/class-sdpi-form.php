@@ -3849,7 +3849,7 @@ class SDPI_Form {
     /**
      * Send quote data to Zapier webhook
      */
-    private function send_to_zapier($pickup_zip, $delivery_zip, $trailer_type, $vehicle_type, $vehicle_inoperable, $vehicle_electric, $vehicle_make, $vehicle_model, $vehicle_year, $final_price_data, $involves_maritime, $extra_data = array()) {
+    public function send_to_zapier($pickup_zip, $delivery_zip, $trailer_type, $vehicle_type, $vehicle_inoperable, $vehicle_electric, $vehicle_make, $vehicle_model, $vehicle_year, $final_price_data, $involves_maritime, $extra_data = array()) {
         $payload = $this->build_zapier_payload_array(
             $pickup_zip,
             $delivery_zip,

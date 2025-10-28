@@ -33,7 +33,7 @@ jQuery(document).ready(function($) {
     var paymentBlockedMessage = (typeof sdpi_payment !== 'undefined' && sdpi_payment.message) ? sdpi_payment.message : '';
 
     var validationPatterns = {
-        city: /^[A-Za-zÀ-ÖØ-öø-ÿ\s\-\.\',]+$/,
+        city: /^[A-Za-zÀ-ÖØ-öø-ÿ0-9\s\-\.\',()]+$/,
         name: /^[A-Za-zÀ-ÖØ-öø-ÿ\s\-\.\']+$/,
         alphanumeric: /^[A-Za-z0-9À-ÖØ-öø-ÿ\s\-\.\']+$/,
         address: /^[A-Za-z0-9À-ÖØ-öø-ÿ\s\-\.\'#&,]+$/,
@@ -41,7 +41,7 @@ jQuery(document).ready(function($) {
         email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
         phone: /^\d{10}$/,
         zip: /^\d{5}$/,
-        dimensions: /^\d+(\.\d+)?x\d+(\.\d+)?x\d+(\.\d+)?(\s?(ft|feet|'|"|in|cm|m))?$/i
+        dimensions: /^\d+(\.\d+)?x\d+(\.\d+)?x\d+(\.\d+)?$/
     };
     var currentYear = new Date().getFullYear();
     var trailerTypes = ['open', 'enclosed'];
@@ -55,8 +55,8 @@ jQuery(document).ready(function($) {
         uploads: {},
         maxFiles: 0,
         maxSize: 0,
-        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-        allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
+        allowedTypes: ['image/jpeg', 'image/png', 'application/pdf']
     };
 
     function escapeHtml(value) {
@@ -301,7 +301,7 @@ jQuery(document).ready(function($) {
             extension = file.name.split('.').pop().toLowerCase();
         }
         if (documentationManager.allowedExtensions.indexOf(extension) === -1) {
-            return { valid: false, message: 'Formato no permitido. Usa JPG, JPEG, PNG, WEBP o PDF.' };
+            return { valid: false, message: 'Formato no permitido. Usa JPG, JPEG, PNG o PDF.' };
         }
         if (file.type && documentationManager.allowedTypes.indexOf(file.type) === -1) {
             return { valid: false, message: 'Formato de archivo no permitido.' };
@@ -578,6 +578,11 @@ jQuery(document).ready(function($) {
 
     function sanitizeAddress(value) {
         return value.replace(/[^A-Za-z0-9À-ÖØ-öø-ÿ'\-\.\s#&,]/g, '');
+    }
+
+    function containsPoBox(value) {
+        if (!value) { return false; }
+        return /p\s*\.?\s*o\.?\s*box/i.test(value);
     }
 
     function sanitizeState(value) {
@@ -874,7 +879,7 @@ jQuery(document).ready(function($) {
                     return { valid: false, message: 'Ingresa la ciudad de recogida.' };
                 }
                 if (!validationPatterns.city.test(value)) {
-                    return { valid: false, message: 'La ciudad de recogida solo puede incluir letras y comas.' };
+                    return { valid: false, message: 'La ciudad de recogida debe usar letras, números, comas o paréntesis (ej. Sunrise, FL (33351)).' };
                 }
                 return { valid: true };
             }
@@ -923,7 +928,7 @@ jQuery(document).ready(function($) {
                     return { valid: false, message: 'Ingresa la ciudad de entrega.' };
                 }
                 if (!validationPatterns.city.test(value)) {
-                    return { valid: false, message: 'La ciudad de entrega solo puede incluir letras y comas.' };
+                    return { valid: false, message: 'La ciudad de entrega debe usar letras, números, comas o paréntesis.' };
                 }
                 return { valid: true };
             }
@@ -992,7 +997,7 @@ jQuery(document).ready(function($) {
                     return { valid: false, message: 'Indica las dimensiones en formato Largo x Ancho x Alto.' };
                 }
                 if (!validationPatterns.dimensions.test(value)) {
-                    return { valid: false, message: 'Las dimensiones deben seguir el formato 15x6x5 con unidades opcionales.' };
+                    return { valid: false, message: 'Las dimensiones deben seguir el formato 15x6x5 sin espacios ni texto adicional.' };
                 }
                 return { valid: true };
             },
@@ -1022,6 +1027,9 @@ jQuery(document).ready(function($) {
                 if (!validationPatterns.address.test(value)) {
                     return { valid: false, message: 'La dirección del shipper contiene caracteres no permitidos.' };
                 }
+                if (containsPoBox(value)) {
+                    return { valid: false, message: 'La dirección del shipper no puede ser un PO BOX.' };
+                }
                 return { valid: true };
             }
         },
@@ -1033,7 +1041,7 @@ jQuery(document).ready(function($) {
                     return { valid: false, message: 'Ingresa la ciudad del shipper.' };
                 }
                 if (!validationPatterns.city.test(value)) {
-                    return { valid: false, message: 'La ciudad del shipper solo puede incluir letras y comas.' };
+                    return { valid: false, message: 'La ciudad del shipper debe usar letras, números, comas o paréntesis.' };
                 }
                 return { valid: true };
             }
@@ -1057,6 +1065,10 @@ jQuery(document).ready(function($) {
                 }
                 if (allowedCountries.indexOf(value) === -1) {
                     return { valid: false, message: 'Selecciona un país válido (USA o Puerto Rico).' };
+                }
+                var direction = getMaritimeDirection();
+                if (direction === 'usa_to_pr' && value !== 'USA') {
+                    return { valid: false, message: 'Para rutas US → PR el país del shipper debe ser USA.' };
                 }
                 return { valid: true };
             }
@@ -1116,6 +1128,9 @@ jQuery(document).ready(function($) {
                 if (!validationPatterns.address.test(value)) {
                     return { valid: false, message: 'La dirección del consignatario contiene caracteres no permitidos.' };
                 }
+                if (containsPoBox(value)) {
+                    return { valid: false, message: 'La dirección del consignatario no puede ser un PO BOX.' };
+                }
                 return { valid: true };
             }
         },
@@ -1127,7 +1142,7 @@ jQuery(document).ready(function($) {
                     return { valid: false, message: 'Ingresa la ciudad del consignatario.' };
                 }
                 if (!validationPatterns.city.test(value)) {
-                    return { valid: false, message: 'La ciudad del consignatario solo puede incluir letras y comas.' };
+                    return { valid: false, message: 'La ciudad del consignatario debe usar letras, números, comas o paréntesis.' };
                 }
                 return { valid: true };
             }
@@ -1138,6 +1153,13 @@ jQuery(document).ready(function($) {
             validator: function(value) {
                 if (!validationPatterns.state.test(value)) {
                     return { valid: false, message: 'Ingresa el estado del consignatario (abreviatura o nombre completo).' };
+                }
+                var direction = getMaritimeDirection();
+                if (direction === 'usa_to_pr') {
+                    var normalized = value.replace(/\s+/g, '').toUpperCase();
+                    if (normalized !== 'PR' && normalized !== 'PUERTORICO') {
+                        return { valid: false, message: 'El estado del consignatario debe ser PR para entregas en Puerto Rico.' };
+                    }
                 }
                 return { valid: true };
             }
@@ -1152,6 +1174,10 @@ jQuery(document).ready(function($) {
                 if (allowedCountries.indexOf(value) === -1) {
                     return { valid: false, message: 'Selecciona un país válido (USA o Puerto Rico).' };
                 }
+                var direction = getMaritimeDirection();
+                if (direction === 'usa_to_pr' && value !== 'Puerto Rico') {
+                    return { valid: false, message: 'Para rutas US → PR el país del consignatario debe ser Puerto Rico.' };
+                }
                 return { valid: true };
             }
         },
@@ -1161,6 +1187,10 @@ jQuery(document).ready(function($) {
             validator: function(value) {
                 if (!validationPatterns.zip.test(value)) {
                     return { valid: false, message: 'Ingresa un ZIP del consignatario válido de 5 dígitos en EE. UU.' };
+                }
+                var direction = getMaritimeDirection();
+                if (direction === 'usa_to_pr' && !/^(006|007|008|009)\d{2}$/.test(value)) {
+                    return { valid: false, message: 'Usa un ZIP de Puerto Rico (006xx - 009xx).' };
                 }
                 return { valid: true };
             }
@@ -1244,7 +1274,7 @@ jQuery(document).ready(function($) {
                     return { valid: false, message: 'Ingresa la ciudad de recogida.' };
                 }
                 if (!validationPatterns.city.test(value)) {
-                    return { valid: false, message: 'La ciudad de recogida solo puede incluir letras y comas.' };
+                    return { valid: false, message: 'La ciudad de recogida debe usar letras, números, comas o paréntesis.' };
                 }
                 return { valid: true };
             },
@@ -1373,7 +1403,7 @@ jQuery(document).ready(function($) {
                     return { valid: false, message: 'Ingresa la ciudad de entrega.' };
                 }
                 if (!validationPatterns.city.test(value)) {
-                    return { valid: false, message: 'La ciudad de entrega solo puede incluir letras y comas.' };
+                    return { valid: false, message: 'La ciudad de entrega debe usar letras, números, comas o paréntesis.' };
                 }
                 return { valid: true };
             },
@@ -1440,42 +1470,6 @@ jQuery(document).ready(function($) {
                 if (!value) { return { valid: true }; }
                 if (!validationPatterns.phone.test(value)) {
                     return { valid: false, message: 'El teléfono secundario de entrega debe tener 10 dígitos válidos.' };
-                }
-                return { valid: true };
-            },
-            optional: true
-        },
-        {
-            selector: '#sdpi_m_title',
-            sanitize: sanitizeAlphanumeric,
-            validator: function(value) {
-                if (!value) { return { valid: true }; }
-                if (!validationPatterns.alphanumeric.test(value)) {
-                    return { valid: false, message: 'El título solo puede incluir letras, números y espacios.' };
-                }
-                return { valid: true };
-            },
-            optional: true
-        },
-        {
-            selector: '#sdpi_m_registration',
-            sanitize: sanitizeAlphanumeric,
-            validator: function(value) {
-                if (!value) { return { valid: true }; }
-                if (!validationPatterns.alphanumeric.test(value)) {
-                    return { valid: false, message: 'El número de registro solo puede incluir letras, números y espacios.' };
-                }
-                return { valid: true };
-            },
-            optional: true
-        },
-        {
-            selector: '#sdpi_m_id',
-            sanitize: sanitizeAlphanumeric,
-            validator: function(value) {
-                if (!value) { return { valid: true }; }
-                if (!validationPatterns.alphanumeric.test(value)) {
-                    return { valid: false, message: 'El identificador solo puede incluir letras, números y espacios.' };
                 }
                 return { valid: true };
             },
@@ -1550,6 +1544,36 @@ jQuery(document).ready(function($) {
         });
 
         return { valid: isValid, firstInvalid: firstInvalid };
+    }
+
+    function getFormValidationAlert(formSelector) {
+        var $form = $(formSelector);
+        if (!$form.length) { return $(); }
+        var $alert = $form.find('.sdpi-form-validation-alert').first();
+        if (!$alert.length) {
+            $alert = $('<div class="sdpi-form-alert sdpi-form-alert-error sdpi-form-validation-alert" role="alert" style="display:none;"></div>');
+            var $actions = $form.find('.sdpi-form-actions').first();
+            if ($actions.length) {
+                $alert.insertBefore($actions);
+            } else {
+                $form.append($alert);
+            }
+        }
+        return $alert;
+    }
+
+    function showValidationAlert(formSelector, message) {
+        var $alert = getFormValidationAlert(formSelector);
+        if ($alert.length) {
+            $alert.text(message || 'Por favor complete los campos obligatorios marcados en rojo para continuar.').show();
+        }
+    }
+
+    function clearValidationAlert(formSelector) {
+        var $alert = getFormValidationAlert(formSelector);
+        if ($alert.length) {
+            $alert.hide().text('');
+        }
     }
 
     window.SDPIValidation = window.SDPIValidation || {};
@@ -2273,6 +2297,22 @@ jQuery(document).ready(function($) {
             }
         }
     }
+
+    function getMaritimeDirection() {
+        return ($('#sdpi_maritime_direction').val() || '').toString().toLowerCase();
+    }
+
+    function lockCountryField($field, value, locked) {
+        if (!$field || !$field.length) { return; }
+        if (typeof value !== 'undefined' && value !== null) {
+            $field.val(value);
+        }
+        if (locked) {
+            $field.prop('disabled', true).addClass('sdpi-field-locked');
+        } else {
+            $field.prop('disabled', false).removeClass('sdpi-field-locked');
+        }
+    }
     
     // Initialize city search for both fields
     $('#sdpi_pickup_city, #sdpi_delivery_city').on('input', function() {
@@ -2987,11 +3027,18 @@ jQuery(document).ready(function($) {
                 toggleMaritimeDimensionsField(quoteData.vehicle_type || vehicleTypeLabel);
 
                 if (direction === 'usa_to_pr') {
-                    $('#sdpi_s_country').val('USA');
-                    $('#sdpi_c_country').val('Puerto Rico');
+                    lockCountryField($('#sdpi_s_country'), 'USA', true);
+                    lockCountryField($('#sdpi_c_country'), 'Puerto Rico', true);
+                    if (!$('#sdpi_p_zip_code').val()) {
+                        $('#sdpi_p_zip_code').val('33322');
+                    }
+                    $('#sdpi_p_country').val('USA');
                 } else if (direction === 'pr_to_usa') {
-                    $('#sdpi_s_country').val('Puerto Rico');
-                    $('#sdpi_c_country').val('USA');
+                    lockCountryField($('#sdpi_s_country'), 'Puerto Rico', true);
+                    lockCountryField($('#sdpi_c_country'), 'USA', true);
+                } else {
+                    lockCountryField($('#sdpi_s_country'), $('#sdpi_s_country').val(), false);
+                    lockCountryField($('#sdpi_c_country'), $('#sdpi_c_country').val(), false);
                 }
 
                 toggleMaritimeSection('#sdpi-pickup-section', direction !== 'pr_to_usa', maritimePickupFields);
@@ -3059,6 +3106,32 @@ jQuery(document).ready(function($) {
         updateSummaryFooter('info', defaultSummaryFooter);
     });
 
+    $(document).on('click', '#sdpi-copy-shipper-to-pickup', function() {
+        var fieldMap = [
+            { from: '#sdpi_s_name', to: '#sdpi_p_name' },
+            { from: '#sdpi_s_street', to: '#sdpi_p_street' },
+            { from: '#sdpi_s_city', to: '#sdpi_p_city' },
+            { from: '#sdpi_s_state', to: '#sdpi_p_state' },
+            { from: '#sdpi_s_country', to: '#sdpi_p_country' },
+            { from: '#sdpi_s_zip', to: '#sdpi_p_zip_code' },
+            { from: '#sdpi_s_phone1', to: '#sdpi_p_phone1' },
+            { from: '#sdpi_s_phone2', to: '#sdpi_p_phone2' }
+        ];
+
+        fieldMap.forEach(function(map) {
+            var value = $(map.from).val();
+            $(map.to).val(value || '');
+        });
+
+        $('#sdpi_p_country').val($('#sdpi_p_country').val() || 'USA');
+
+        if (window.SDPIValidation && typeof window.SDPIValidation.validateField === 'function') {
+            fieldMap.forEach(function(map) {
+                window.SDPIValidation.validateField(map.to);
+            });
+        }
+    });
+
     $(document).on('click', '#sdpi-payment-back-btn', function() {
         $('#sdpi-payment-screen').hide();
         $('#sdpi-payment-summary-panel').hide();
@@ -3071,6 +3144,8 @@ jQuery(document).ready(function($) {
         updateSummaryFooter('info', summaryFooterMessage);
         $('#sdpi-ai-continue').prop('disabled', false).text('Proceder al Checkout').removeData('doc-disabled').removeData('doc-original-text');
         $('#sdpi-maritime-continue').prop('disabled', false).text('Proceder al Checkout').removeData('doc-disabled').removeData('doc-original-text');
+        clearValidationAlert('#sdpi-additional-info-form');
+        clearValidationAlert('#sdpi-maritime-info-form');
         if ($('#sdpi-additional-info').length) {
             $('html, body').animate({ scrollTop: $('#sdpi-additional-info').offset().top - 40 }, 300);
         }
@@ -3084,11 +3159,13 @@ jQuery(document).ready(function($) {
 
         var additionalValidation = runFormValidation('#sdpi-additional-info-form');
         if (!additionalValidation.valid) {
+            showValidationAlert('#sdpi-additional-info-form', 'Por favor complete los campos obligatorios marcados en rojo para continuar.');
             if (additionalValidation.firstInvalid && additionalValidation.firstInvalid.length) {
                 additionalValidation.firstInvalid.focus();
             }
             return;
         }
+        clearValidationAlert('#sdpi-additional-info-form');
 
         if (documentationManager.initialized && !documentationCanProceed()) {
             setDocumentationFeedback('Finaliza las cargas pendientes de documentos para continuar.', 'error');
@@ -3170,11 +3247,13 @@ jQuery(document).ready(function($) {
         var btn = $(this);
         var maritimeValidation = runFormValidation('#sdpi-maritime-info-form');
         if (!maritimeValidation.valid) {
+            showValidationAlert('#sdpi-maritime-info-form', 'Por favor complete los campos obligatorios marcados en rojo para continuar.');
             if (maritimeValidation.firstInvalid && maritimeValidation.firstInvalid.length) {
                 maritimeValidation.firstInvalid.focus();
             }
             return;
         }
+        clearValidationAlert('#sdpi-maritime-info-form');
 
         if (documentationManager.initialized && !documentationCanProceed()) {
             setDocumentationFeedback('Finaliza las cargas pendientes de documentos para continuar.', 'error');
@@ -3227,10 +3306,7 @@ jQuery(document).ready(function($) {
             dropoff_country: $('#sdpi_d_country').val().trim(),
             dropoff_zip: $('#sdpi_d_zip_code').val().trim(),
             dropoff_phone1: $('#sdpi_d_phone1').val().trim(),
-            dropoff_phone2: $('#sdpi_d_phone2').val().trim(),
-            title: $('#sdpi_m_title').val().trim(),
-            registration: $('#sdpi_m_registration').val().trim(),
-            other_id: $('#sdpi_m_id').val().trim()
+            dropoff_phone2: $('#sdpi_d_phone2').val().trim()
         };
 
         $.ajax({

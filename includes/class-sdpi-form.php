@@ -266,11 +266,15 @@ class SDPI_Form {
     }
 
     private function validate_city_name($value) {
-        return (bool) preg_match("/^[\p{L}\s'\-\.,]+$/u", (string) $value);
+        return (bool) preg_match("/^[\p{L}0-9\s'\-\.,()]+$/u", (string) $value);
     }
 
     private function validate_address_line($value) {
         return (bool) preg_match("/^[\p{L}0-9\s'\-#\.,&]+$/u", (string) $value);
+    }
+
+    private function contains_po_box($value) {
+        return (bool) preg_match('/p\s*\.?\s*o\.?\s*box/i', (string) $value);
     }
 
     private function validate_generic_text($value) {
@@ -287,7 +291,7 @@ class SDPI_Form {
         if ($value === '' || $value === null) {
             return true;
         }
-        return (bool) preg_match("/^\d+(?:\.\d+)?x\d+(?:\.\d+)?x\d+(?:\.\d+)?(?:\s?(?:ft|feet|'|\"|in|cm|m))?$/i", (string) $value);
+        return (bool) preg_match("/^\d+(?:\.\d+)?x\d+(?:\.\d+)?x\d+(?:\.\d+)?$/", (string) $value);
     }
 
     private function validate_allowed_country($country) {
@@ -1578,6 +1582,7 @@ class SDPI_Form {
                             </div>
                         </div>
 
+                        <div class="sdpi-form-alert sdpi-form-alert-error sdpi-form-validation-alert" id="sdpi-additional-validation-alert" role="alert" style="display:none;"></div>
                         <div class="sdpi-form-actions">
                             <button type="button" class="sdpi-clear-btn" id="sdpi-ai-cancel">Volver</button>
                             <button type="button" class="sdpi-pay-btn" id="sdpi-ai-continue">Proceder al Checkout</button>
@@ -1633,40 +1638,47 @@ class SDPI_Form {
                             <div class="sdpi-form-row">
                                 <div class="sdpi-form-group sdpi-col-3">
                                     <label for="sdpi_m_unit_value">Unit Value *</label>
-                                    <input type="number" id="sdpi_m_unit_value" placeholder="Vehicle value in USD" required>
+                                    <input type="number" id="sdpi_m_unit_value" placeholder="Valor comercial en USD" required>
+                                    <small class="sdpi-field-help">Valor comercial del carro. Si no lo sabe, puede verificarlo en www.KBB.com.</small>
                                 </div>
                                 <div class="sdpi-form-group sdpi-col-3">
                                     <label for="sdpi_m_color">Color *</label>
-                                    <input type="text" id="sdpi_m_color" placeholder="e.g., Red, Blue, Black" required>
+                                    <input type="text" id="sdpi_m_color" placeholder="Color en el título" required>
+                                    <small class="sdpi-field-help">Color del carro. Debe coincidir con el color que aparece en el título.</small>
                                 </div>
                                 <div class="sdpi-form-group sdpi-col-3">
                                     <label for="sdpi_m_dimensions">Dimensions LxWxH *</label>
-                                    <input type="text" id="sdpi_m_dimensions" placeholder="e.g., 15x6x5 ft">
+                                    <input type="text" id="sdpi_m_dimensions" placeholder="15x6x5">
+                                    <small class="sdpi-field-help">Dimensiones en largo x ancho x alto (sin espacios). Ejemplo válido: 15x6x5.</small>
                                 </div>
                             </div>
                         </div>
 
                         <div class="sdpi-form-card sdpi-review-card sdpi-maritime-shipper-section">
                             <h3>Shipper Information</h3>
-                            <small class="sdpi-field-help">Este formulario debe llenarse con la información del dueño del vehículo.</small>
+                            <small class="sdpi-field-help">El shipper tiene que ser el dueño legal del vehículo.</small>
                             <div class="sdpi-form-row">
                                 <div class="sdpi-form-group sdpi-col-2">
                                     <label for="sdpi_s_name">Shipper Name *</label>
                                     <input type="text" id="sdpi_s_name" required>
+                                    <small class="sdpi-field-help">Nombre completo tal como aparece en su ID.</small>
                                 </div>
                                 <div class="sdpi-form-group sdpi-col-2">
                                     <label for="sdpi_s_street">Shipper Street *</label>
                                     <input type="text" id="sdpi_s_street" required>
+                                    <small class="sdpi-field-help">Dirección residencial (no se permite PO BOX).</small>
                                 </div>
                             </div>
                             <div class="sdpi-form-row">
                                 <div class="sdpi-form-group sdpi-col-3">
                                     <label for="sdpi_s_city">Shipper City *</label>
                                     <input type="text" id="sdpi_s_city" required>
+                                    <small class="sdpi-field-help">Ciudad del shipper.</small>
                                 </div>
                                 <div class="sdpi-form-group sdpi-col-3">
                                     <label for="sdpi_s_state">Shipper State *</label>
                                     <input type="text" id="sdpi_s_state" required>
+                                    <small class="sdpi-field-help">Estado del shipper.</small>
                                 </div>
                                 <div class="sdpi-form-group sdpi-col-3">
                                     <label for="sdpi_s_country">Shipper Country *</label>
@@ -1675,44 +1687,53 @@ class SDPI_Form {
                                         <option value="USA">Estados Unidos</option>
                                         <option value="Puerto Rico">Puerto Rico</option>
                                     </select>
+                                    <small class="sdpi-field-help">Se bloquea automáticamente según la ruta del envío.</small>
                                 </div>
                             </div>
                             <div class="sdpi-form-row">
                                 <div class="sdpi-form-group sdpi-col-3">
                                     <label for="sdpi_s_zip">Shipper Zip *</label>
                                     <input type="text" id="sdpi_s_zip" required>
+                                    <small class="sdpi-field-help">Código postal de 5 dígitos.</small>
                                 </div>
                                 <div class="sdpi-form-group sdpi-col-3">
                                     <label for="sdpi_s_phone1">Shipper Phone 1 *</label>
                                     <input type="tel" id="sdpi_s_phone1" required>
+                                    <small class="sdpi-field-help">Teléfono principal de contacto.</small>
                                 </div>
                                 <div class="sdpi-form-group sdpi-col-3">
                                     <label for="sdpi_s_phone2">Shipper Phone 2</label>
                                     <input type="tel" id="sdpi_s_phone2">
+                                    <small class="sdpi-field-help">Teléfono secundario (opcional).</small>
                                 </div>
                             </div>
                         </div>
 
                         <div class="sdpi-form-card sdpi-review-card sdpi-maritime-consignee-section">
                             <h3>Consignee Information</h3>
+                            <small class="sdpi-field-help">El consignee es la persona responsable de recibir el vehículo en destino. Si el consignee está en Puerto Rico, será responsable de pagar los arbitrios (si aplica).</small>
                             <div class="sdpi-form-row">
                                 <div class="sdpi-form-group sdpi-col-2">
                                     <label for="sdpi_c_name">Consignee Name *</label>
                                     <input type="text" id="sdpi_c_name" required>
+                                    <small class="sdpi-field-help">Nombre completo tal como aparece en su ID.</small>
                                 </div>
                                 <div class="sdpi-form-group sdpi-col-2">
                                     <label for="sdpi_c_street">Consignee Street *</label>
                                     <input type="text" id="sdpi_c_street" required>
+                                    <small class="sdpi-field-help">Dirección residencial (no se permite PO BOX).</small>
                                 </div>
                             </div>
                             <div class="sdpi-form-row">
                                 <div class="sdpi-form-group sdpi-col-3">
                                     <label for="sdpi_c_city">Consignee City *</label>
                                     <input type="text" id="sdpi_c_city" required>
+                                    <small class="sdpi-field-help">Ciudad del consignee.</small>
                                 </div>
                                 <div class="sdpi-form-group sdpi-col-3">
                                     <label for="sdpi_c_state">Consignee State *</label>
                                     <input type="text" id="sdpi_c_state" required>
+                                    <small class="sdpi-field-help">Estado o región del consignee.</small>
                                 </div>
                                 <div class="sdpi-form-group sdpi-col-3">
                                     <label for="sdpi_c_country">Consignee Country *</label>
@@ -1721,26 +1742,33 @@ class SDPI_Form {
                                         <option value="USA">Estados Unidos</option>
                                         <option value="Puerto Rico">Puerto Rico</option>
                                     </select>
+                                    <small class="sdpi-field-help">Fijado en Puerto Rico para entregas en la isla.</small>
                                 </div>
                             </div>
                             <div class="sdpi-form-row">
                                 <div class="sdpi-form-group sdpi-col-3">
                                     <label for="sdpi_c_zip">Consignee Zip *</label>
                                     <input type="text" id="sdpi_c_zip" required>
+                                    <small class="sdpi-field-help">ZIP de Puerto Rico (006xx – 009xx).</small>
                                 </div>
                                 <div class="sdpi-form-group sdpi-col-3">
                                     <label for="sdpi_c_phone1">Consignee Phone 1 *</label>
                                     <input type="tel" id="sdpi_c_phone1" required>
+                                    <small class="sdpi-field-help">Teléfono principal de contacto.</small>
                                 </div>
                                 <div class="sdpi-form-group sdpi-col-3">
                                     <label for="sdpi_c_phone2">Consignee Phone 2</label>
                                     <input type="tel" id="sdpi_c_phone2">
+                                    <small class="sdpi-field-help">Teléfono secundario (opcional).</small>
                                 </div>
                             </div>
                         </div>
 
                         <div class="sdpi-form-card sdpi-review-card sdpi-maritime-pickup-section" id="sdpi-pickup-section" style="display:none;">
                             <h3>Pick Up Information</h3>
+                            <div class="sdpi-card-actions">
+                                <button type="button" class="sdpi-copy-btn" id="sdpi-copy-shipper-to-pickup">Copiar dirección del Shipper</button>
+                            </div>
                             <div class="sdpi-form-row">
                                 <div class="sdpi-form-group sdpi-col-2">
                                     <label for="sdpi_p_name">P. Name *</label>
@@ -1762,7 +1790,7 @@ class SDPI_Form {
                                 </div>
                                 <div class="sdpi-form-group sdpi-col-3">
                                     <label for="sdpi_p_country">P. Country *</label>
-                                    <input type="text" id="sdpi_p_country" value="USA" readonly>
+                                    <input type="text" id="sdpi_p_country" value="USA">
                                 </div>
                             </div>
                             <div class="sdpi-form-row">
@@ -1824,36 +1852,24 @@ class SDPI_Form {
                         </div>
 
                         <div class="sdpi-form-card sdpi-review-card">
-                            <h3>Documentación</h3>
-                            <div class="sdpi-form-row">
-                                <div class="sdpi-form-group sdpi-col-3">
-                                    <label for="sdpi_m_title">Title</label>
-                                    <input type="text" id="sdpi_m_title" placeholder="Optional">
-                                </div>
-                                <div class="sdpi-form-group sdpi-col-3">
-                                    <label for="sdpi_m_registration">Registration</label>
-                                    <input type="text" id="sdpi_m_registration" placeholder="Optional">
-                                </div>
-                                <div class="sdpi-form-group sdpi-col-3">
-                                    <label for="sdpi_m_id">ID</label>
-                                    <input type="text" id="sdpi_m_id" placeholder="Optional">
-                                </div>
-                            </div>
+                            <h3>Documentos Adjuntos</h3>
+                            <p class="sdpi-field-help">Cargue fotos del título, registración e identificación del dueño. Las fotos deben ser legibles y en formato JPG, PNG o PDF.</p>
                             <div class="sdpi-form-row sdpi-documentation-upload-row">
                                 <div class="sdpi-form-group sdpi-col-6">
                                     <label for="sdpi_documentation_input">Carga de documentos (hasta <?php echo intval($this->documentation_max_files); ?> archivos)</label>
-                                    <p class="sdpi-field-helper">Formatos permitidos: JPG, JPEG, PNG, WEBP y PDF. L&iacute;mite 10&nbsp;MB por archivo.</p>
+                                    <p class="sdpi-field-helper">Formatos permitidos: JPG, JPEG, PNG y PDF. L&iacute;mite 10&nbsp;MB por archivo.</p>
                                     <div class="sdpi-documentation-dropzone" id="sdpi-documentation-dropzone" data-max-files="<?php echo intval($this->documentation_max_files); ?>" data-max-size="<?php echo intval($this->documentation_max_size); ?>" aria-describedby="sdpi_documentation_helper">
                                         <button type="button" class="sdpi-upload-btn" id="sdpi-documentation-trigger">Seleccionar archivos</button>
                                         <span id="sdpi_documentation_helper" class="sdpi-upload-subtitle">o arrastra y su&eacute;ltalos aqu&iacute;</span>
                                     </div>
-                                    <input type="file" id="sdpi_documentation_input" accept=".jpg,.jpeg,.png,.webp,.pdf" multiple hidden>
+                                    <input type="file" id="sdpi_documentation_input" accept=".jpg,.jpeg,.png,.pdf" multiple hidden>
                                     <div class="sdpi-documentation-feedback" id="sdpi-documentation-feedback" role="alert" aria-live="polite"></div>
                                     <ul class="sdpi-documentation-list" id="sdpi-documentation-list" aria-live="polite"></ul>
                                 </div>
                             </div>
                         </div>
 
+                        <div class="sdpi-form-alert sdpi-form-alert-error sdpi-form-validation-alert" id="sdpi-maritime-validation-alert" role="alert" style="display:none;"></div>
                         <div class="sdpi-form-actions">
                             <button type="button" class="sdpi-clear-btn" id="sdpi-maritime-cancel">Volver</button>
                             <button type="button" class="sdpi-pay-btn" id="sdpi-maritime-continue">Proceder al Checkout</button>
@@ -2696,7 +2712,7 @@ class SDPI_Form {
         }
 
         if (!$this->validate_dimensions_value($dimensions)) {
-            wp_send_json_error('Las dimensiones deben tener el formato Largo x Ancho x Alto con unidades opcionales.');
+            wp_send_json_error('Las dimensiones deben seguir el formato 15x6x5 sin espacios ni texto adicional.');
             exit;
         }
 
@@ -2752,7 +2768,7 @@ class SDPI_Form {
             'id' => sanitize_text_field($_POST['other_id'] ?? '')
         );
 
-        $validate_contact = function (&$details, $label, $required) {
+        $validate_contact = function (&$details, $label, $required) use ($direction) {
             $fields = array('name', 'street', 'city', 'state', 'zip', 'phone1');
             $has_country = array_key_exists('country', $details);
             if ($has_country) {
@@ -2792,8 +2808,13 @@ class SDPI_Form {
                 exit;
             }
 
+            if (in_array($label, array('del shipper', 'del consignatario'), true) && $this->contains_po_box($details['street'])) {
+                wp_send_json_error('La dirección ' . $label . ' no puede ser un PO BOX.');
+                exit;
+            }
+
             if (!$this->validate_city_name($details['city'])) {
-                wp_send_json_error('La ciudad ' . $label . ' solo puede incluir letras y espacios.');
+                wp_send_json_error('La ciudad ' . $label . ' debe usar letras, números, comas o paréntesis.');
                 exit;
             }
 
@@ -2803,6 +2824,15 @@ class SDPI_Form {
                 exit;
             }
 
+            if ($direction === 'usa_to_pr' && $label === 'del consignatario') {
+                $state_code = strtoupper(str_replace(' ', '', $details['state']));
+                if ($state_code !== 'PR' && $state_code !== 'PUERTORICO') {
+                    wp_send_json_error('El estado ' . $label . ' debe ser PR para entregas en Puerto Rico.');
+                    exit;
+                }
+                $details['state'] = 'PR';
+            }
+
             if ($has_country) {
                 if (!$this->validate_allowed_country($details['country'])) {
                     wp_send_json_error('Selecciona un país válido para la sección ' . $label . '.');
@@ -2810,6 +2840,17 @@ class SDPI_Form {
                 }
                 $normalized_country = strtoupper(trim($details['country'])) === 'PUERTO RICO' ? 'Puerto Rico' : 'USA';
                 $details['country'] = $normalized_country;
+
+                if ($direction === 'usa_to_pr') {
+                    if ($label === 'del shipper' && $normalized_country !== 'USA') {
+                        wp_send_json_error('El shipper debe tener país USA para rutas US → PR.');
+                        exit;
+                    }
+                    if ($label === 'del consignatario' && $normalized_country !== 'Puerto Rico') {
+                        wp_send_json_error('El consignatario debe tener país Puerto Rico para rutas US → PR.');
+                        exit;
+                    }
+                }
             }
 
             if (!$this->validate_us_zip($details['zip'])) {
@@ -2817,6 +2858,11 @@ class SDPI_Form {
                 exit;
             }
             $details['zip'] = $this->normalize_digits($details['zip'], 5);
+
+            if ($direction === 'usa_to_pr' && $label === 'del consignatario' && !preg_match('/^(006|007|008|009)\d{2}$/', $details['zip'])) {
+                wp_send_json_error('Utiliza un ZIP de Puerto Rico (006xx - 009xx) para la sección ' . $label . '.');
+                exit;
+            }
 
             if (!$this->validate_us_phone($details['phone1'])) {
                 wp_send_json_error('Ingresa un teléfono válido de 10 dígitos para la sección ' . $label . '.');

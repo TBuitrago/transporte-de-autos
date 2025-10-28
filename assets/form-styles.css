@@ -136,6 +136,30 @@
     width: 100%;
 }
 
+.sdpi-card-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 1rem;
+}
+
+.sdpi-copy-btn {
+    background: #17205F;
+    color: #ffffff;
+    border: none;
+    padding: 0.65rem 1.5rem;
+    border-radius: 10px;
+    font-size: 0.92rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 10px 24px rgba(23, 32, 95, 0.18);
+}
+
+.sdpi-copy-btn:hover {
+    background: #1e2b7d;
+    transform: translateY(-1px);
+}
+
 .sdpi-clear-btn {
     background: transparent;
     color: #17205F;
@@ -642,6 +666,26 @@
 
 .sdpi-form-group.error .sdpi-field-error {
     display: block;
+}
+
+.sdpi-form-alert {
+    display: none;
+    border-radius: 14px;
+    padding: 1rem 1.25rem;
+    font-size: 0.95rem;
+    margin-bottom: 1.5rem;
+    font-weight: 500;
+}
+
+.sdpi-form-alert-error {
+    background: rgba(220, 50, 50, 0.08);
+    border: 1px solid #dc3232;
+    color: #c0392b;
+}
+
+.sdpi-field-locked {
+    background-color: #f3f5ff !important;
+    cursor: not-allowed;
 }
 
 .sdpi-form-group select:focus {
@@ -1541,9 +1585,14 @@
 }
 
 .sdpi-summary-footer {
-    margin-top: 1.5rem;
+    margin-top: 0;
+    padding-top: 0.25rem;
     font-size: 0.85rem;
     color: #5c628f;
+}
+
+.sdpi-summary-footer p {
+    margin: 0;
 }
 
 .sdpi-summary-footer.is-info {
